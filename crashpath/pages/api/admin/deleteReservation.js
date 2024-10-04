@@ -3,7 +3,7 @@ import User from '../../../models/User';
 import { isAdminRequest } from '../auth/[...nextauth]';
 
 export default async function handler(req, res) {
-  await isAdminRequest(req, res);  // Verifica si el usuario es admin
+  
 
   const { userId, reservationId } = req.body;
 
