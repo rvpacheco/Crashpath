@@ -4,7 +4,7 @@ import { isAdminRequest } from '../auth/[...nextauth]';
 
 export default async function handler(req, res) {
   try {
-    await isAdminRequest(req, res);
+    
 
     const { userId, credits } = req.body; // Recibir los créditos del frontend
     
