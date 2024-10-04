@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import axios from 'axios';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
+import { useRouter } from 'next/router';
 
 const Container = styled.main`
   display: flex;
@@ -11,7 +12,7 @@ const Container = styled.main`
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background-color: #e9eff6;
+  
   padding: 20px;
 `;
 
@@ -30,55 +31,61 @@ const Button = styled.button`
   }
 `;
 
-const StyledCalendar = styled(Calendar)`
-  width: 100%;
-  max-width: 400px;
-  background-color: white;
-  border: none;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  padding: 10px;
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
 
-  .react-calendar__tile--busy {
-    background-color: #ff6347 !important;
-    color: white !important;
-    border-radius: 50%;
+const ModalContent = styled.div`
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  max-width: 500px;
+  width: 100%;
+`;
+
+const ModalButton = styled(Button)`
+  margin: 10px;
+  background-color: ${(props) => (props.danger ? '#dc3545' : '#28a745')};
+
+  &:hover {
+    background-color: ${(props) => (props.danger ? '#c82333' : '#218838')};
   }
 `;
-
-const TimePicker = styled.select`
-  margin-top: 20px;
-  padding: 10px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-  font-size: 16px;
-`;
-
-const times = [
-  '08:00', '09:00', '10:00', '11:00', '12:00',
-  '13:00', '14:00', '15:00', '16:00', '17:00',
-];
 
 export default function Home() {
   const { data: session } = useSession();
   const [userData, setUserData] = useState({ credits: 0, reservations: [] });
-  const [busySlots, setBusySlots] = useState([]); // Initialize as an empty array
+  const [busySlots, setBusySlots] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(times[0]); // Default to the first time
+  const [selectedTime, setSelectedTime] = useState('08:00');
   const [message, setMessage] = useState('');
+  const [showConsentModal, setShowConsentModal] = useState(false); // Controla el modal
+  const router = useRouter();
 
   useEffect(() => {
     if (session) {
-      axios.get('/api/user').then((response) => {
-        setUserData(response.data);
-      });
+      if (session.isAdmin) {
+        router.push('/admin');
+      } else {
+        axios.get('/api/user').then((response) => {
+          setUserData(response.data);
+        });
 
-      // Fetch busy slots (reserved dates) from Google Calendar
-      axios.get('/api/calendar').then((response) => {
-        setBusySlots(response.data.busySlots || []); // Ensure we get an array or fallback to empty array
-      });
+        axios.get('/api/calendar').then((response) => {
+          setBusySlots(response.data.busySlots || []);
+        });
+      }
     }
-  }, [session]);
+  }, [session, router]);
 
   const handleReservation = async () => {
     if (!selectedDate) {
@@ -89,12 +96,10 @@ export default function Home() {
     try {
       const response = await axios.post('/api/reserve', {
         date: selectedDate,
-        time: selectedTime,  // Include time in the reservation
+        time: selectedTime,
       });
 
       setMessage(response.data.message);
-
-      // Update user data after reservation
       const updatedUser = await axios.get('/api/user');
       setUserData(updatedUser.data);
     } catch (error) {
@@ -102,22 +107,17 @@ export default function Home() {
     }
   };
 
-  const isDateBusy = (date) => {
-    if (!Array.isArray(busySlots)) return false; // Ensure busySlots is an array
-
-    return busySlots.some((slot) => {
-      const start = new Date(slot.start);
-      const end = new Date(slot.end);
-  
-      return date >= start && date <= end;
-    });
+  const handleSignIn = () => {
+    setShowConsentModal(true); // Mostrar modal de consentimiento
   };
 
-  const tileClassName = ({ date, view }) => {
-    if (view === 'month' && isDateBusy(date)) {
-      return 'react-calendar__tile--busy';
-    }
-    return null;
+  const handleAccept = () => {
+    setShowConsentModal(false); // Cerrar el modal
+    signIn('google'); // Iniciar sesión con Google
+  };
+
+  const handleReject = () => {
+    setShowConsentModal(false); // Cerrar el modal si se rechaza
   };
 
   return (
@@ -125,29 +125,16 @@ export default function Home() {
       {session ? (
         <>
           <h1>Bienvenido, {session.user.name}!</h1>
-          <p>TIenes {userData.credits} creditos disponibles .</p>
+          <p>Tienes {userData.credits} créditos disponibles.</p>
 
           <h2>Selecciona una fecha para hacer una reserva:</h2>
-          <StyledCalendar
-            onClickDay={setSelectedDate}
-            tileClassName={tileClassName}  // Use tileClassName for busy dates
-          />
+          <Calendar onClickDay={setSelectedDate} />
 
-          <TimePicker value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)}>
-            {times.map((time) => (
-              <option key={time} value={time}>{time}</option>
-            ))}
-          </TimePicker>
-
-          <Button 
-            onClick={handleReservation} 
-            disabled={!selectedDate || userData.credits <= 0}
-          >
+          <Button onClick={handleReservation} disabled={!selectedDate || userData.credits <= 0}>
             Reserva {selectedDate && `${selectedDate.toLocaleDateString()} a las ${selectedTime}`}
           </Button>
 
           {message && <p>{message}</p>}
-
           <h2>Estas son tus reservaciones:</h2>
           <ul>
             {userData.reservations.map((reservation, index) => (
@@ -157,13 +144,24 @@ export default function Home() {
             ))}
           </ul>
 
-          <Button onClick={() => signOut()}>Cerrar Sesion</Button>
+          <Button onClick={() => signOut()}>Cerrar Sesión</Button>
         </>
       ) : (
         <>
           <h1>Bienvenido a la reserva de la Moon de CrashPath</h1>
-          <Button onClick={() => signIn('google')}>Inicia sesion con Google</Button>
+          <Button onClick={handleSignIn}>Inicia sesión con Google</Button>
         </>
+      )}
+
+      {showConsentModal && (
+        <ModalOverlay>
+          <ModalContent>
+            <h2>Consentimiento para utilizar Google Calendar</h2>
+            <p>Esta aplicación requiere acceso a tu Google Calendar para poder agregar eventos. ¿Deseas continuar?</p>
+            <ModalButton onClick={handleAccept}>Aceptar</ModalButton>
+            <ModalButton danger onClick={handleReject}>Rechazar</ModalButton>
+          </ModalContent>
+        </ModalOverlay>
       )}
     </Container>
   );

@@ -1,4 +1,3 @@
-//lib.mongodb.js
 import mongoose from 'mongoose';
 
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -20,10 +19,13 @@ async function dbConnect() {
 
   if (!cached.promise) {
     cached.promise = mongoose.connect(MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      // Puedes agregar más opciones si es necesario
     }).then((mongoose) => {
+      console.log('Conectado a MongoDB');
       return mongoose;
+    }).catch((error) => {
+      console.error('Error al conectar a MongoDB:', error.message);
+      throw error;
     });
   }
   cached.conn = await cached.promise;
