@@ -1,15 +1,22 @@
-import { getToken } from 'next-auth/jwt';
+import dbConnect from '../../../lib/mongodb';
 import User from '../../../models/User';
-
-const secret = process.env.NEXTAUTH_SECRET;
+import { isAdminRequest } from '../auth/[...nextauth]';
 
 export default async function handler(req, res) {
-  const token = await getToken({ req, secret });
+  try {
+    // Verifica si el usuario es administrador
+    await isAdminRequest(req, res);
 
-  if (!token || token.role !== 'admin') {
-    return res.status(401).json({ message: 'Unauthorized' });
+    // Conectar a la base de datos
+    await dbConnect();
+
+    // Buscar todos los usuarios en la base de datos
+    const users = await User.find({});
+
+    // Responder con la lista de usuarios
+    res.status(200).json({ users });
+  } catch (error) {
+    console.error('Error fetching users:', error.message);
+    res.status(500).json({ message: 'Error al obtener usuarios' });
   }
-
-  const users = await User.find({});
-  res.status(200).json(users);
 }
