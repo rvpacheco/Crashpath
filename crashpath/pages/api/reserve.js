@@ -109,7 +109,7 @@ export default async function handler(req, res) {
     // Envío de correo electrónico a rvpacheco17@gmail.com
     try {
       await sendEmail({
-        to: 'jeevanobando97@gmail.com',
+        to: 'jeevanobando97@gmail.com, rvpacheco17@gmail.com',
         subject: 'Nueva Reserva Realizada',
         text: `Una nueva reserva ha sido realizada por ${user.name} (${token.email}) para la fecha: ${formattedDate} a las ${time}.`,
       });
