@@ -5,6 +5,7 @@ import axios from 'axios';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { useRouter } from 'next/router';
+import Link from 'next/link'; // Importa Link para navegar entre páginas
 
 const Container = styled.main`
   display: flex;
@@ -67,7 +68,8 @@ const ModalButton = styled(Button)`
 
 // Define los horarios desde las 9 AM hasta las 7 PM
 const times = [
-  '07:00','08:00','09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
+  '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00',
+  '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
 ];
 
 export default function Home() {
@@ -77,12 +79,11 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(times[0]); // Predeterminado a la primera hora (9:00 AM)
   const [message, setMessage] = useState('');
-  const [showConsentModal, setShowConsentModal] = useState(false); 
+  const [showConsentModal, setShowConsentModal] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     if (session) {
-      
       if (session.isAdmin) {
         router.push('/admin');
       } else {
@@ -94,7 +95,6 @@ export default function Home() {
           setBusySlots(response.data.busySlots || []);
         });
       }
-      
     }
   }, [session, router]);
 
@@ -140,7 +140,7 @@ export default function Home() {
   };
 
   const handleSignIn = () => {
-    setShowConsentModal(true); 
+    setShowConsentModal(true);
   };
 
   const handleAccept = () => {
@@ -149,7 +149,7 @@ export default function Home() {
   };
 
   const handleReject = () => {
-    setShowConsentModal(false); 
+    setShowConsentModal(false);
   };
 
   return (
@@ -203,6 +203,12 @@ export default function Home() {
           </ModalContent>
         </ModalOverlay>
       )}
+
+      <footer style={{ textAlign: 'center', marginTop: '40px' }}>
+        <Link href="/privacy" style={{ color: '#007bff', textDecoration: 'none' }}>
+          Política de Privacidad
+        </Link>
+      </footer>
     </Container>
   );
 }

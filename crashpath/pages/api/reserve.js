@@ -67,7 +67,7 @@ export default async function handler(req, res) {
     endDateTime.setHours(endDateTime.getHours() + 1);
 
     const event = {
-      summary: 'Reservation at CrashPath',
+      summary: 'Reserva para Crashpath',
       description: 'Your reserved time at CrashPath',
       start: {
         dateTime: startDateTime.toISOString(),
