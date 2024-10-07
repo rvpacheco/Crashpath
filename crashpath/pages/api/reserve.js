@@ -7,6 +7,14 @@ import { sendEmail } from '../../lib/sendEmail'; // Usamos la función sendEmail
 const secret = process.env.NEXTAUTH_SECRET;
 const calendarId = process.env.GOOGLE_CALENDAR_ID;
 
+// Función para formatear la fecha a DD/MM/AAAA
+function formatDateToDDMMYYYY(date) {
+  const day = (`0${date.getDate()}`).slice(-2); // Obtiene el día y añade cero si es menor a 10
+  const month = (`0${date.getMonth() + 1}`).slice(-2); // Los meses empiezan en 0, por eso sumamos 1
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 export default async function handler(req, res) {
   const token = await getToken({ req, secret });
 
@@ -40,7 +48,7 @@ export default async function handler(req, res) {
     });
 
     if (conflictingReservation) {
-      return res.status(400).json({ message: 'Time slot already reserved' });
+      return res.status(400).json({ message: 'Tiempo ya reservado' });
     }
 
     user.reservations.push({
@@ -95,12 +103,15 @@ export default async function handler(req, res) {
       return res.status(500).json({ message: 'Failed to create Google Calendar event' });
     }
 
-    // Envío de correo electrónico a jeevanobando97@gmail.com
+    // Convertir la fecha a DD/MM/AAAA
+    const formattedDate = formatDateToDDMMYYYY(new Date(date));
+
+    // Envío de correo electrónico a rvpacheco17@gmail.com
     try {
       await sendEmail({
-        to: 'ronaldofofy@gmail.com',
+        to: 'jeevanobando97@gmail.com',
         subject: 'Nueva Reserva Realizada',
-        text: `Una nueva reserva ha sido realizada por ${token.email} para la fecha: ${date} a las ${time}.`,
+        text: `Una nueva reserva ha sido realizada por ${user.name} (${token.email}) para la fecha: ${formattedDate} a las ${time}.`,
       });
       console.log('Correo enviado correctamente a jeevanobando97@gmail.com');
     } catch (error) {
@@ -108,7 +119,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ message: 'Failed to send email notification' });
     }
 
-    res.status(201).json({ message: 'Reservation created successfully and event added to Google Calendar' });
+    res.status(201).json({ message: 'Reserva creada exitosamente y evento agregado a Google Calendar' });
   } catch (error) {
     console.error('Error creating reservation:', error);
     res.status(500).json({ message: 'Internal server error' });

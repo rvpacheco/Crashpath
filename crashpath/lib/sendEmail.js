@@ -1,13 +1,13 @@
 import nodemailer from 'nodemailer';
 
-// Configura el transporte SMTP
+// Configura el transporte SMTP con tu correo corporativo
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,   // El host del servicio SMTP (p.ej., smtp.sendgrid.net)
-  port: process.env.SMTP_PORT,   // El puerto SMTP (p.ej., 587)
-  secure: false,                 // true para 465, false para otros puertos
+  host:  'smtp-relay.sendinblue.com',   // El host del servicio SMTP (p.ej., smtp-relay.brevo.com)
+  port: 587,   // El puerto SMTP (587 es común para TLS)
+  secure: false,                 // true para 465, false para otros puertos (TLS)
   auth: {
-    user: process.env.SMTP_USER, // Usuario SMTP
-    pass: process.env.SMTP_PASS, // Contraseña SMTP
+    user: '7d5b50003@smtp-brevo.com', // Tu correo corporativo
+    pass: 'YETRW9r8XBAvsPCh', // La API key de Brevo o la contraseña SMTP
   },
 });
 
