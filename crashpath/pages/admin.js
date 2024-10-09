@@ -3,114 +3,91 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
 import styled from 'styled-components';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 
+// Estilos
 const AdminContainer = styled.div`
-  max-width: 900px;
-  margin: 0 auto;
+  max-width: 1100px;
+  margin: 40px auto;
   padding: 20px;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background-color: #f9f9f9;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  text-align: center;
+`;
 
-  @media (max-width: 768px) {
-    padding: 10px;
-  }
-
-  @media (max-width: 480px) {
-    max-width: 100%;
-    padding: 5px;
-  }
+const Title = styled.h1`
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 32px;
 `;
 
 const TableWrapper = styled.div`
   width: 100%;
-  overflow-x: auto; /* Permite que la tabla se desplace horizontalmente en pantallas pequeñas */
+  overflow-x: auto;
   margin-bottom: 20px;
-
-  @media (max-width: 480px) {
-    overflow-x: scroll; /* Hace la tabla desplazable horizontalmente */
-    -webkit-overflow-scrolling: touch; /* Suaviza el desplazamiento en dispositivos táctiles */
-  }
 `;
 
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 20px;
-
-  @media (max-width: 768px) {
-    font-size: 14px;
-  }
-
-  @media (max-width: 480px) {
-    font-size: 12px;
-  }
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 `;
 
 const Th = styled.th`
   background-color: #007bff;
   color: white;
-  padding: 10px;
+  padding: 12px 15px;
   text-align: left;
-
-  @media (max-width: 768px) {
-    padding: 8px;
-  }
-
-  @media (max-width: 480px) {
-    padding: 6px;
-  }
+  font-size: 16px;
+  white-space: nowrap;
 `;
 
 const Td = styled.td`
-  padding: 10px;
-  border-bottom: 1px solid #ccc;
+  padding: 12px 15px;
+  border-bottom: 1px solid #f0f0f0;
+  text-align: left;
+  color: #555;
+`;
 
-  @media (max-width: 768px) {
-    padding: 8px;
-  }
-
-  @media (max-width: 480px) {
-    padding: 6px;
-  }
+const ActionContainer = styled.div`
+  display: flex;
+  gap: 10px;
+  justify-content: center;
 `;
 
 const Button = styled.button`
-  background-color: #28a745;
+  background-color: ${(props) => (props.danger ? '#dc3545' : '#28a745')};
   color: white;
   padding: 8px 12px;
   border: none;
   border-radius: 5px;
   cursor: pointer;
-  font-size: 12px;
-  margin-right: 5px;
-  white-space: nowrap; /* Asegura que el texto del botón no se divida en dos líneas */
+  font-size: 14px;
+  transition: background-color 0.3s;
 
   &:hover {
-    background-color: #218838;
+    background-color: ${(props) => (props.danger ? '#c82333' : '#218838')};
   }
+`;
 
-  &.danger {
-    background-color: #dc3545;
-    color: white;
-    border-radius: 50%;
-    width: 25px;
-    height: 25px;
-    padding: 0;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
+const DangerButton = styled(Button)`
+  background-color: #dc3545;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
 
-    &:hover {
-      background-color: #c82333;
-    }
-  }
-
-  @media (max-width: 480px) {
-    font-size: 10px; /* Reducir tamaño de letra en pantallas pequeñas */
-    padding: 6px 8px;
+  &:hover {
+    background-color: #c82333;
   }
 `;
 
@@ -122,14 +99,11 @@ const Modal = styled.div`
   transform: translate(-50%, -50%);
   background-color: #fff;
   padding: 20px;
-  border-radius: 10px;
+  border-radius: 12px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   z-index: 1000;
-
-  @media (max-width: 480px) {
-    width: 90%;
-    padding: 15px;
-  }
+  width: 400px;
+  max-width: 90%;
 `;
 
 const Overlay = styled.div`
@@ -143,14 +117,32 @@ const Overlay = styled.div`
   z-index: 500;
 `;
 
+const ModalTitle = styled.h2`
+  margin-bottom: 20px;
+  font-size: 24px;
+  color: #333;
+`;
+
+const Input = styled.input`
+  padding: 10px;
+  width: 100%;
+  margin: 10px 0;
+  font-size: 16px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+`;
+
 export default function AdminPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [showCreditsModal, setShowCreditsModal] = useState(false); // Para el modal de créditos
+  const [showReservationModal, setShowReservationModal] = useState(false); // Para el modal de reservas
   const [selectedUser, setSelectedUser] = useState(null);
   const [credits, setCredits] = useState(0);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedTime, setSelectedTime] = useState('');
 
   useEffect(() => {
     if (!session) {
@@ -174,7 +166,12 @@ export default function AdminPage() {
 
   const handleAddCredits = (userId) => {
     setSelectedUser(userId);
-    setShowModal(true);
+    setShowCreditsModal(true); // Mostrar modal para créditos
+  };
+
+  const handleCreateReservation = (userId) => {
+    setSelectedUser(userId);
+    setShowReservationModal(true); // Mostrar modal para reservas
   };
 
   const submitCredits = async () => {
@@ -183,11 +180,31 @@ export default function AdminPage() {
         userId: selectedUser,
         credits: parseInt(credits),
       });
-      setShowModal(false);
+      setShowCreditsModal(false); // Cerrar modal
       setCredits(0);
       fetchUsers();
     } catch (error) {
       console.error('Error modifying credits:', error);
+    }
+  };
+
+  const addReservation = async () => {
+    if (!selectedDate || !selectedTime) {
+      alert('Por favor selecciona una fecha y hora.');
+      return;
+    }
+
+    try {
+      await axios.post('/api/reserve', {
+        userId: selectedUser,
+        date: selectedDate,
+        time: selectedTime,
+      });
+      alert('Reserva creada exitosamente.');
+      setShowReservationModal(false); // Cerrar modal
+      fetchUsers();
+    } catch (error) {
+      console.error('Error creating reservation:', error);
     }
   };
 
@@ -201,12 +218,12 @@ export default function AdminPage() {
   };
 
   if (!session) {
-    return <div>Loading...</div>;
+    return <div>Cargando...</div>;
   }
 
   return (
     <AdminContainer>
-      <h1>Panel de Administración</h1>
+      <Title>Panel de Administración</Title>
       {loading ? (
         <p>Cargando usuarios...</p>
       ) : (
@@ -232,18 +249,24 @@ export default function AdminPage() {
                       {user.reservations.map((reservation) => (
                         <li key={reservation._id}>
                           {new Date(reservation.date).toLocaleDateString()} - {reservation.time}
-                          <Button
-                            className="danger"
+                          <DangerButton
                             onClick={() => removeReservation(user._id, reservation._id)}
                           >
                             &times;
-                          </Button>
+                          </DangerButton>
                         </li>
                       ))}
                     </ul>
                   </Td>
                   <Td>
-                    <Button onClick={() => handleAddCredits(user._id)}>Modificar Créditos</Button>
+                    <ActionContainer>
+                      <Button onClick={() => handleAddCredits(user._id)}>
+                        Modificar Créditos
+                      </Button>
+                      <Button onClick={() => handleCreateReservation(user._id)}>
+                        Crear Reserva
+                      </Button>
+                    </ActionContainer>
                   </Td>
                 </tr>
               ))}
@@ -253,19 +276,40 @@ export default function AdminPage() {
       )}
       <Button onClick={() => signOut()}>Cerrar Sesión</Button>
 
-      <Overlay show={showModal} onClick={() => setShowModal(false)} />
-      <Modal show={showModal}>
-        <h2>Modificar Créditos</h2>
-        <input
+      {/* Modal para agregar créditos */}
+      <Overlay show={showCreditsModal} onClick={() => setShowCreditsModal(false)} />
+      <Modal show={showCreditsModal}>
+        <ModalTitle>Modificar Créditos</ModalTitle>
+        <Input
           type="number"
           value={credits}
           onChange={(e) => setCredits(e.target.value)}
-          placeholder="Ingrese la cantidad (+ para agregar, - para eliminar)"
+          placeholder="Ingrese la cantidad (+ o -)"
         />
-        <Button onClick={submitCredits}>Confirmar</Button>
-        <Button className="danger" onClick={() => setShowModal(false)}>
-          Cancelar
-        </Button>
+        <ActionContainer>
+          <Button onClick={submitCredits}>Confirmar</Button>
+          <Button danger onClick={() => setShowCreditsModal(false)}>
+            Cancelar
+          </Button>
+        </ActionContainer>
+      </Modal>
+
+      {/* Modal para agregar reservas */}
+      <Overlay show={showReservationModal} onClick={() => setShowReservationModal(false)} />
+      <Modal show={showReservationModal}>
+        <ModalTitle>Crear Nueva Reserva</ModalTitle>
+        <Calendar onClickDay={setSelectedDate} />
+        <Input
+          type="time"
+          value={selectedTime}
+          onChange={(e) => setSelectedTime(e.target.value)}
+        />
+        <ActionContainer>
+          <Button onClick={addReservation}>Confirmar Reserva</Button>
+          <Button danger onClick={() => setShowReservationModal(false)}>
+            Cancelar
+          </Button>
+        </ActionContainer>
       </Modal>
     </AdminContainer>
   );
