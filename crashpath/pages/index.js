@@ -5,7 +5,7 @@ import axios from 'axios';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { useRouter } from 'next/router';
-import Link from 'next/link'; // Importa Link para navegar entre páginas
+import Link from 'next/link';
 
 const Container = styled.main`
   display: flex;
@@ -14,6 +14,24 @@ const Container = styled.main`
   justify-content: center;
   min-height: 100vh;
   padding: 20px;
+`;
+
+const WelcomeText = styled.div`
+  text-align: center;
+  max-width: 600px;
+  margin-bottom: 40px;
+
+  h1 {
+    font-size: 36px;
+    margin-bottom: 20px;
+    color: #333;
+  }
+
+  p {
+    font-size: 18px;
+    line-height: 1.6;
+    color: #555;
+  }
 `;
 
 const Button = styled.button`
@@ -38,6 +56,22 @@ const TimePicker = styled.select`
   border: 1px solid #ccc;
   font-size: 16px;
 `;
+
+const CloseButton = styled.button`
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: red; // Cambia el color de la "X" a rojo
+  
+  &:hover {
+    color: darkred;
+  }
+`;
+
 const ModalOverlay = styled.div`
   position: fixed;
   top: 0;
@@ -49,6 +83,7 @@ const ModalOverlay = styled.div`
   align-items: center;
   justify-content: center;
 `;
+
 const ModalContent = styled.div`
   background-color: white;
   padding: 20px;
@@ -56,7 +91,9 @@ const ModalContent = styled.div`
   text-align: center;
   max-width: 500px;
   width: 100%;
+  position: relative; // Necesario para que el botón de cierre esté posicionado correctamente
 `;
+
 
 const ModalButton = styled(Button)`
   margin: 10px;
@@ -66,7 +103,6 @@ const ModalButton = styled(Button)`
   }
 `;
 
-// Define los horarios desde las 9 AM hasta las 7 PM
 const times = [
   '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00',
   '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
@@ -77,9 +113,12 @@ export default function Home() {
   const [userData, setUserData] = useState({ credits: 0, reservations: [] });
   const [busySlots, setBusySlots] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(times[0]); // Predeterminado a la primera hora (9:00 AM)
+  const [selectedTime, setSelectedTime] = useState(times[0]);
   const [message, setMessage] = useState('');
   const [showConsentModal, setShowConsentModal] = useState(false);
+  const [showReservationModal, setShowReservationModal] = useState(false);
+  const [showNoSpaceModal, setShowNoSpaceModal] = useState(false);
+  const [reservationsAtTime, setReservationsAtTime] = useState(0); // Estado para contar reservaciones en una hora específica
   const router = useRouter();
 
   useEffect(() => {
@@ -98,47 +137,6 @@ export default function Home() {
     }
   }, [session, router]);
 
-  const handleReservation = async () => {
-    if (!selectedDate) {
-      setMessage('Por favor seleccione una fecha');
-      return;
-    }
-
-    // Combinar la fecha seleccionada y la hora seleccionada
-    const reservationDateTime = new Date(selectedDate);
-    const [hours, minutes] = selectedTime.split(':');
-    reservationDateTime.setHours(hours);
-    reservationDateTime.setMinutes(minutes);
-
-    // Obtener la fecha y hora actual
-    const now = new Date();
-
-    // Calcular la diferencia en milisegundos
-    const timeDifference = reservationDateTime - now;
-
-    // Convertir la diferencia a horas
-    const hoursDifference = timeDifference / (1000 * 60 * 60);
-
-    // Verificar si la diferencia es menor a 18 horas
-    if (hoursDifference < 18) {
-      setMessage('Las reservas deben hacerse al menos 18 horas antes.');
-      return;
-    }
-
-    try {
-      const response = await axios.post('/api/reserve', {
-        date: selectedDate,
-        time: selectedTime,
-      });
-
-      setMessage(response.data.message);
-      const updatedUser = await axios.get('/api/user');
-      setUserData(updatedUser.data);
-    } catch (error) {
-      setMessage(error.response.data.message);
-    }
-  };
-
   const handleSignIn = () => {
     setShowConsentModal(true);
   };
@@ -152,8 +150,75 @@ export default function Home() {
     setShowConsentModal(false);
   };
 
+  const handleReservation = async () => {
+    if (!selectedDate) {
+      setMessage('Por favor seleccione una fecha');
+      return;
+    }
+
+    const reservationDateTime = new Date(selectedDate);
+    const [hours, minutes] = selectedTime.split(':');
+    reservationDateTime.setHours(hours);
+    reservationDateTime.setMinutes(minutes);
+
+    const now = new Date();
+    const timeDifference = reservationDateTime - now;
+    const hoursDifference = timeDifference / (1000 * 60 * 60);
+
+    if (hoursDifference < 18) {
+      setMessage('Las reservas deben hacerse al menos 18 horas antes.');
+      return;
+    }
+
+    try {
+      // Ver cuántas personas ya han reservado a esta hora
+      const response = await axios.post('/api/check-reservations', {
+        date: selectedDate,
+        time: selectedTime,
+      });
+
+      setReservationsAtTime(response.data.count);
+
+      if (response.data.count >= 4) {
+        setShowNoSpaceModal(true); // Mostrar modal de no hay espacio
+      } else {
+        setShowReservationModal(true); // Mostrar modal de confirmación de reserva
+      }
+    } catch (error) {
+      setMessage(error.response.data.message);
+    }
+  };
+
+  const confirmReservation = async () => {
+    try {
+      const response = await axios.post('/api/reserve', {
+        date: selectedDate,
+        time: selectedTime,
+      });
+
+      setMessage(response.data.message);
+      const updatedUser = await axios.get('/api/user');
+      setUserData(updatedUser.data);
+      setShowReservationModal(false);
+    } catch (error) {
+      setMessage(error.response.data.message);
+    }
+  };
+
   return (
     <Container>
+      {!session && (
+        <WelcomeText>
+          <h1>Bienvenido a la reserva de la Moon de CrashPath</h1>
+          <p>
+            CrashPath Moon es una plataforma donde puedes reservar el tiempo de uso de la moonboard y la zona de entramiento de Crashpath.
+            Puedes elegir una fecha y hora, y automáticamente la reservamos para ti y se agendará en tu calendario de Google.
+            <br /><br />
+            ¡Inicia sesión para ver tus créditos disponibles y hacer una reserva!
+          </p>
+        </WelcomeText>
+      )}
+
       {session ? (
         <>
           <h1>Bienvenido, {session.user.name}!</h1>
@@ -162,7 +227,6 @@ export default function Home() {
           <h2>Selecciona una fecha y una hora para hacer una reserva:</h2>
           <Calendar onClickDay={setSelectedDate} />
 
-          {/* Selector de tiempo para elegir la hora */}
           <TimePicker value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)}>
             {times.map((time) => (
               <option key={time} value={time}>{time}</option>
@@ -175,11 +239,11 @@ export default function Home() {
 
           {message && <p>{message}</p>}
 
-          <h2>Estas son tus reservaciones:</h2>
+          <h2>Tus Reservaciones:</h2>
           <ul>
             {userData.reservations.map((reservation, index) => (
               <li key={index}>
-                Reserva Para el dia {new Date(reservation.date).toLocaleDateString()} a las {reservation.time}
+                Reserva para el día {new Date(reservation.date).toLocaleDateString()} a las {reservation.time}
               </li>
             ))}
           </ul>
@@ -188,9 +252,30 @@ export default function Home() {
         </>
       ) : (
         <>
-          <h1>Bienvenido a la reserva de la Moon de CrashPath</h1>
           <Button onClick={handleSignIn}>Inicia sesión con Google</Button>
         </>
+      )}
+
+      {/* Modal de confirmación de reserva */}
+      {showReservationModal && (
+        <ModalOverlay>
+          <ModalContent>
+            <CloseButton onClick={() => setShowReservationModal(false)}>X</CloseButton>
+            <h2>Han reservado {reservationsAtTime} personas para esta hora.</h2>
+            <p>¿Quieres reservar?</p>
+            <ModalButton onClick={confirmReservation}>Reservar</ModalButton>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+
+      {/* Modal de no hay espacio */}
+      {showNoSpaceModal && (
+        <ModalOverlay>
+          <ModalContent>
+            <CloseButton onClick={() => setShowNoSpaceModal(false)}>X</CloseButton>
+            <h2>Lo siento, No quedan cupos para esta hora/día.</h2>
+          </ModalContent>
+        </ModalOverlay>
       )}
 
       {showConsentModal && (

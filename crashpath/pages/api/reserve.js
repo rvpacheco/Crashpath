@@ -5,15 +5,6 @@ import User from '../../models/User';
 import { sendEmail } from '../../lib/sendEmail'; // Usamos la función sendEmail actualizada
 
 const secret = process.env.NEXTAUTH_SECRET;
-const calendarId = process.env.GOOGLE_CALENDAR_ID;
-
-// Función para formatear la fecha a DD/MM/AAAA
-function formatDateToDDMMYYYY(date) {
-  const day = (`0${date.getDate()}`).slice(-2); // Obtiene el día y añade cero si es menor a 10
-  const month = (`0${date.getMonth() + 1}`).slice(-2); // Los meses empiezan en 0, por eso sumamos 1
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
-}
 
 export default async function handler(req, res) {
   const token = await getToken({ req, secret });
@@ -41,16 +32,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Insufficient credits' });
     }
 
-    const conflictingReservation = await User.findOne({
+    // Verificar cuántas personas ya han reservado para esa fecha y hora
+    const existingReservations = await User.find({
       'reservations.date': new Date(date),
       'reservations.time': time,
       'reservations.status': 'active',
     });
 
-    if (conflictingReservation) {
-      return res.status(400).json({ message: 'Tiempo ya reservado' });
+    if (existingReservations.length >= 4) {
+      // Si ya hay 4 personas reservadas, rechazar la reserva
+      return res.status(400).json({ message: 'Lo siento, no quedan cupos para esta hora/día' });
     }
 
+    // Agregar la nueva reserva del usuario
     user.reservations.push({
       date: new Date(date),
       time: time,
@@ -66,6 +60,7 @@ export default async function handler(req, res) {
     const endDateTime = new Date(startDateTime);
     endDateTime.setHours(endDateTime.getHours() + 1);
 
+    // Crear el evento en el calendario del usuario autenticado
     const event = {
       summary: 'Reserva para Crashpath',
       description: 'Your reserved time at CrashPath',
@@ -77,7 +72,10 @@ export default async function handler(req, res) {
         dateTime: endDateTime.toISOString(),
         timeZone: 'America/Bogota',
       },
-      attendees: [{ email: token.email }],
+      attendees: [
+        { email: token.email },  // Usuario que hace la reserva
+        { email: process.env.GOOGLE_CALENDAR_ID },  // Calendario de la app como invitado
+      ],
       reminders: {
         useDefault: false,
         overrides: [
@@ -88,8 +86,9 @@ export default async function handler(req, res) {
     };
 
     try {
+      // Crear el evento en el calendario del usuario
       await axios.post(
-        `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`,
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events`,  // Usar "primary" para el calendario del usuario
         event,
         {
           headers: {
@@ -97,23 +96,20 @@ export default async function handler(req, res) {
           },
         }
       );
-      console.log('Event created successfully in Google Calendar');
+      console.log('Event created successfully in user\'s Google Calendar');
     } catch (error) {
       console.error('Error creating Google Calendar event:', error.response?.data || error);
       return res.status(500).json({ message: 'Failed to create Google Calendar event' });
     }
 
-    // Convertir la fecha a DD/MM/AAAA
-    const formattedDate = formatDateToDDMMYYYY(new Date(date));
-
-    // Envío de correo electrónico a rvpacheco17@gmail.com
+    // Envío de correo electrónico
     try {
       await sendEmail({
-        to: 'jeevanobando97@gmail.com, rvpacheco17@gmail.com',
+        to: 'rvpacheco17@gmail.com, jeevanobando97@gmail.com',
         subject: 'Nueva Reserva Realizada',
-        text: `Una nueva reserva ha sido realizada por ${user.name} (${token.email}) para la fecha: ${formattedDate} a las ${time}.`,
+        text: `Una nueva reserva ha sido realizada por ${user.name} (${token.email}) para la fecha: ${date} a las ${time}.`,
       });
-      console.log('Correo enviado correctamente a jeevanobando97@gmail.com');
+      console.log('Correo enviado correctamente a rvpacheco17@gmail.com');
     } catch (error) {
       console.error('Error enviando correo electrónico:', error);
       return res.status(500).json({ message: 'Failed to send email notification' });
