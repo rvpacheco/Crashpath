@@ -119,6 +119,7 @@ export default function Home() {
   const [isFirstReservation, setIsFirstReservation] = useState(false); // Estado para verificar si es la primera reserva
   const [isPrivate, setIsPrivate] = useState(false); // Estado para controlar si la reserva será privada o pública
   const [reservationsAtTime, setReservationsAtTime] = useState(0);
+  const [showConsentModal, setShowConsentModal] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
