@@ -136,6 +136,16 @@ export default function Home() {
       }
     }
   }, [session, router]);
+  const handleSignIn = () => {
+    setShowConsentModal(true);
+  };
+  const handleAccept = () => {
+    setShowConsentModal(false);
+    signIn('google');
+  };
+  const handleReject = () => {
+    setShowConsentModal(false);
+  };
 
   const handleReservation = async () => {
     if (!selectedDate) {
@@ -199,16 +209,7 @@ export default function Home() {
     } catch (error) {
       setMessage(error.response.data.message);
     }
-    const handleSignIn = () => {
-      setShowConsentModal(true);
-    };
-    const handleAccept = () => {
-      setShowConsentModal(false);
-      signIn('google');
-    };
-    const handleReject = () => {
-      setShowConsentModal(false);
-    };
+    
   };
 
   return (
