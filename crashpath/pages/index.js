@@ -65,7 +65,7 @@ const CloseButton = styled.button`
   border: none;
   font-size: 24px;
   cursor: pointer;
-  color: red; // Cambia el color de la "X" a rojo
+  color: red;
   
   &:hover {
     color: darkred;
@@ -91,9 +91,8 @@ const ModalContent = styled.div`
   text-align: center;
   max-width: 500px;
   width: 100%;
-  position: relative; // Necesario para que el botón de cierre esté posicionado correctamente
+  position: relative;
 `;
-
 
 const ModalButton = styled(Button)`
   margin: 10px;
@@ -115,10 +114,11 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(times[0]);
   const [message, setMessage] = useState('');
-  const [showConsentModal, setShowConsentModal] = useState(false);
   const [showReservationModal, setShowReservationModal] = useState(false);
   const [showNoSpaceModal, setShowNoSpaceModal] = useState(false);
-  const [reservationsAtTime, setReservationsAtTime] = useState(0); // Estado para contar reservaciones en una hora específica
+  const [isFirstReservation, setIsFirstReservation] = useState(false); // Estado para verificar si es la primera reserva
+  const [isPrivate, setIsPrivate] = useState(false); // Estado para controlar si la reserva será privada o pública
+  const [reservationsAtTime, setReservationsAtTime] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -136,19 +136,6 @@ export default function Home() {
       }
     }
   }, [session, router]);
-
-  const handleSignIn = () => {
-    setShowConsentModal(true);
-  };
-
-  const handleAccept = () => {
-    setShowConsentModal(false);
-    signIn('google');
-  };
-
-  const handleReject = () => {
-    setShowConsentModal(false);
-  };
 
   const handleReservation = async () => {
     if (!selectedDate) {
@@ -171,7 +158,6 @@ export default function Home() {
     }
 
     try {
-      // Ver cuántas personas ya han reservado a esta hora
       const response = await axios.post('/api/check-reservations', {
         date: selectedDate,
         time: selectedTime,
@@ -179,8 +165,16 @@ export default function Home() {
 
       setReservationsAtTime(response.data.count);
 
-      if (response.data.count >= 4) {
+      if (response.data.isPrivate) {
+        // Si la franja es privada, mostramos el mensaje y cerramos el modal
+        setMessage('Lo siento, esta franja horaria es privada y no se pueden hacer más reservas.');
+        setShowReservationModal(false);  // Aquí cerramos el modal
+        return;  // Salimos de la función para que no continúe
+      } else if (response.data.count >= 3) {
         setShowNoSpaceModal(true); // Mostrar modal de no hay espacio
+      } else if (response.data.count === 0) {
+        setIsFirstReservation(true); // Es la primera reserva
+        setShowReservationModal(true); // Mostrar el modal para elegir si es privada o pública
       } else {
         setShowReservationModal(true); // Mostrar modal de confirmación de reserva
       }
@@ -191,9 +185,11 @@ export default function Home() {
 
   const confirmReservation = async () => {
     try {
+      // Aquí aseguramos que `isPrivate` se envíe correctamente al backend
       const response = await axios.post('/api/reserve', {
         date: selectedDate,
         time: selectedTime,
+        isPrivate: isFirstReservation ? isPrivate : false, // Si es la primera reserva, decidir si es privada
       });
 
       setMessage(response.data.message);
@@ -211,7 +207,7 @@ export default function Home() {
         <WelcomeText>
           <h1>Bienvenido a la reserva de la Moon de CrashPath</h1>
           <p>
-            CrashPath Moon es una plataforma donde puedes reservar el tiempo de uso de la moonboard y la zona de entramiento de Crashpath.
+            CrashPath Moon es una plataforma donde puedes reservar el tiempo de uso de la moonboard y la zona de entrenamiento de Crashpath.
             Puedes elegir una fecha y hora, y automáticamente la reservamos para ti y se agendará en tu calendario de Google.
             <br /><br />
             ¡Inicia sesión para ver tus créditos disponibles y hacer una reserva!
@@ -252,12 +248,25 @@ export default function Home() {
         </>
       ) : (
         <>
-          <Button onClick={handleSignIn}>Inicia sesión con Google</Button>
+          <Button onClick={() => signIn('google')}>Inicia sesión con Google</Button>
         </>
       )}
 
+      {/* Modal para elegir si la reserva es privada o pública */}
+      {isFirstReservation && showReservationModal && (
+        <ModalOverlay>
+          <ModalContent>
+            <CloseButton onClick={() => setShowReservationModal(false)}>X</CloseButton>
+            <h2>¿Quieres que esta sesión sea privada o pública?</h2>
+            <p>Si eliges privada, nadie más podrá reservar en esta franja horaria. Si eliges pública, se pueden agregar hasta 3 personas más.</p>
+            <ModalButton onClick={() => { setIsPrivate(true); confirmReservation(); }}>Privada</ModalButton>
+            <ModalButton onClick={() => { setIsPrivate(false); confirmReservation(); }}>Pública</ModalButton>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+
       {/* Modal de confirmación de reserva */}
-      {showReservationModal && (
+      {!isFirstReservation && showReservationModal && (
         <ModalOverlay>
           <ModalContent>
             <CloseButton onClick={() => setShowReservationModal(false)}>X</CloseButton>
@@ -277,23 +286,6 @@ export default function Home() {
           </ModalContent>
         </ModalOverlay>
       )}
-
-      {showConsentModal && (
-        <ModalOverlay>
-          <ModalContent>
-            <h2>Consentimiento para utilizar Google Calendar</h2>
-            <p>Esta aplicación requiere acceso a tu Google Calendar para poder agregar eventos. ¿Deseas continuar?</p>
-            <ModalButton onClick={handleAccept}>Aceptar</ModalButton>
-            <ModalButton danger onClick={handleReject}>Rechazar</ModalButton>
-          </ModalContent>
-        </ModalOverlay>
-      )}
-
-      <footer style={{ textAlign: 'center', marginTop: '40px' }}>
-        <Link href="/privacy" style={{ color: '#007bff', textDecoration: 'none' }}>
-          Política de Privacidad
-        </Link>
-      </footer>
     </Container>
   );
 }

@@ -2,7 +2,7 @@ import { getToken } from 'next-auth/jwt';
 import axios from 'axios';
 import dbConnect from '../../lib/mongodb';
 import User from '../../models/User';
-import { sendEmail } from '../../lib/sendEmail'; // Usamos la función sendEmail actualizada
+import { sendEmail } from '../../lib/sendEmail';
 
 const secret = process.env.NEXTAUTH_SECRET;
 
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const { date, time } = req.body;
+  const { date, time, isPrivate } = req.body;  // Nos aseguramos de recibir isPrivate correctamente
 
   await dbConnect();
 
@@ -32,23 +32,42 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Insufficient credits' });
     }
 
-    // Verificar cuántas personas ya han reservado para esa fecha y hora
+    // Verificar si ya existe una reserva privada o si hay 4 reservas en ese horario
     const existingReservations = await User.find({
       'reservations.date': new Date(date),
       'reservations.time': time,
       'reservations.status': 'active',
     });
 
-    if (existingReservations.length >= 4) {
-      // Si ya hay 4 personas reservadas, rechazar la reserva
+    // Si ya hay una reserva privada en ese horario, no permitir más reservas
+    const privateReservation = existingReservations.some(user =>
+      user.reservations.some(res => res.isPrivate)
+    );
+
+    if (privateReservation) {
+      return res.status(400).json({ message: 'Lo siento, esta franja horaria es privada y no se pueden hacer más reservas.' });
+    }
+
+    // Si ya hay 4 reservas (públicas), rechazar la reserva
+    if (existingReservations.length >= 3) {
       return res.status(400).json({ message: 'Lo siento, no quedan cupos para esta hora/día' });
     }
 
-    // Agregar la nueva reserva del usuario
+    // Verificar si el usuario ya tiene una reserva activa en el mismo horario
+    const userAlreadyHasReservation = user.reservations.find(res =>
+      res.date.toISOString() === new Date(date).toISOString() && res.time === time && res.status === 'active'
+    );
+
+    if (userAlreadyHasReservation) {
+      return res.status(400).json({ message: 'Ya tienes una reserva en esta fecha y hora.' });
+    }
+
+    // **Corregir aquí:** Agregar la nueva reserva con el valor correcto de isPrivate
     user.reservations.push({
       date: new Date(date),
       time: time,
       status: 'active',
+      isPrivate: isPrivate === true ? true : false,  // Asegurarse de que se envíe como `true` o `false`
     });
 
     user.credits -= 1;

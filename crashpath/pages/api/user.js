@@ -32,7 +32,7 @@ export default async function handler(req, res) {
       user = new User({
         email,  // Use extracted email
         name,   // Use extracted name
-        credits: 5,                 // Default initial credits
+        credits: 0,                 // Default initial credits
         reservations: [],           // Initialize an empty reservations array
       });
 
