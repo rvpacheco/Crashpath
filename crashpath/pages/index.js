@@ -199,6 +199,16 @@ export default function Home() {
     } catch (error) {
       setMessage(error.response.data.message);
     }
+    const handleSignIn = () => {
+      setShowConsentModal(true);
+    };
+    const handleAccept = () => {
+      setShowConsentModal(false);
+      signIn('google');
+    };
+    const handleReject = () => {
+      setShowConsentModal(false);
+    };
   };
 
   return (
@@ -248,7 +258,7 @@ export default function Home() {
         </>
       ) : (
         <>
-          <Button onClick={() => signIn('google')}>Inicia sesión con Google</Button>
+          <Button onClick={handleSignIn}>Inicia sesión con Google</Button>
         </>
       )}
 
@@ -286,6 +296,21 @@ export default function Home() {
           </ModalContent>
         </ModalOverlay>
       )}
+            {showConsentModal && (
+        <ModalOverlay>
+          <ModalContent>
+            <h2>Consentimiento para utilizar Google Calendar</h2>
+            <p>Esta aplicación requiere acceso a tu Google Calendar para poder agregar eventos. ¿Deseas continuar?</p>
+            <ModalButton onClick={handleAccept}>Aceptar</ModalButton>
+            <ModalButton danger onClick={handleReject}>Rechazar</ModalButton>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+      <footer style={{ textAlign: 'center', marginTop: '40px' }}>
+        <Link href="/privacy" style={{ color: '#007bff', textDecoration: 'none' }}>
+          Política de Privacidad
+        </Link>
+      </footer>
     </Container>
   );
 }
