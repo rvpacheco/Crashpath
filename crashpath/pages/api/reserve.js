@@ -74,10 +74,10 @@ export default async function handler(req, res) {
     await user.save();
 
     const startDateTime = new Date(date);
-    startDateTime.setHours(parseInt(time.split(':')[0]), parseInt(time.split(':')[1]));
+    const [hours, minutes] = time.split(':');
+startDateTime.setHours(parseInt(hours), parseInt(minutes));
 
-    const endDateTime = new Date(startDateTime);
-    endDateTime.setHours(endDateTime.getHours() + 1);
+const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000);  // Añade 1 hora
 
     // Crear el evento en el calendario del usuario autenticado
     const event = {
