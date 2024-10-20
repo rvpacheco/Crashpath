@@ -196,13 +196,14 @@ export default function Home() {
 
   const confirmReservation = async () => {
     try {
-      // Aquí aseguramos que `isPrivate` se envíe correctamente al backend
+      // Convertir la fecha a ISO antes de enviarla al backend si es necesario
+      const formattedDate = new Date(selectedDate).toISOString().split('T')[0];  // Enviar solo la parte de la fecha
       const response = await axios.post('/api/reserve', {
-        date: selectedDate,
-        time: selectedTime,
-        isPrivate: isFirstReservation ? isPrivate : false, // Si es la primera reserva, decidir si es privada
+        date: formattedDate,  // Asegúrate de enviar la fecha en formato ISO
+        time: selectedTime,   // La hora en formato HH:mm
+        isPrivate: isFirstReservation ? isPrivate : false,
       });
-
+  
       setMessage(response.data.message);
       const updatedUser = await axios.get('/api/user');
       setUserData(updatedUser.data);
@@ -210,7 +211,6 @@ export default function Home() {
     } catch (error) {
       setMessage(error.response.data.message);
     }
-    
   };
 
   return (
