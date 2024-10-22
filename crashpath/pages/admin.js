@@ -248,7 +248,8 @@ export default function AdminPage() {
                     <ul>
                       {user.reservations.map((reservation) => (
                         <li key={reservation._id}>
-                          {new Date(reservation.date).toLocaleDateString()} - {reservation.time}
+                          {new Date(reservation.date).toLocaleDateString()} - {reservation.time} -{' '}
+                          {reservation.isPrivate ? 'Privada' : 'Pública'}
                           <DangerButton
                             onClick={() => removeReservation(user._id, reservation._id)}
                           >

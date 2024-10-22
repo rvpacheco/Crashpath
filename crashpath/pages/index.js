@@ -120,6 +120,10 @@ export default function Home() {
   const [isPrivate, setIsPrivate] = useState(false); // Estado para controlar si la reserva será privada o pública
   const [reservationsAtTime, setReservationsAtTime] = useState(0);
   const [showConsentModal, setShowConsentModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false); // Estado para el modal de 
+  const [showPrivateSlotModal, setShowPrivateSlotModal] = useState(false); // Nuevo estado para franja privada
+
+
   const router = useRouter();
 
   useEffect(() => {
@@ -177,9 +181,8 @@ export default function Home() {
       setReservationsAtTime(response.data.count);
 
       if (response.data.isPrivate) {
-        // Si la franja es privada, mostramos el mensaje y cerramos el modal
-        setMessage('Lo siento, esta franja horaria es privada y no se pueden hacer más reservas.');
-        setShowReservationModal(false);  // Aquí cerramos el modal
+        // Si la franja es privada, mostrar el modal de franja privada
+        setShowPrivateSlotModal(true);
         return;  // Salimos de la función para que no continúe
       } else if (response.data.count >= 3) {
         setShowNoSpaceModal(true); // Mostrar modal de no hay espacio
@@ -194,6 +197,7 @@ export default function Home() {
     }
   };
 
+
   const confirmReservation = async () => {
     try {
       // Convertir la fecha a ISO antes de enviarla al backend si es necesario
@@ -203,7 +207,7 @@ export default function Home() {
         time: selectedTime,   // La hora en formato HH:mm
         isPrivate: isFirstReservation ? isPrivate : false,
       });
-  
+
       setMessage(response.data.message);
       const updatedUser = await axios.get('/api/user');
       setUserData(updatedUser.data);
@@ -212,6 +216,23 @@ export default function Home() {
       setMessage(error.response.data.message);
     }
   };
+  const finalizeReservation = async () => {
+    try {
+      const formattedDate = new Date(selectedDate).toISOString().split('T')[0];
+      const response = await axios.post('/api/reserve', {
+        date: formattedDate,
+        time: selectedTime,
+        isPrivate,
+      });
+
+      setMessage(response.data.message);
+      setShowConfirmModal(false); // Cierra el modal de confirmación después de hacer la reserva
+      setShowReservationModal(false); // Cierra el modal de reserva
+    } catch (error) {
+      setMessage(error.response.data.message);
+    }
+  };
+
 
   return (
     <Container>
@@ -271,23 +292,50 @@ export default function Home() {
             <CloseButton onClick={() => setShowReservationModal(false)}>X</CloseButton>
             <h2>¿Quieres que esta sesión sea privada o pública?</h2>
             <p>Si eliges privada, nadie más podrá reservar en esta franja horaria. Si eliges pública, se pueden agregar hasta 3 personas más.</p>
-            <ModalButton onClick={() => { setIsPrivate(true); confirmReservation(); }}>Privada</ModalButton>
-            <ModalButton onClick={() => { setIsPrivate(false); confirmReservation(); }}>Pública</ModalButton>
+            <ModalButton onClick={() => { setIsPrivate(true); setShowConfirmModal(true); setShowReservationModal(false); }}>Privada</ModalButton>
+            <ModalButton onClick={() => { setIsPrivate(false); setShowConfirmModal(true); setShowReservationModal(false); }}>Pública</ModalButton>
           </ModalContent>
         </ModalOverlay>
       )}
 
-      {/* Modal de confirmación de reserva */}
+
+      {/* Modal de confirmación de reserva pública */}
       {!isFirstReservation && showReservationModal && (
         <ModalOverlay>
           <ModalContent>
             <CloseButton onClick={() => setShowReservationModal(false)}>X</CloseButton>
             <h2>Han reservado {reservationsAtTime} personas para esta hora.</h2>
             <p>¿Quieres reservar?</p>
-            <ModalButton onClick={confirmReservation}>Reservar</ModalButton>
+            <ModalButton onClick={() => { setShowConfirmModal(true); setShowReservationModal(false); }}>
+              Reservar
+            </ModalButton>
           </ModalContent>
         </ModalOverlay>
       )}
+
+      {/* Modal para franja horaria privada */}
+      {showPrivateSlotModal && (
+        <ModalOverlay>
+          <ModalContent>
+            <CloseButton onClick={() => setShowPrivateSlotModal(false)}>X</CloseButton>
+            <h2>Lo siento, esta franja horaria ya es privada.</h2>
+            <p>Por favor, selecciona otra hora para tu reserva.</p>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+
+      {/* Modal de confirmación final de reserva */}
+      {showConfirmModal && (
+        <ModalOverlay>
+          <ModalContent>
+            <CloseButton onClick={() => setShowConfirmModal(false)}>X</CloseButton>
+            <h2>¿Estás segur@ que quieres reservar a las {selectedTime} del día {new Date(selectedDate).toLocaleDateString()}?</h2>
+            <ModalButton onClick={finalizeReservation}>Confirmar</ModalButton>
+            <ModalButton danger onClick={() => setShowConfirmModal(false)}>Cancelar</ModalButton>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+
 
       {/* Modal de no hay espacio */}
       {showNoSpaceModal && (
@@ -298,7 +346,7 @@ export default function Home() {
           </ModalContent>
         </ModalOverlay>
       )}
-            {showConsentModal && (
+      {showConsentModal && (
         <ModalOverlay>
           <ModalContent>
             <h2>Consentimiento para utilizar Google Calendar</h2>
