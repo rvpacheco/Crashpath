@@ -122,6 +122,7 @@ export default function Home() {
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false); // Estado para el modal de 
   const [showPrivateSlotModal, setShowPrivateSlotModal] = useState(false); // Nuevo estado para franja privada
+  const [isSubmitting, setIsSubmitting] = useState(false); // Nuevo estado para prevenir múltiples envíos
 
 
   const router = useRouter();
@@ -217,6 +218,9 @@ export default function Home() {
     }
   };
   const finalizeReservation = async () => {
+    if (isSubmitting) return; // Si ya está enviando, evita que la función se ejecute nuevamente
+    setIsSubmitting(true); // Establecer el estado a 'enviando' para evitar múltiples envíos
+  
     try {
       const formattedDate = new Date(selectedDate).toISOString().split('T')[0];
       const response = await axios.post('/api/reserve', {
@@ -224,12 +228,14 @@ export default function Home() {
         time: selectedTime,
         isPrivate,
       });
-
+  
       setMessage(response.data.message);
       setShowConfirmModal(false); // Cierra el modal de confirmación después de hacer la reserva
       setShowReservationModal(false); // Cierra el modal de reserva
+      setIsSubmitting(false); // Restablece el estado después de que se complete la solicitud
     } catch (error) {
       setMessage(error.response.data.message);
+      setIsSubmitting(false); // Restablece el estado en caso de error
     }
   };
 
@@ -326,15 +332,26 @@ export default function Home() {
 
       {/* Modal de confirmación final de reserva */}
       {showConfirmModal && (
-        <ModalOverlay>
-          <ModalContent>
-            <CloseButton onClick={() => setShowConfirmModal(false)}>X</CloseButton>
-            <h2>¿Estás segur@ que quieres reservar a las {selectedTime} del día {new Date(selectedDate).toLocaleDateString()}?</h2>
-            <ModalButton onClick={finalizeReservation}>Confirmar</ModalButton>
-            <ModalButton danger onClick={() => setShowConfirmModal(false)}>Cancelar</ModalButton>
-          </ModalContent>
-        </ModalOverlay>
-      )}
+  <ModalOverlay>
+    <ModalContent>
+      <CloseButton onClick={() => setShowConfirmModal(false)}>X</CloseButton>
+      <h2>¿Estás segur@ que quieres reservar a las {selectedTime} del día {new Date(selectedDate).toLocaleDateString()}?</h2>
+      <ModalButton 
+        onClick={finalizeReservation} 
+        disabled={isSubmitting} // Deshabilitar el botón mientras se envía
+      >
+        {isSubmitting ? 'Reservando...' : 'Confirmar'}
+      </ModalButton>
+      <ModalButton 
+        danger 
+        onClick={() => setShowConfirmModal(false)} 
+        disabled={isSubmitting} // Deshabilitar el botón mientras se envía
+      >
+        Cancelar
+      </ModalButton>
+    </ModalContent>
+  </ModalOverlay>
+)}
 
 
       {/* Modal de no hay espacio */}
