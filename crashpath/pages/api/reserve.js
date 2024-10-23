@@ -3,7 +3,7 @@ import axios from 'axios';
 import dbConnect from '../../lib/mongodb';
 import User from '../../models/User';
 import { sendEmail } from '../../lib/sendEmail';
-import { DateTime } from 'luxon'; // Usa Luxon para un mejor manejo de las fechas y horas
+import { DateTime } from 'luxon'; 
 
 const secret = process.env.NEXTAUTH_SECRET;
 
@@ -60,59 +60,67 @@ export default async function handler(req, res) {
     }
 
     user.reservations.push({
-      date: DateTime.fromISO(date, { zone: 'America/Bogota' }).toJSDate(), // Convertir la fecha a la zona horaria correcta
+      date: DateTime.fromISO(date, { zone: 'America/Bogota' }).toJSDate(), 
       time: time,
       status: 'active',
       isPrivate: isPrivate === true ? true : false,
     });
-    
 
     user.credits -= 1;
     await user.save();
 
-    // **Ajuste para manejar la zona horaria y la hora correctamente**
-    const startDateTime = DateTime.fromISO(`${date}T${time}`, { zone: 'America/Bogota' });
-    const endDateTime = startDateTime.plus({ hours: 1 }); // Añade 1 hora para el fin del evento
+   // Ajuste para manejar la zona horaria y la hora correctamente
+const startDateTime = DateTime.fromISO(`${date}T${time}`, { zone: 'America/Bogota' }).toISO(); // Debe contener la fecha y la hora
+const endDateTime = startDateTime.plus({ hours: 1, minutes: 30 }); // Añade 1 hora y 30 minutos
+// Imprimir los valores de startDateTime y endDateTime para depuración
+console.log('Start DateTime:', startDateTime);
+console.log('End DateTime:', endDateTime);
 
-    const event = {
-      summary: 'Reserva para Crashpath',
-      description: 'Your reserved time at CrashPath',
-      start: {
-        dateTime: startDateTime.toISO(),  // Usamos toISO() para mantener el formato correcto
-        timeZone: 'America/Bogota',
-      },
-      end: {
-        dateTime: endDateTime.toISO(),    // Debe ser de tipo dateTime
-        timeZone: 'America/Bogota',
-      },
-      attendees: [
-        { email: token.email },           // Usuario que hace la reserva
-        { email: process.env.GOOGLE_CALENDAR_ID },  // Calendario de la app como invitado
-      ],
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'email', minutes: 10 },
-          { method: 'popup', minutes: 10 },
-        ],
-      },
-    };
+const event = {
+  summary: 'Reserva para Crashpath',
+  description: 'Your reserved time at CrashPath',
+  start: {
+    dateTime: startDateTime,  // Verificar que este campo contiene una fecha y hora completa
+    timeZone: 'America/Bogota',
+  },
+  end: {
+    dateTime: endDateTime,    // Verificar que este campo contiene una fecha y hora completa
+    timeZone: 'America/Bogota',
+  },
+  attendees: [
+    { email: token.email },  
+    { email: process.env.GOOGLE_CALENDAR_ID },  
+  ],
+  reminders: {
+    useDefault: false,
+    overrides: [
+      { method: 'email', minutes: 10 },
+      { method: 'popup', minutes: 10 },
+    ],
+  },
+};
 
-    try {
-      await axios.post(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events`,
-        event,
-        {
-          headers: {
-            Authorization: `Bearer ${token.accessToken}`,
-          },
-        }
-      );
-      console.log('Event created successfully in user\'s Google Calendar');
-    } catch (error) {
-      console.error('Error creating Google Calendar event:', error.response?.data || error);
-      return res.status(500).json({ message: 'Failed to create Google Calendar event' });
+// Si los valores de start y end son válidos, se procederá a crear el evento
+try {
+  const response = await axios.post(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events`,
+    event,
+    {
+      headers: {
+        Authorization: `Bearer ${token.accessToken}`,
+      },
     }
+  );
+  console.log('Event created successfully in user\'s Google Calendar', response.data);
+} catch (error) {
+  console.error('Error creating Google Calendar event:', error.response?.data || error.message);
+  
+  return res.status(500).json({
+    message: 'Failed to create Google Calendar event',
+    error: error.response?.data || error.message,
+  });
+}
+
 
     try {
       await sendEmail({

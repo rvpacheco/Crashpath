@@ -5,7 +5,6 @@ import axios from 'axios';
 import styled from 'styled-components';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-
 // Estilos
 const AdminContainer = styled.div`
   max-width: 1100px;
@@ -143,6 +142,8 @@ export default function AdminPage() {
   const [credits, setCredits] = useState(0);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);  // Estado para la opción de privacidad
+  const [isFirstReservation, setIsFirstReservation] = useState(false);  // Indicador para la primera reserva
 
   useEffect(() => {
     if (!session) {
@@ -174,6 +175,37 @@ export default function AdminPage() {
     setShowReservationModal(true); // Mostrar modal para reservas
   };
 
+  // Verificación de si es la primera reserva
+  const checkFirstReservation = async (date, time) => {
+    const formattedDate = date.toISOString().split('T')[0];
+    try {
+      const response = await axios.post('/api/check-first-reservation', {
+        date: formattedDate,
+        time: time,
+      });
+      setIsFirstReservation(response.data.isFirstReservation);
+    } catch (error) {
+      console.error('Error checking first reservation:', error);
+    }
+  };
+
+  // Actualiza el estado de la fecha seleccionada
+  const handleDateSelection = (date) => {
+    setSelectedDate(date);
+    if (selectedTime) {
+      checkFirstReservation(date, selectedTime);  // Verificamos si es la primera reserva
+    }
+  };
+
+  // Actualiza el estado del tiempo seleccionado y asegura el formato adecuado
+  const handleTimeSelection = (event) => {
+    const time = event.target.value;  // Captura el valor en formato "HH:mm"
+    setSelectedTime(time);
+    if (selectedDate) {
+      checkFirstReservation(selectedDate, time);  // Verificamos si es la primera reserva
+    }
+  };
+
   const submitCredits = async () => {
     try {
       await axios.post('/api/admin/adjust-credits', {
@@ -194,11 +226,14 @@ export default function AdminPage() {
       return;
     }
 
+    const formattedDate = selectedDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+
     try {
       await axios.post('/api/reserve', {
         userId: selectedUser,
-        date: selectedDate,
-        time: selectedTime,
+        date: formattedDate,  // Enviamos la fecha en formato YYYY-MM-DD
+        time: selectedTime,    // La hora seleccionada en formato HH:mm
+        isPrivate: isPrivate,  // Enviar si la reserva es privada o pública
       });
       alert('Reserva creada exitosamente.');
       setShowReservationModal(false); // Cerrar modal
@@ -299,12 +334,37 @@ export default function AdminPage() {
       <Overlay show={showReservationModal} onClick={() => setShowReservationModal(false)} />
       <Modal show={showReservationModal}>
         <ModalTitle>Crear Nueva Reserva</ModalTitle>
-        <Calendar onClickDay={setSelectedDate} />
+        <Calendar onClickDay={handleDateSelection} />
         <Input
           type="time"
           value={selectedTime}
-          onChange={(e) => setSelectedTime(e.target.value)}
+          onChange={handleTimeSelection}  // Actualizamos el estado con el valor de la hora seleccionada
         />
+        
+        {/* Mostrar la opción de privacidad solo si es la primera reserva */}
+        {isFirstReservation && (
+          <div>
+            <label>
+              <input
+                type="radio"
+                value={false}
+                checked={!isPrivate}
+                onChange={() => setIsPrivate(false)}
+              />
+              Pública
+            </label>
+            <label>
+              <input
+                type="radio"
+                value={true}
+                checked={isPrivate}
+                onChange={() => setIsPrivate(true)}
+              />
+              Privada
+            </label>
+          </div>
+        )}
+        
         <ActionContainer>
           <Button onClick={addReservation}>Confirmar Reserva</Button>
           <Button danger onClick={() => setShowReservationModal(false)}>
