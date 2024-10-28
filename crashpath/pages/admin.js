@@ -235,7 +235,7 @@ export default function AdminPage() {
         time: selectedTime,    // La hora seleccionada en formato HH:mm
         isPrivate: isPrivate,  // Enviar si la reserva es privada o pública
       });
-      alert('Reserva creada exitosamente.');
+      
       setShowReservationModal(false); // Cerrar modal
       fetchUsers();
     } catch (error) {
