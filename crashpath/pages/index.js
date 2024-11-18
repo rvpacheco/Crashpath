@@ -152,7 +152,16 @@ export default function Home() {
     setShowConsentModal(false);
   };
   const handleTimeSelection = (event) => {
-    setSelectedTime(event.target.value);
+    const value = event.target.value;
+    const [hours, minutes] = value.split(':').map(Number);
+
+    if (hours < 7 || hours > 20 || (hours === 20 && minutes > 0)) {
+      setMessage('Por favor selecciona una hora entre las 07:00 y las 20:00.');
+      setSelectedTime('');
+    } else {
+      setMessage('');
+      setSelectedTime(value);
+    }
   };
   const handleReservation = async () => {
     if (!selectedDate) {
