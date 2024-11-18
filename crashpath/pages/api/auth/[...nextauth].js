@@ -6,7 +6,7 @@ import { getSession } from 'next-auth/react'; // Cambia o añade esta importaci�
 
 
 // Lista de correos electrónicos de administradores
-const adminEmails = [' santistebanfabi@gmail.com','jeevanobando97@gmail.com','mattucm01@gmail.com','rvpacheco17s@gmail.com'];
+const adminEmails = [' santistebanfabi@gmail.com','jeevanobando97@gmail.com','mattucm01@gmail.com','rvpacheco17@gmail.com'];
 
 // Función para refrescar el token de acceso
 async function refreshAccessToken(token) {
