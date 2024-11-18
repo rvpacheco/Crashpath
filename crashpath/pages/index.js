@@ -5,7 +5,7 @@ import axios from 'axios';
 import { Calendar} from 'rsuite';
 import 'rsuite/dist/rsuite.min.css';
 import { useRouter } from 'next/router';
-import { DigitalClock } from '@mui/x-date-pickers/DigitalClock';
+import { MultiSectionDigitalClock } from '@mui/x-date-pickers/MultiSectionDigitalClock';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import Link from 'next/link';
@@ -151,7 +151,9 @@ export default function Home() {
   const handleReject = () => {
     setShowConsentModal(false);
   };
-
+  const handleTimeSelection = (event) => {
+    setSelectedTime(event.target.value);
+  };
   const handleReservation = async () => {
     if (!selectedDate) {
       setMessage('Por favor seleccione una fecha');
@@ -163,9 +165,10 @@ export default function Home() {
       return;
     }
 
+    const [hours, minutes] = selectedTime.split(':');
     const reservationDateTime = new Date(selectedDate);
-    reservationDateTime.setHours(selectedTime.getHours());
-    reservationDateTime.setMinutes(selectedTime.getMinutes());
+    reservationDateTime.setHours(hours);
+    reservationDateTime.setMinutes(minutes);
 
     const now = new Date();
     const timeDifference = reservationDateTime - now;
@@ -270,12 +273,14 @@ export default function Home() {
             value={selectedDate}
           />
 
-<DigitalClock
-            onChange={(value) => setSelectedTime(value)}
-            ampm={true}
-            timeStep={30} // Intervalos de 30 minutos
-            minTime={new Date(0, 0, 0, 7, 0)} // 07:00
-            maxTime={new Date(0, 0, 0, 20, 0)} // 20:00
+
+<input
+            type="time"
+            value={selectedTime}
+            onChange={handleTimeSelection}
+            min="07:00" // Hora mínima permitida
+            max="20:00" // Hora máxima permitida
+            step="1800" // Intervalos de 30 minutos
           />
 
           <Button onClick={handleReservation} disabled={!selectedDate || userData.credits <= 0}>
