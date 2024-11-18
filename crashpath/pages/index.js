@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import styled from 'styled-components';
 import axios from 'axios';
-import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
+import { Calendar, TimePicker } from 'rsuite';
+import 'rsuite/dist/rsuite.min.css';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 
@@ -22,7 +22,7 @@ const WelcomeText = styled.div`
   margin-bottom: 40px;
 
   h1 {
-    font-size: 36px;
+    font-size: 20px;
     margin-bottom: 20px;
     color: #333;
   }
@@ -49,13 +49,7 @@ const Button = styled.button`
   }
 `;
 
-const TimePicker = styled.select`
-  margin-top: 20px;
-  padding: 10px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-  font-size: 16px;
-`;
+
 
 const CloseButton = styled.button`
   position: absolute;
@@ -102,17 +96,18 @@ const ModalButton = styled(Button)`
   }
 `;
 
-const times = [
-  '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00',
-  '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
-];
+const times = Array.from({ length: 27 }, (_, i) => {
+  const hour = Math.floor(i / 2) + 7; // Empieza en las 7 horas
+  const minutes = i % 2 === 0 ? '00' : '30'; // Alterna entre :00 y :30
+  return `${hour.toString().padStart(2, '0')}:${minutes}`;
+});
 
 export default function Home() {
   const { data: session } = useSession();
   const [userData, setUserData] = useState({ credits: 0, reservations: [] });
   const [busySlots, setBusySlots] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(times[0]);
+  const [selectedTime, setSelectedTime] = useState(null);
   const [message, setMessage] = useState('');
   const [showReservationModal, setShowReservationModal] = useState(false);
   const [showNoSpaceModal, setShowNoSpaceModal] = useState(false);
@@ -159,10 +154,14 @@ export default function Home() {
       return;
     }
 
+    if (!selectedTime) {
+      setMessage('Por favor seleccione una hora válida');
+      return;
+    }
+
     const reservationDateTime = new Date(selectedDate);
-    const [hours, minutes] = selectedTime.split(':');
-    reservationDateTime.setHours(hours);
-    reservationDateTime.setMinutes(minutes);
+    reservationDateTime.setHours(selectedTime.getHours());
+    reservationDateTime.setMinutes(selectedTime.getMinutes());
 
     const now = new Date();
     const timeDifference = reservationDateTime - now;
@@ -176,7 +175,7 @@ export default function Home() {
     try {
       const response = await axios.post('/api/check-reservations', {
         date: selectedDate,
-        time: selectedTime,
+        time: `${reservationDateTime.getHours().toString().padStart(2, '0')}:${reservationDateTime.getMinutes().toString().padStart(2, '0')}`,
       });
 
       setReservationsAtTime(response.data.count);
@@ -196,7 +195,7 @@ export default function Home() {
     } catch (error) {
       setMessage(error.response.data.message);
     }
-  };
+};
 
 
   const confirmReservation = async () => {
@@ -220,7 +219,7 @@ export default function Home() {
   const finalizeReservation = async () => {
     if (isSubmitting) return; // Si ya está enviando, evita que la función se ejecute nuevamente
     setIsSubmitting(true); // Establecer el estado a 'enviando' para evitar múltiples envíos
-  
+
     try {
       const formattedDate = new Date(selectedDate).toISOString().split('T')[0];
       const response = await axios.post('/api/reserve', {
@@ -228,7 +227,7 @@ export default function Home() {
         time: selectedTime,
         isPrivate,
       });
-  
+
       setMessage(response.data.message);
       setShowConfirmModal(false); // Cierra el modal de confirmación después de hacer la reserva
       setShowReservationModal(false); // Cierra el modal de reserva
@@ -260,30 +259,24 @@ export default function Home() {
           <p>Tienes {userData.credits} créditos disponibles.</p>
 
           <h2>Selecciona una fecha y una hora para hacer una reserva:</h2>
-          <Calendar onClickDay={setSelectedDate} />
+          <Calendar
+            compact
+            onSelect={(date) => setSelectedDate(date)}
+            value={selectedDate}
+          />
 
-          <TimePicker value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)}>
-            {times.map((time) => (
-              <option key={time} value={time}>{time}</option>
-            ))}
-          </TimePicker>
+<TimePicker
+            format="HH:mm"
+            hideHours={(hour) => hour < 7 || hour > 20} // Oculta las horas fuera del rango 7:00 - 20:00
+            hideMinutes={(minute) => minute % 30 !== 0} // Permite solo intervalos de 30 minutos
+            onChange={(value) => setSelectedTime(value)}
+          />
 
           <Button onClick={handleReservation} disabled={!selectedDate || userData.credits <= 0}>
             Reserva {selectedDate && `${selectedDate.toLocaleDateString()} a las ${selectedTime}`}
           </Button>
 
           {message && <p>{message}</p>}
-
-          <h2>Tus Reservaciones:</h2>
-          <ul>
-            {userData.reservations.map((reservation, index) => (
-              <li key={index}>
-                Reserva para el día {new Date(reservation.date).toLocaleDateString()} a las {reservation.time}
-              </li>
-            ))}
-          </ul>
-
-          <Button onClick={() => signOut()}>Cerrar Sesión</Button>
         </>
       ) : (
         <>
@@ -332,26 +325,26 @@ export default function Home() {
 
       {/* Modal de confirmación final de reserva */}
       {showConfirmModal && (
-  <ModalOverlay>
-    <ModalContent>
-      <CloseButton onClick={() => setShowConfirmModal(false)}>X</CloseButton>
-      <h2>¿Estás segur@ que quieres reservar a las {selectedTime} del día {new Date(selectedDate).toLocaleDateString()}?</h2>
-      <ModalButton 
-        onClick={finalizeReservation} 
-        disabled={isSubmitting} // Deshabilitar el botón mientras se envía
-      >
-        {isSubmitting ? 'Reservando...' : 'Confirmar'}
-      </ModalButton>
-      <ModalButton 
-        danger 
-        onClick={() => setShowConfirmModal(false)} 
-        disabled={isSubmitting} // Deshabilitar el botón mientras se envía
-      >
-        Cancelar
-      </ModalButton>
-    </ModalContent>
-  </ModalOverlay>
-)}
+        <ModalOverlay>
+          <ModalContent>
+            <CloseButton onClick={() => setShowConfirmModal(false)}>X</CloseButton>
+            <h2>¿Estás segur@ que quieres reservar a las {selectedTime} del día {new Date(selectedDate).toLocaleDateString()}?</h2>
+            <ModalButton
+              onClick={finalizeReservation}
+              disabled={isSubmitting} // Deshabilitar el botón mientras se envía
+            >
+              {isSubmitting ? 'Reservando...' : 'Confirmar'}
+            </ModalButton>
+            <ModalButton
+              danger
+              onClick={() => setShowConfirmModal(false)}
+              disabled={isSubmitting} // Deshabilitar el botón mientras se envía
+            >
+              Cancelar
+            </ModalButton>
+          </ModalContent>
+        </ModalOverlay>
+      )}
 
 
       {/* Modal de no hay espacio */}
