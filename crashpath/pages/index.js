@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import styled from 'styled-components';
 import axios from 'axios';
-import { Calendar, TimePicker } from 'rsuite';
+import { Calendar} from 'rsuite';
 import 'rsuite/dist/rsuite.min.css';
 import { useRouter } from 'next/router';
+import { DigitalClock } from '@mui/x-date-pickers/DigitalClock';
+import { LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import Link from 'next/link';
+
 
 const Container = styled.main`
   display: flex;
@@ -240,6 +244,7 @@ export default function Home() {
 
 
   return (
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
     <Container>
       {!session && (
         <WelcomeText>
@@ -255,21 +260,22 @@ export default function Home() {
 
       {session ? (
         <>
-          <h1>Bienvenido, {session.user.name}!</h1>
+<h1 style={{ fontSize: '30px' }}>Bienvenido, {session.user.name}!</h1>
           <p>Tienes {userData.credits} créditos disponibles.</p>
 
-          <h2>Selecciona una fecha y una hora para hacer una reserva:</h2>
+          <strong>Selecciona una fecha y una hora para hacer una reserva:</strong>
           <Calendar
             compact
             onSelect={(date) => setSelectedDate(date)}
             value={selectedDate}
           />
 
-<TimePicker
-            format="HH:mm"
-            hideHours={(hour) => hour < 7 || hour > 20} // Oculta las horas fuera del rango 7:00 - 20:00
-            hideMinutes={(minute) => minute % 30 !== 0} // Permite solo intervalos de 30 minutos
+<DigitalClock
             onChange={(value) => setSelectedTime(value)}
+            ampm={true}
+            timeStep={30} // Intervalos de 30 minutos
+            minTime={new Date(0, 0, 0, 7, 0)} // 07:00
+            maxTime={new Date(0, 0, 0, 20, 0)} // 20:00
           />
 
           <Button onClick={handleReservation} disabled={!selectedDate || userData.credits <= 0}>
@@ -372,5 +378,6 @@ export default function Home() {
         </Link>
       </footer>
     </Container>
+    </LocalizationProvider>
   );
 }
