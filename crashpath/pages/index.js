@@ -1,128 +1,319 @@
+"use client";
+
 import { useEffect, useState } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import styled from 'styled-components';
 import axios from 'axios';
-import { Calendar} from 'rsuite';
+import { Calendar } from 'rsuite';
 import 'rsuite/dist/rsuite.min.css';
 import { useRouter } from 'next/router';
-import { MultiSectionDigitalClock } from '@mui/x-date-pickers/MultiSectionDigitalClock';
-import { LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import Link from 'next/link';
 
-
 const Container = styled.main`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   min-height: 100vh;
-  padding: 20px;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
 `;
 
-const WelcomeText = styled.div`
+const Card = styled.section`
+  width: 100%;
+  max-width: 360px;
   text-align: center;
-  max-width: 600px;
-  margin-bottom: 40px;
+  display: grid;
+  gap: 16px;
+`;
 
-  h1 {
-    font-size: 20px;
-    margin-bottom: 20px;
-    color: #333;
+const WelcomeRow = styled.h1`
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #1E1E1E;
+`;
+
+const BrushName = styled.span`
+  font-family: var(--font-brush);
+  color: #9a4a23;
+  text-transform: none;
+`;
+
+const Credits = styled.p`
+  margin: 0;
+  font-size: 13.5px;
+  color: #1f1f1f;
+  strong{ color:#9a4a23; }
+`;
+
+const Sub = styled.p`
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #b5632e;
+`;
+
+const CalendarWrap = styled.div`
+  display: grid;
+  place-items: center;
+
+  .rs-calendar {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e7e7e7;
+    box-shadow: 0 6px 18px rgba(0,0,0,.08);
+    padding: 10px;
+    width: 100%;
+    max-width: 320px;
   }
-
-  p {
-    font-size: 18px;
-    line-height: 1.6;
-    color: #555;
+  .rs-calendar-header-title,
+  .rs-calendar-header-title > button {
+    font-weight: 600;
+  }
+  .rs-calendar-table-cell-selected .rs-calendar-table-cell-content {
+    background: #FDFD76;
   }
 `;
 
-const Button = styled.button`
-  padding: 12px 24px;
-  margin: 20px 0;
-  background-color: ${(props) => (props.disabled ? '#d3d3d3' : '#007bff')};
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: ${(props) => (props.disabled ? 'not-allowed' : 'pointer')};
-  font-size: 16px;
-
-  &:hover {
-    background-color: ${(props) => (props.disabled ? '#d3d3d3' : '#0056b3')};
-  }
+const Controls = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  max-width: 360px;
 `;
 
-
-
-const CloseButton = styled.button`
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: transparent;
-  border: none;
-  font-size: 24px;
+const TimePill = styled.input`
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  height: 44px;
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: .02em;
+  background: #9a4a23;
+  color: #fff;
+  box-shadow: 0 2px 0 rgba(0,0,0,.12);
   cursor: pointer;
-  color: red;
-  
-  &:hover {
-    color: darkred;
-  }
+`;
+
+const ReserveBtn = styled.button`
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  height: 44px;
+  background: #9a4a23;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: .04em;
+  cursor: pointer;
+  box-shadow: 0 2px 0 rgba(0,0,0,.12);
+  transition: transform .02s ease, box-shadow .2s ease, filter .2s ease;
+  &:active{ transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
+  &:disabled{ background:#d3d3d3; cursor:not-allowed; }
+`;
+
+const SectionTitle = styled.p`
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #2b2b2b;
+`;
+
+const Logout = styled.button`
+  width: 100%;
+  max-width: 220px;
+  margin: 6px auto 0;
+  border: 0;
+  border-radius: 10px;
+  height: 40px;
+  background: #9bbfd0;
+  color: #0f2b30;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 0 rgba(0,0,0,.12);
+`;
+
+const FooterLink = styled(Link)`
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: #2b8dfc;
+  text-decoration: underline;
+`;
+
+const BrushTitle = styled.h2`
+  font-family: var(--font-brush);
+  font-size: 28px;
+  line-height: 1.1;
+  margin: 0;
+  color: #9a4a23;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+`;
+
+const Body = styled.div`
+  color: #2c2c2c;
+  font-size: 14px;
+  line-height: 1.55;
+  margin-top: 4px;
+  p { margin: 0 0 10px; }
+  strong { font-weight: 700; }
+`;
+
+const SmallNote = styled.p`
+  margin: 0;
+  font-size: 13px;
+  color: #3a3a3a;
 `;
 
 const ModalOverlay = styled.div`
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background-color: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+  z-index: 50;
+`;
+
+/* Modales con gecko */
+const FrogCard = styled.div`
+  position: relative;
+  background: #fff;
+  width: 100%;
+  max-width: 360px;
+  border-radius: 16px;
+  padding: 64px 18px 20px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+  text-align: center;
+`;
+
+const FrogImg = styled.img`
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -95px;
+  width: 140px;
+  height: auto;
+`;
+
+const FrogClose = styled.button`
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  color: #9a4a23;
+  cursor: pointer;
+`;
+
+const FrogSub = styled.p`
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  color: #5a5a5a;
+`;
+
+const FrogBrush = styled.h3`
+  font-family: var(--font-brush);
+  margin: 2px 0 12px;
+  font-size: 30px;
+  letter-spacing: 0.02em;
+  color: #9a4a23;
+  text-transform: uppercase;
+`;
+
+const FrogBody = styled.p`
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #3a3a3a;
+`;
+
+const FrogRow = styled.div`
   display: flex;
-  align-items: center;
+  gap: 12px;
   justify-content: center;
 `;
 
-const ModalContent = styled.div`
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  text-align: center;
-  max-width: 500px;
-  width: 100%;
-  position: relative;
+const PublicBtn = styled.button`
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  cursor: pointer;
+  color: #fff;
+  background: #9a4a23;
+  box-shadow: 0 2px 0 rgba(0,0,0,.12);
+  transition: transform .02s ease, box-shadow .2s ease, filter .2s ease;
+  &:active{ transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
+  &:hover{ filter: brightness(.98); }
+  min-width: 120px;
+`;
+const PrivateBtn = styled(PublicBtn)` background:#2f6f7a; `;
+const NeutralBtn = styled(PublicBtn)` background:#7aaab0; color:#0f2b30; font-weight:700; `;
+
+/* Lista de reservas */
+const ResList = styled.ul`
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  display: grid;
+  gap: 8px;
 `;
 
-const ModalButton = styled(Button)`
-  margin: 10px;
-  background-color: ${(props) => (props.danger ? '#dc3545' : '#28a745')};
-  &:hover {
-    background-color: ${(props) => (props.danger ? '#c82333' : '#218838')};
-  }
+const ResItem = styled.li`
+  background: #fff;
+  border: 1px solid #e7e7e7;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.06);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 `;
 
-const times = Array.from({ length: 27 }, (_, i) => {
-  const hour = Math.floor(i / 2) + 7; // Empieza en las 7 horas
-  const minutes = i % 2 === 0 ? '00' : '30'; // Alterna entre :00 y :30
-  return `${hour.toString().padStart(2, '0')}:${minutes}`;
-});
+const ResTitle = styled.span`
+  font-size: 13.5px;
+  color: #1f1f1f;
+  font-weight: 600;
+`;
+
+const ResMeta = styled.span`
+  display: block;
+  font-size: 12.5px;
+  color: #6b6b6b;
+  margin-top: 2px;
+`;
+
+const Badge = styled.span`
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: ${p => (p.$private ? '#2f6f7a' : '#9a4a23')};
+  color: #fff;
+  font-weight: 700;
+`;
+
+const toISODate = (d) => new Date(d).toISOString().split('T')[0];
 
 export default function Home() {
   const { data: session } = useSession();
   const [userData, setUserData] = useState({ credits: 0, reservations: [] });
   const [busySlots, setBusySlots] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(null);
+  const [selectedTime, setSelectedTime] = useState('');
   const [message, setMessage] = useState('');
   const [showReservationModal, setShowReservationModal] = useState(false);
   const [showNoSpaceModal, setShowNoSpaceModal] = useState(false);
-  const [isFirstReservation, setIsFirstReservation] = useState(false); // Estado para verificar si es la primera reserva
-  const [isPrivate, setIsPrivate] = useState(false); // Estado para controlar si la reserva será privada o pública
+  const [isFirstReservation, setIsFirstReservation] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
   const [reservationsAtTime, setReservationsAtTime] = useState(0);
   const [showConsentModal, setShowConsentModal] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false); // Estado para el modal de 
-  const [showPrivateSlotModal, setShowPrivateSlotModal] = useState(false); // Nuevo estado para franja privada
-  const [isSubmitting, setIsSubmitting] = useState(false); // Nuevo estado para prevenir múltiples envíos
-
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showPrivateSlotModal, setShowPrivateSlotModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const router = useRouter();
 
@@ -131,30 +322,31 @@ export default function Home() {
       if (session.isAdmin) {
         router.push('/admin');
       } else {
-        axios.get('/api/user').then((response) => {
-          setUserData(response.data);
-        });
-
-        axios.get('/api/calendar').then((response) => {
-          setBusySlots(response.data.busySlots || []);
-        });
+        axios.get('/api/user').then((res) => setUserData(res.data));
+        axios.get('/api/calendar').then((res) => setBusySlots(res.data.busySlots || []));
       }
     }
   }, [session, router]);
-  const handleSignIn = () => {
-    setShowConsentModal(true);
-  };
-  const handleAccept = () => {
-    setShowConsentModal(false);
-    signIn('google');
-  };
-  const handleReject = () => {
-    setShowConsentModal(false);
-  };
-  const handleTimeSelection = (event) => {
-    const value = event.target.value;
-    const [hours, minutes] = value.split(':').map(Number);
 
+  useEffect(() => {
+    if (session && (!Array.isArray(userData.reservations) || userData.reservations.length === 0)) {
+      axios.get('/api/reservations')
+        .then(r => {
+          if (Array.isArray(r.data)) {
+            setUserData(u => ({ ...u, reservations: r.data }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [session, userData.reservations]);
+
+  const handleSignIn = () => setShowConsentModal(true);
+  const handleAccept = () => { setShowConsentModal(false); signIn('google'); };
+  const handleReject = () => setShowConsentModal(false);
+
+  const handleTimeSelection = (e) => {
+    const value = e.target.value;
+    const [hours, minutes] = value.split(':').map(Number);
     if (hours < 7 || hours > 20 || (hours === 20 && minutes > 0)) {
       setMessage('Por favor selecciona una hora entre las 07:00 y las 20:00.');
       setSelectedTime('');
@@ -163,235 +355,223 @@ export default function Home() {
       setSelectedTime(value);
     }
   };
+
   const handleReservation = async () => {
-    if (!selectedDate) {
-      setMessage('Por favor seleccione una fecha');
-      return;
-    }
+    if (!selectedDate) { setMessage('Por favor selecciona una fecha'); return; }
+    if (!selectedTime) { setMessage('Por favor selecciona una hora válida'); return; }
 
-    if (!selectedTime) {
-      setMessage('Por favor seleccione una hora válida');
-      return;
-    }
-
-    const [hours, minutes] = selectedTime.split(':');
-    const reservationDateTime = new Date(selectedDate);
-    reservationDateTime.setHours(hours);
-    reservationDateTime.setMinutes(minutes);
+    const [h, m] = selectedTime.split(':').map(Number);
+    const when = new Date(selectedDate);
+    when.setHours(h); when.setMinutes(m); when.setSeconds(0); when.setMilliseconds(0);
 
     const now = new Date();
-    const timeDifference = reservationDateTime - now;
-    const hoursDifference = timeDifference / (1000 * 60 * 60);
-
-    if (hoursDifference < 18) {
-      setMessage('Las reservas deben hacerse al menos 18 horas antes.');
-      return;
-    }
+    const hoursDiff = (when.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (hoursDiff < 18) { setMessage('Las reservas deben hacerse al menos 18 horas antes.'); return; }
 
     try {
-      const response = await axios.post('/api/check-reservations', {
-        date: selectedDate,
-        time: `${reservationDateTime.getHours().toString().padStart(2, '0')}:${reservationDateTime.getMinutes().toString().padStart(2, '0')}`,
+      const res = await axios.post('/api/check-reservations', {
+        date: toISODate(selectedDate),
+        time: selectedTime,
       });
 
-      setReservationsAtTime(response.data.count);
+      const count = res.data?.count ?? 0;
+      setReservationsAtTime(count);
 
-      if (response.data.isPrivate) {
-        // Si la franja es privada, mostrar el modal de franja privada
-        setShowPrivateSlotModal(true);
-        return;  // Salimos de la función para que no continúe
-      } else if (response.data.count >= 3) {
-        setShowNoSpaceModal(true); // Mostrar modal de no hay espacio
-      } else if (response.data.count === 0) {
-        setIsFirstReservation(true); // Es la primera reserva
-        setShowReservationModal(true); // Mostrar el modal para elegir si es privada o pública
+      if (res.data?.isPrivate) { setShowPrivateSlotModal(true); return; }
+      if (count >= 3) { setShowNoSpaceModal(true); return; }
+
+      if (count === 0) {
+        setIsFirstReservation(true);
+        setShowReservationModal(true);
       } else {
-        setShowReservationModal(true); // Mostrar modal de confirmación de reserva
+        setIsFirstReservation(false);
+        setShowConfirmModal(true);
       }
     } catch (error) {
-      setMessage(error.response.data.message);
-    }
-};
-
-
-  const confirmReservation = async () => {
-    try {
-      // Convertir la fecha a ISO antes de enviarla al backend si es necesario
-      const formattedDate = new Date(selectedDate).toISOString().split('T')[0];  // Enviar solo la parte de la fecha
-      const response = await axios.post('/api/reserve', {
-        date: formattedDate,  // Asegúrate de enviar la fecha en formato ISO
-        time: selectedTime,   // La hora en formato HH:mm
-        isPrivate: isFirstReservation ? isPrivate : false,
-      });
-
-      setMessage(response.data.message);
-      const updatedUser = await axios.get('/api/user');
-      setUserData(updatedUser.data);
-      setShowReservationModal(false);
-    } catch (error) {
-      setMessage(error.response.data.message);
+      setMessage(error?.response?.data?.message ?? 'Error al verificar disponibilidad');
     }
   };
-  const finalizeReservation = async () => {
-    if (isSubmitting) return; // Si ya está enviando, evita que la función se ejecute nuevamente
-    setIsSubmitting(true); // Establecer el estado a 'enviando' para evitar múltiples envíos
 
+  const finalizeReservation = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
-      const formattedDate = new Date(selectedDate).toISOString().split('T')[0];
-      const response = await axios.post('/api/reserve', {
-        date: formattedDate,
+      const payload = {
+        date: toISODate(selectedDate),
         time: selectedTime,
         isPrivate,
-      });
+      };
+      const res = await axios.post('/api/reserve', payload);
+      setMessage(res.data?.message ?? 'Reserva realizada');
 
-      setMessage(response.data.message);
-      setShowConfirmModal(false); // Cierra el modal de confirmación después de hacer la reserva
-      setShowReservationModal(false); // Cierra el modal de reserva
-      setIsSubmitting(false); // Restablece el estado después de que se complete la solicitud
+      const updated = await axios.get('/api/user');
+      setUserData(updated.data);
+
+      setShowConfirmModal(false);
+      setShowReservationModal(false);
     } catch (error) {
-      setMessage(error.response.data.message);
-      setIsSubmitting(false); // Restablece el estado en caso de error
+      setMessage(error?.response?.data?.message ?? 'Error al reservar');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
     <Container>
-      {!session && (
-        <WelcomeText>
-          <h1>Bienvenido a la reserva de la Moon de CrashPath</h1>
-          <p>
-            CrashPath Moon es una plataforma donde puedes reservar el tiempo de uso de la moonboard y la zona de entrenamiento de Crashpath.
-            Puedes elegir una fecha y hora, y automáticamente la reservamos para ti y se agendará en tu calendario de Google.
-            <br /><br />
-            ¡Inicia sesión para ver tus créditos disponibles y hacer una reserva!
-          </p>
-        </WelcomeText>
-      )}
-
-      {session ? (
-        <>
-<h1 style={{ fontSize: '30px' }}>Bienvenido, {session.user.name}!</h1>
-          <p>Tienes {userData.credits} créditos disponibles.</p>
-
-          <strong>Selecciona una fecha y una hora para hacer una reserva:</strong>
-          <Calendar
-            compact
-            onSelect={(date) => setSelectedDate(date)}
-            value={selectedDate}
-          />
-
-
-<input
-            type="time"
-            value={selectedTime}
-            onChange={handleTimeSelection}
-            min="07:00" // Hora mínima permitida
-            max="20:00" // Hora máxima permitida
-            step="1800" // Intervalos de 30 minutos
-          />
-
-          <Button onClick={handleReservation} disabled={!selectedDate || userData.credits <= 0}>
-            Reserva {selectedDate && `${selectedDate.toLocaleDateString()} a las ${selectedTime}`}
-          </Button>
-
-          {message && <p>{message}</p>}
-        </>
+      {!session ? (
+        <Card>
+          <WelcomeRow>Bienvenid@ a la reserva de</WelcomeRow>
+          <BrushTitle>La Moon de CrashPath</BrushTitle>
+          <Body>
+            <p><strong>CrashPath Moon</strong> es una plataforma donde puedes reservar el tiempo de uso de la moonboard y la zona de entrenamiento de CrashPath.</p>
+            <p>Puedes elegir la <strong>fecha y hora</strong>, automáticamente la reservamos para ti y se agendará en tu calendario de Google.</p>
+            <SmallNote>Inicia sesión para ver tus créditos disponibles y hacer una reserva</SmallNote>
+          </Body>
+          <ReserveBtn onClick={handleSignIn}>Inicia sesión con Google</ReserveBtn>
+          <FooterLink href="/privacy">Conoce nuestra política de privacidad</FooterLink>
+        </Card>
       ) : (
-        <>
-          <Button onClick={handleSignIn}>Inicia sesión con Google</Button>
-        </>
-      )}
+        <Card>
+          <WelcomeRow>
+            Bienvenid@, <BrushName>{session.user.name}</BrushName>
+          </WelcomeRow>
+          <Credits>Tienes <strong>{userData.credits}</strong> créditos disponibles</Credits>
+          <Sub>Selecciona fecha y hora para tu reserva</Sub>
 
-      {/* Modal para elegir si la reserva es privada o pública */}
-      {isFirstReservation && showReservationModal && (
-        <ModalOverlay>
-          <ModalContent>
-            <CloseButton onClick={() => setShowReservationModal(false)}>X</CloseButton>
-            <h2>¿Quieres que esta sesión sea privada o pública?</h2>
-            <p>Si eliges privada, nadie más podrá reservar en esta franja horaria. Si eliges pública, se pueden agregar hasta 3 personas más.</p>
-            <ModalButton onClick={() => { setIsPrivate(true); setShowConfirmModal(true); setShowReservationModal(false); }}>Privada</ModalButton>
-            <ModalButton onClick={() => { setIsPrivate(false); setShowConfirmModal(true); setShowReservationModal(false); }}>Pública</ModalButton>
-          </ModalContent>
-        </ModalOverlay>
-      )}
+          <CalendarWrap>
+            <Calendar compact onSelect={(date) => setSelectedDate(date)} value={selectedDate} />
+          </CalendarWrap>
 
-
-      {/* Modal de confirmación de reserva pública */}
-      {!isFirstReservation && showReservationModal && (
-        <ModalOverlay>
-          <ModalContent>
-            <CloseButton onClick={() => setShowReservationModal(false)}>X</CloseButton>
-            <h2>Han reservado {reservationsAtTime} personas para esta hora.</h2>
-            <p>¿Quieres reservar?</p>
-            <ModalButton onClick={() => { setShowConfirmModal(true); setShowReservationModal(false); }}>
+          <Controls>
+            <TimePill
+              type="time"
+              value={selectedTime}
+              onChange={handleTimeSelection}
+              min="07:00"
+              max="20:00"
+              step="1800"
+            />
+            <ReserveBtn onClick={handleReservation} disabled={!selectedDate || userData.credits <= 0}>
               Reservar
-            </ModalButton>
-          </ModalContent>
-        </ModalOverlay>
+            </ReserveBtn>
+          </Controls>
+
+          <SectionTitle>Tus reservas</SectionTitle>
+
+          {Array.isArray(userData.reservations) && userData.reservations.length > 0 ? (
+            <ResList>
+              {userData.reservations.map((r, idx) => {
+                const key = r._id || `${r.date}-${r.time}-${idx}`;
+                const dateObj = r.date ? new Date(r.date) : null;
+                const dateStr = r.date
+                  ? (isNaN(dateObj?.getTime?.()) ? String(r.date) : dateObj.toLocaleDateString())
+                  : '';
+                const timeStr = r.time || r.hour || '';
+                const isPriv = !!r.isPrivate;
+                return (
+                  <ResItem key={key}>
+                    <div>
+                      <ResTitle>{dateStr}{timeStr ? ` — ${timeStr}` : ''}</ResTitle>
+                      <ResMeta>{isPriv ? 'Sesión privada' : 'Sesión pública'}</ResMeta>
+                    </div>
+                    <Badge $private={isPriv}>{isPriv ? 'Privada' : 'Pública'}</Badge>
+                  </ResItem>
+                );
+              })}
+            </ResList>
+          ) : (
+            <SmallNote>No tienes reservas activas.</SmallNote>
+          )}
+
+          <Logout onClick={() => signOut()}>Cerrar sesión</Logout>
+          <FooterLink href="/privacy">Conoce nuestra política de privacidad</FooterLink>
+          {message && <SmallNote>{message}</SmallNote>}
+        </Card>
       )}
 
-      {/* Modal para franja horaria privada */}
-      {showPrivateSlotModal && (
+      {showReservationModal && (
         <ModalOverlay>
-          <ModalContent>
-            <CloseButton onClick={() => setShowPrivateSlotModal(false)}>X</CloseButton>
-            <h2>Lo siento, esta franja horaria ya es privada.</h2>
-            <p>Por favor, selecciona otra hora para tu reserva.</p>
-          </ModalContent>
+          <FrogCard>
+            <FrogClose onClick={() => setShowReservationModal(false)}>×</FrogClose>
+            <FrogImg src="/gecko.png" alt="Gecko" />
+            <FrogSub>¿Cómo deseas reservar</FrogSub>
+            <FrogBrush>La Moonboard?</FrogBrush>
+            <FrogBody>Si eliges privada, nadie más podrá reservar en esta franja horaria. Si eliges pública, se pueden agregar hasta 3 personas más.</FrogBody>
+            <FrogRow>
+              <PublicBtn onClick={() => { setIsPrivate(false); setShowReservationModal(false); setShowConfirmModal(true); }}>PÚBLICA</PublicBtn>
+              <PrivateBtn onClick={() => { setIsPrivate(true); setShowReservationModal(false); setShowConfirmModal(true); }}>PRIVADA</PrivateBtn>
+            </FrogRow>
+          </FrogCard>
         </ModalOverlay>
       )}
 
-      {/* Modal de confirmación final de reserva */}
       {showConfirmModal && (
         <ModalOverlay>
-          <ModalContent>
-            <CloseButton onClick={() => setShowConfirmModal(false)}>X</CloseButton>
-            <h2>¿Estás segur@ que quieres reservar a las {selectedTime} del día {new Date(selectedDate).toLocaleDateString()}?</h2>
-            <ModalButton
-              onClick={finalizeReservation}
-              disabled={isSubmitting} // Deshabilitar el botón mientras se envía
-            >
-              {isSubmitting ? 'Reservando...' : 'Confirmar'}
-            </ModalButton>
-            <ModalButton
-              danger
-              onClick={() => setShowConfirmModal(false)}
-              disabled={isSubmitting} // Deshabilitar el botón mientras se envía
-            >
-              Cancelar
-            </ModalButton>
-          </ModalContent>
+          <FrogCard>
+            <FrogClose onClick={() => setShowConfirmModal(false)}>×</FrogClose>
+            <FrogImg src="/gecko.png" alt="Gecko" />
+            <FrogSub>Confirmar</FrogSub>
+            <FrogBrush>Tu reserva</FrogBrush>
+            <FrogBody>
+              ¿Reservar a las <strong>{selectedTime}</strong> del día <strong>{selectedDate ? new Date(selectedDate).toLocaleDateString() : ''}</strong>?
+            </FrogBody>
+            <FrogRow>
+              <PublicBtn onClick={finalizeReservation} disabled={isSubmitting}>
+                {isSubmitting ? 'Reservando...' : 'CONFIRMAR'}
+              </PublicBtn>
+              <NeutralBtn onClick={() => setShowConfirmModal(false)} disabled={isSubmitting}>
+                CANCELAR
+              </NeutralBtn>
+            </FrogRow>
+          </FrogCard>
         </ModalOverlay>
       )}
 
+      {showPrivateSlotModal && (
+        <ModalOverlay>
+          <FrogCard>
+            <FrogClose onClick={() => setShowPrivateSlotModal(false)}>×</FrogClose>
+            <FrogImg src="/gecko.png" alt="Gecko" />
+            <FrogSub>Ups…</FrogSub>
+            <FrogBrush>Franja privada</FrogBrush>
+            <FrogBody>Esta franja horaria ya es privada. Por favor, selecciona otra hora.</FrogBody>
+            <FrogRow>
+              <PublicBtn onClick={() => setShowPrivateSlotModal(false)}>ENTENDIDO</PublicBtn>
+            </FrogRow>
+          </FrogCard>
+        </ModalOverlay>
+      )}
 
-      {/* Modal de no hay espacio */}
       {showNoSpaceModal && (
         <ModalOverlay>
-          <ModalContent>
-            <CloseButton onClick={() => setShowNoSpaceModal(false)}>X</CloseButton>
-            <h2>Lo siento, No quedan cupos para esta hora/día.</h2>
-          </ModalContent>
+          <FrogCard>
+            <FrogClose onClick={() => setShowNoSpaceModal(false)}>×</FrogClose>
+            <FrogImg src="/gecko.png" alt="Gecko" />
+            <FrogSub>Lo sentimos</FrogSub>
+            <FrogBrush>Sin cupos</FrogBrush>
+            <FrogBody>No quedan cupos para esta hora/día.</FrogBody>
+            <FrogRow>
+              <PublicBtn onClick={() => setShowNoSpaceModal(false)}>OK</PublicBtn>
+            </FrogRow>
+          </FrogCard>
         </ModalOverlay>
       )}
+
       {showConsentModal && (
         <ModalOverlay>
-          <ModalContent>
-            <h2>Consentimiento para utilizar Google Calendar</h2>
-            <p>Esta aplicación requiere acceso a tu Google Calendar para poder agregar eventos. ¿Deseas continuar?</p>
-            <ModalButton onClick={handleAccept}>Aceptar</ModalButton>
-            <ModalButton danger onClick={handleReject}>Rechazar</ModalButton>
-          </ModalContent>
+          <FrogCard>
+            <FrogClose onClick={() => setShowConsentModal(false)}>×</FrogClose>
+            <FrogImg src="/gecko.png" alt="Gecko" />
+            <FrogSub>Consentimiento para utilizar</FrogSub>
+            <FrogBrush>Google Calendar</FrogBrush>
+            <FrogBody>Esta aplicación requiere acceso a tu Google Calendar para poder agregar eventos.</FrogBody>
+            <FrogRow>
+              <PublicBtn onClick={handleAccept}>ACEPTAR</PublicBtn>
+              <NeutralBtn onClick={handleReject}>RECHAZAR</NeutralBtn>
+            </FrogRow>
+          </FrogCard>
         </ModalOverlay>
       )}
-      <footer style={{ textAlign: 'center', marginTop: '40px' }}>
-        <Link href="/privacy" style={{ color: '#007bff', textDecoration: 'none' }}>
-          Política de Privacidad
-        </Link>
-      </footer>
     </Container>
-    </LocalizationProvider>
   );
 }

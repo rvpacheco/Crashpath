@@ -2,40 +2,55 @@ import { SessionProvider } from 'next-auth/react';
 import styled, { createGlobalStyle } from 'styled-components';
 
 const GlobalStyle = createGlobalStyle`
+  /* Variables de fuente (los <link> están en _document.js) */
+  :root {
+    --font-body: 'Montserrat', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    --font-brush: 'Knewave', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  }
+
+  /* Box-sizing consistente en toda la app */
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body, #__next {
+    height: 100%;
+  }
+
   body {
     margin: 0;
     padding: 0;
-    box-sizing: border-box;
-    font-family: 'Arial', sans-serif;
-    background-color: #f4f4f9;
+    font-family: var(--font-body);
+    background-color: #E5E5D1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 `;
 
-
-
+/* Fondo repetido, sin bloquear clics, y con control de escala */
 const BackgroundLogo = styled.div`
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: url('/AI LOGO_Mesa de trabajo 1.png');
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 50%; /* Ajusta el tamaño del logo según sea necesario */
-  opacity: 0.1; /* Visibilidad del 20% */
-  z-index: -1 ;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
 
+  background-image: url('/test1.png');
+  background-repeat: repeat;
+  background-position: center;
+
+  /* Ajusta el tamaño del patrón a gusto:
+     - 100% estira el tile al ancho completo (no suele ser ideal para repetir)
+     - 320px 320px lo hace tipo patrón; cámbialo según tu asset */
+  background-size: 320px 320px;
+
+  /* Opcional: ligera transparencia si quieres que el contenido respire más */
+  /* opacity: 0.06; */
 `;
 
 export default function App({ Component, pageProps: { session, ...pageProps } }) {
   return (
     <SessionProvider session={session}>
       <GlobalStyle />
-      
-        <BackgroundLogo />
-        <Component {...pageProps} />
-      
+      <BackgroundLogo />
+      <Component {...pageProps} />
     </SessionProvider>
   );
 }
