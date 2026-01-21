@@ -1,577 +1,824 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { signIn, signOut, useSession } from 'next-auth/react';
-import styled from 'styled-components';
-import axios from 'axios';
-import { Calendar } from 'rsuite';
-import 'rsuite/dist/rsuite.min.css';
-import { useRouter } from 'next/router';
-import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import styled, { createGlobalStyle } from "styled-components";
 
-const Container = styled.main`
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px 16px;
+/** =========================
+ * CrashPath Landing (from zero)
+ * Quantum-ish layout:
+ * - Full hero carousel
+ * - Transparent header with centered logo
+ * - Services tiles like "Collections" (5)
+ * - About/Reservations section + video placeholder
+ * - Day/Dark toggle (persisted)
+ * ========================= */
+
+const themes = {
+  day: {
+    bg: "#E7E1D2",
+    text: "#2B2620",
+    muted: "#6B6257",
+    border: "rgba(43,38,32,0.16)",
+    panel: "rgba(255,255,255,0.55)",
+    panelSolid: "#F3EFE6",
+    accent: "#9C4F24",
+    accent2: "#C26A34",
+    overlay: "rgba(0,0,0,0.35)",
+    heroText: "rgba(255,255,255,0.92)",
+    heroMuted: "rgba(255,255,255,0.72)",
+    chipBg: "rgba(0,0,0,0.35)",
+    grain: 0.10,
+  },
+  dark: {
+    bg: "#0F0D0B",
+    text: "rgba(255,255,255,0.90)",
+    muted: "rgba(255,255,255,0.65)",
+    border: "rgba(255,255,255,0.14)",
+    panel: "rgba(255,255,255,0.06)",
+    panelSolid: "rgba(255,255,255,0.08)",
+    accent: "#C26A34",
+    accent2: "#9C4F24",
+    overlay: "rgba(0,0,0,0.55)",
+    heroText: "rgba(255,255,255,0.92)",
+    heroMuted: "rgba(255,255,255,0.72)",
+    chipBg: "rgba(0,0,0,0.45)",
+    grain: 0.16,
+  },
+};
+
+const GlobalStyle = createGlobalStyle`
+  :root { color-scheme: ${(p) => (p.$mode === "dark" ? "dark" : "light")}; }
+  *{ box-sizing:border-box; }
+  html, body { height:100%; }
+  body{
+    margin:0;
+    background:${(p) => p.$t.bg};
+    color:${(p) => p.$t.text};
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  }
+  a{ color:inherit; text-decoration:none; }
+  button, input { font-family: inherit; }
+  button { -webkit-tap-highlight-color: transparent; }
+
+  ::selection { background: ${(p) => p.$t.accent}33; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition:none !important; animation:none !important; scroll-behavior:auto !important; }
+  }
 `;
 
-const Card = styled.section`
-  width: 100%;
-  max-width: 360px;
+const Page = styled.div`
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+
+  /* subtle grain */
+  &::after{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    z-index:0;
+    opacity:${(p) => p.$t.grain};
+    mix-blend-mode:${(p) => (p.$mode === "dark" ? "overlay" : "multiply")};
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,0.05),
+        rgba(255,255,255,0.05) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+  }
+`;
+
+const Header = styled.header`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  pointer-events: none; /* we will re-enable on children */
+`;
+
+const HeaderInner = styled.div`
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+`;
+
+const NavLeft = styled.nav`
+  display: none;
+  gap: 18px;
+  align-items: center;
+  pointer-events: auto;
+
+  @media (min-width: 860px){
+    display: flex;
+  }
+`;
+
+const NavRight = styled.nav`
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  align-items: center;
+  pointer-events: auto;
+`;
+
+const NavLink = styled.a`
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: ${(p) => p.$t.heroMuted};
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+
+  &:hover{
+    color: ${(p) => p.$t.heroText};
+    border-color: rgba(255,255,255,0.25);
+    background: rgba(0,0,0,0.18);
+  }
+`;
+
+const CenterLogo = styled.div`
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
   text-align: center;
+`;
+
+const LogoMark = styled.div`
+  font-weight: 950;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: ${(p) => p.$t.heroText};
+  font-size: 12px;
+`;
+
+const LogoSub = styled.div`
+  margin-top: 3px;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 10px;
+  color: ${(p) => p.$t.heroMuted};
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+`;
+
+const IconBtn = styled.button`
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.20);
+  background: rgba(0,0,0,0.22);
+  color: ${(p) => p.$t.heroText};
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+
+  &:hover { background: rgba(0,0,0,0.30); }
+  &:focus-visible{
+    outline: none;
+    box-shadow: 0 0 0 4px ${(p) => p.$t.accent}33;
+  }
+`;
+
+const CTA = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.22);
+  background: rgba(0,0,0,0.22);
+  color: ${(p) => p.$t.heroText};
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  &:hover { background: rgba(0,0,0,0.30); }
+`;
+
+const Hero = styled.section`
+  position: relative;
+  height: 86vh;
+  min-height: 560px;
+  width: 100%;
+  overflow: hidden;
+  background: #000;
+`;
+
+const Slide = styled.div`
+  position: absolute;
+  inset: 0;
+  background-image: url(${(p) => p.$src});
+  background-size: cover;
+  background-position: center;
+  opacity: ${(p) => (p.$active ? 1 : 0)};
+  transition: opacity 600ms ease;
+  filter: ${(p) => (p.$mode === "dark" ? "contrast(1.05) saturate(1.0)" : "contrast(1.05) saturate(1.05)")};
+`;
+
+const HeroShade = styled.div`
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(1200px 700px at 50% 30%, rgba(0,0,0,0.10), ${(p) => p.$t.overlay});
+`;
+
+const HeroContent = styled.div`
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: end;
+  justify-items: start;
+  padding: 92px 14px 24px;
+  z-index: 2;
+
+  @media (min-width: 900px){
+    padding: 96px 18px 36px;
+  }
+`;
+
+const HeroBox = styled.div`
+  max-width: 720px;
+`;
+
+const HeroTitle = styled.h1`
+  margin: 0;
+  color: ${(p) => p.$t.heroText};
+  font-size: 34px;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+
+  @media (min-width: 900px){
+    font-size: 52px;
+  }
+`;
+
+const HeroLead = styled.p`
+  margin: 10px 0 0;
+  color: ${(p) => p.$t.heroMuted};
+  font-size: 13px;
+  line-height: 1.7;
+  max-width: 70ch;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  @media (min-width: 900px){
+    font-size: 14px;
+  }
+`;
+
+const HeroActions = styled.div`
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+`;
+
+const HeroBtn = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 950;
+  letter-spacing: 0.02em;
+  border: 1px solid ${(p) =>
+    p.$kind === "primary" ? "transparent" : "rgba(255,255,255,0.22)"};
+  background: ${(p) =>
+    p.$kind === "primary"
+      ? `linear-gradient(180deg, ${p.$t.accent}, ${p.$t.accent2})`
+      : "rgba(0,0,0,0.22)"};
+  color: ${(p) => p.$t.heroText};
+
+  &:hover { filter: brightness(0.96); transform: translateY(-1px); }
+`;
+
+const Dots = styled.div`
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 3;
+`;
+
+const Dot = styled.button`
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.45);
+  background: ${(p) => (p.$active ? "rgba(255,255,255,0.90)" : "transparent")};
+  cursor: pointer;
+`;
+
+const Section = styled.section`
+  padding: 60px 14px;
+
+  @media (min-width: 900px){
+    padding: 80px 18px;
+  }
+`;
+
+const SectionInner = styled.div`
+  max-width: 1200px;
+  margin: 0 auto;
+`;
+
+const SectionTitle = styled.h2`
+  margin: 0;
+  text-align: center;
+  font-size: 28px;
+  letter-spacing: -0.01em;
+
+  @media (min-width: 900px){
+    font-size: 34px;
+  }
+`;
+
+const SectionKicker = styled.div`
+  margin-top: 10px;
+  text-align: center;
+  color: ${(p) => p.$t.muted};
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+`;
+
+const Tiles = styled.div`
+  margin-top: 26px;
   display: grid;
   gap: 16px;
+  grid-template-columns: 1fr;
+
+  @media (min-width: 760px){
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  @media (min-width: 1040px){
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 18px;
+  }
 `;
 
-const WelcomeRow = styled.h1`
-  margin: 0;
+const TileWrap = styled.div`
+  @media (min-width: 1040px){
+    grid-column: span ${(p) => p.$span || 4};
+  }
+`;
+
+
+const Tile = styled(Link)`
+  position: relative;
+  display: grid;
+  align-content: end;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid ${(p) => p.$t.border};
+  background: ${(p) => p.$t.panelSolid};
+
+  /* 🔥 clave: consistencia visual */
+  aspect-ratio: 16 / 9;
+  min-height: 210px;
+
+  box-shadow: ${(p) =>
+    p.$mode === "dark"
+      ? "0 18px 55px rgba(0,0,0,0.60)"
+      : "0 14px 40px rgba(0,0,0,0.12)"};
+
+  transform: translateZ(0);
+  transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease, border-color 220ms ease;
+
+  &:hover{
+    transform: translateY(-4px);
+    border-color: ${(p) => (p.$mode === "dark" ? "rgba(255,255,255,0.22)" : "rgba(43,38,32,0.24)")};
+    box-shadow: ${(p) =>
+    p.$mode === "dark"
+      ? "0 26px 80px rgba(0,0,0,0.70)"
+      : "0 24px 70px rgba(0,0,0,0.16)"};
+  }
+
+  &:focus-visible{
+    outline: none;
+    box-shadow: 0 0 0 4px ${(p) => p.$t.accent}33, 0 18px 55px rgba(0,0,0,0.22);
+  }
+`;
+
+const TileImg = styled.div`
+  position: absolute;
+  inset: 0;
+  background-image: url(${(p) => p.$src});
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.02);
+  transition: transform 420ms ease;
+  filter: contrast(1.05) saturate(1.02);
+
+  ${Tile}:hover & {
+    transform: scale(1.07);
+  }
+`;
+
+const TileShade = styled.div`
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(900px 420px at 15% 20%, rgba(0,0,0,0.10), transparent 60%),
+    radial-gradient(900px 420px at 85% 10%, rgba(0,0,0,0.12), transparent 60%),
+    linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.62) 75%, rgba(0,0,0,0.72) 100%);
+`;
+
+const TileTopRow = styled.div`
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+`;
+
+const TileLabel = styled.div`
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.22);
+  background: rgba(0,0,0,0.34);
+  backdrop-filter: blur(8px);
+  color: rgba(255,255,255,0.92);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+`;
+const TileTitle = styled.div`
+  color: rgba(255,255,255,0.96);
+  font-weight: 950;
   font-size: 18px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: #1E1E1E;
+  letter-spacing: -0.01em;
+
+  @media (min-width: 900px){
+    font-size: 20px;
+  }
 `;
 
-const BrushName = styled.span`
-  font-family: var(--font-brush);
-  color: #9a4a23;
-  text-transform: none;
-`;
+const TileSub = styled.div`
+  color: rgba(255,255,255,0.80);
+  font-size: 12px;
+  line-height: 1.55;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 
-const Credits = styled.p`
-  margin: 0;
-  font-size: 13.5px;
-  color: #1f1f1f;
-  strong{ color:#9a4a23; }
+  /* para que no se vuelva un párrafo infinito */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `;
-
-const Sub = styled.p`
-  margin: 0 0 6px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #b5632e;
-`;
-
-const CalendarWrap = styled.div`
+const TileArrow = styled.div`
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.26);
+  backdrop-filter: blur(8px);
   display: grid;
   place-items: center;
+  color: rgba(255,255,255,0.92);
+  font-weight: 900;
+  transition: transform 220ms ease, background 220ms ease;
 
-  .rs-calendar {
-    background: #fff;
-    border-radius: 12px;
-    border: 1px solid #e7e7e7;
-    box-shadow: 0 6px 18px rgba(0,0,0,.08);
-    padding: 10px;
-    width: 100%;
-    max-width: 320px;
-  }
-  .rs-calendar-header-title,
-  .rs-calendar-header-title > button {
-    font-weight: 600;
-  }
-  .rs-calendar-table-cell-selected .rs-calendar-table-cell-content {
-    background: #FDFD76;
+  ${Tile}:hover & {
+    transform: translateY(-1px);
+    background: rgba(0,0,0,0.34);
   }
 `;
 
-const Controls = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-items: center;
-  width: 100%;
-  max-width: 360px;
-`;
 
-const TimePill = styled.input`
-  width: 100%;
-  border: 0;
-  border-radius: 10px;
-  height: 44px;
-  text-align: center;
-  font-weight: 700;
-  letter-spacing: .02em;
-  background: #9a4a23;
-  color: #fff;
-  box-shadow: 0 2px 0 rgba(0,0,0,.12);
-  cursor: pointer;
-`;
-
-const ReserveBtn = styled.button`
-  width: 100%;
-  border: 0;
-  border-radius: 10px;
-  height: 44px;
-  background: #9a4a23;
-  color: #fff;
-  font-weight: 700;
-  letter-spacing: .04em;
-  cursor: pointer;
-  box-shadow: 0 2px 0 rgba(0,0,0,.12);
-  transition: transform .02s ease, box-shadow .2s ease, filter .2s ease;
-  &:active{ transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
-  &:disabled{ background:#d3d3d3; cursor:not-allowed; }
-`;
-
-const SectionTitle = styled.p`
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: #2b2b2b;
-`;
-
-const Logout = styled.button`
-  width: 100%;
-  max-width: 220px;
-  margin: 6px auto 0;
-  border: 0;
-  border-radius: 10px;
-  height: 40px;
-  background: #9bbfd0;
-  color: #0f2b30;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 2px 0 rgba(0,0,0,.12);
-`;
-
-const FooterLink = styled(Link)`
-  display: inline-block;
-  margin-top: 8px;
-  font-size: 12.5px;
-  color: #2b8dfc;
-  text-decoration: underline;
-`;
-
-const BrushTitle = styled.h2`
-  font-family: var(--font-brush);
-  font-size: 28px;
-  line-height: 1.1;
-  margin: 0;
-  color: #9a4a23;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-`;
-
-const Body = styled.div`
-  color: #2c2c2c;
-  font-size: 14px;
-  line-height: 1.55;
-  margin-top: 4px;
-  p { margin: 0 0 10px; }
-  strong { font-weight: 700; }
-`;
-
-const SmallNote = styled.p`
-  margin: 0;
-  font-size: 13px;
-  color: #3a3a3a;
-`;
-
-const ModalOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background-color: rgba(0,0,0,0.5);
-  display: flex; align-items: center; justify-content: center;
-  padding: 16px;
-  z-index: 50;
-`;
-
-/* Modales con gecko */
-const FrogCard = styled.div`
+const TileContent = styled.div`
   position: relative;
-  background: #fff;
-  width: 100%;
-  max-width: 360px;
-  border-radius: 16px;
-  padding: 64px 18px 20px;
-  box-shadow: 0 12px 28px rgba(0,0,0,0.18);
-  text-align: center;
-`;
-
-const FrogImg = styled.img`
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: -95px;
-  width: 140px;
-  height: auto;
-`;
-
-const FrogClose = styled.button`
-  position: absolute;
-  right: 14px;
-  top: 12px;
-  border: 0;
-  background: transparent;
-  font-size: 22px;
-  color: #9a4a23;
-  cursor: pointer;
-`;
-
-const FrogSub = styled.p`
-  margin: 0 0 6px;
-  font-size: 13.5px;
-  color: #5a5a5a;
-`;
-
-const FrogBrush = styled.h3`
-  font-family: var(--font-brush);
-  margin: 2px 0 12px;
-  font-size: 30px;
-  letter-spacing: 0.02em;
-  color: #9a4a23;
-  text-transform: uppercase;
-`;
-
-const FrogBody = styled.p`
-  margin: 0 0 12px;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: #3a3a3a;
-`;
-
-const FrogRow = styled.div`
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-`;
-
-const PublicBtn = styled.button`
-  border: 0;
-  border-radius: 12px;
-  padding: 12px 18px;
-  font-weight: 800;
-  letter-spacing: .02em;
-  cursor: pointer;
-  color: #fff;
-  background: #9a4a23;
-  box-shadow: 0 2px 0 rgba(0,0,0,.12);
-  transition: transform .02s ease, box-shadow .2s ease, filter .2s ease;
-  &:active{ transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,.12); }
-  &:hover{ filter: brightness(.98); }
-  min-width: 120px;
-`;
-const PrivateBtn = styled(PublicBtn)` background:#2f6f7a; `;
-const NeutralBtn = styled(PublicBtn)` background:#7aaab0; color:#0f2b30; font-weight:700; `;
-
-/* Lista de reservas */
-const ResList = styled.ul`
-  list-style: none;
-  padding: 0;
-  margin: 6px 0 0;
+  z-index: 2;
+  padding: 16px;
   display: grid;
   gap: 8px;
 `;
 
-const ResItem = styled.li`
-  background: #fff;
-  border: 1px solid #e7e7e7;
-  border-radius: 10px;
-  padding: 10px 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,.06);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+
+const AboutGrid = styled.div`
+  margin-top: 26px;
+  display: grid;
+  gap: 16px;
+
+  @media (min-width: 980px){
+    grid-template-columns: 1.1fr 0.9fr;
+    align-items: start;
+  }
 `;
 
-const ResTitle = styled.span`
-  font-size: 13.5px;
-  color: #1f1f1f;
-  font-weight: 600;
+const AboutCard = styled.div`
+  border: 1px solid ${(p) => p.$t.border};
+  border-radius: 18px;
+  background: ${(p) => p.$t.panel};
+  padding: 16px;
+  backdrop-filter: blur(10px);
+  box-shadow: ${(p) =>
+    p.$mode === "dark"
+      ? "0 20px 60px rgba(0,0,0,0.55)"
+      : "0 14px 40px rgba(0,0,0,0.10)"};
 `;
 
-const ResMeta = styled.span`
-  display: block;
-  font-size: 12.5px;
-  color: #6b6b6b;
-  margin-top: 2px;
+const AboutTitle = styled.h3`
+  margin: 0;
+  font-size: 16px;
 `;
 
-const Badge = styled.span`
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: ${p => (p.$private ? '#2f6f7a' : '#9a4a23')};
-  color: #fff;
-  font-weight: 700;
+const AboutText = styled.p`
+  margin: 10px 0 0;
+  color: ${(p) => p.$t.muted};
+  font-size: 13px;
+  line-height: 1.75;
+  max-width: 78ch;
 `;
 
-const toISODate = (d) => new Date(d).toISOString().split('T')[0];
+const Bullets = styled.ul`
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: ${(p) => p.$t.muted};
+  font-size: 13px;
+  line-height: 1.7;
 
-export default function Home() {
-  const { data: session } = useSession();
-  const [userData, setUserData] = useState({ credits: 0, reservations: [] });
-  const [busySlots, setBusySlots] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState('');
-  const [message, setMessage] = useState('');
-  const [showReservationModal, setShowReservationModal] = useState(false);
-  const [showNoSpaceModal, setShowNoSpaceModal] = useState(false);
-  const [isFirstReservation, setIsFirstReservation] = useState(false);
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [reservationsAtTime, setReservationsAtTime] = useState(0);
-  const [showConsentModal, setShowConsentModal] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showPrivateSlotModal, setShowPrivateSlotModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  li { margin: 6px 0; }
+`;
 
-  const router = useRouter();
+const VideoBox = styled.div`
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid ${(p) => p.$t.border};
+  background: ${(p) => (p.$mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.55)")};
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  position: relative;
+`;
 
+const VideoHint = styled.div`
+  color: ${(p) => p.$t.muted};
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  text-align: center;
+  padding: 18px;
+`;
+
+const Footer = styled.footer`
+  padding: 40px 14px 50px;
+  text-align: center;
+  color: ${(p) => p.$t.muted};
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+`;
+
+function getInitialMode() {
+  if (typeof window === "undefined") return "day";
+  const saved = window.localStorage.getItem("cp_theme");
+  if (saved === "day" || saved === "dark") return saved;
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+  return prefersDark ? "dark" : "day";
+}
+
+/** Replace these with your real images in /public */
+const slides = [
+  "/landing/hero-1.jpg",
+  "/landing/hero-2.jpg",
+  "/landing/hero-3.jpg",
+];
+
+const services = [
+  {
+    tag: "RESERVAS",
+    title: "Moonboard Sessions",
+    subtitle: "1h30 · cupos controlados · progreso medible.",
+    href: "/reserve",
+    img: "/landing/service-reserve.jpg",
+    span: 6,
+    tall: true,
+  },
+  {
+    tag: "GUIADAS",
+    title: "Trips & Guiadas",
+    subtitle: "Roca + logística + coaching. Armamos grupos por nivel.",
+    href: "/guides",
+    img: "/landing/service-reserve.jpg",
+    span: 6,
+    tall: true,
+  },
+  {
+    tag: "ENTRENOS",
+    title: "Entrenos",
+    subtitle: "Fuerza, resistencia y plan serio (sin humo).",
+    href: "/training",
+    img: "/landing/service-reserve.jpg",
+    span: 4,
+  },
+  {
+    tag: "SHOP",
+    title: "Productos",
+    subtitle: "Magnesio, straps, gear. Drops & collabs.",
+    href: "/shop",
+    img: "/landing/service-reserve.jpg",
+    span: 4,
+  },
+  {
+    tag: "STAY",
+    title: "Hospedaje",
+    subtitle: "Casa cerca de la roca para trips y temporadas.",
+    href: "/stay",
+    img: "/landing/service-reserve.jpg",
+    span: 4,
+  },
+];
+
+export default function CrashPathLanding() {
+  const [mode, setMode] = useState("day");
+  const t = useMemo(() => themes[mode], [mode]);
+
+  const [idx, setIdx] = useState(0);
+  const timerRef = useRef(null);
+
+  useEffect(() => setMode(getInitialMode()), []);
   useEffect(() => {
-    if (session) {
-      if (session.isAdmin) {
-        router.push('/admin');
-      } else {
-        axios.get('/api/user').then((res) => setUserData(res.data));
-        axios.get('/api/calendar').then((res) => setBusySlots(res.data.busySlots || []));
-      }
-    }
-  }, [session, router]);
+    if (typeof window !== "undefined") window.localStorage.setItem("cp_theme", mode);
+  }, [mode]);
 
+  const toggleMode = () => setMode((m) => (m === "dark" ? "day" : "dark"));
+
+  // auto-rotate hero
   useEffect(() => {
-    if (session && (!Array.isArray(userData.reservations) || userData.reservations.length === 0)) {
-      axios.get('/api/reservations')
-        .then(r => {
-          if (Array.isArray(r.data)) {
-            setUserData(u => ({ ...u, reservations: r.data }));
-          }
-        })
-        .catch(() => {});
-    }
-  }, [session, userData.reservations]);
+    // clear previous
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setIdx((i) => (i + 1) % slides.length);
+    }, 5500);
+    return () => timerRef.current && clearInterval(timerRef.current);
+  }, []);
 
-  const handleSignIn = () => setShowConsentModal(true);
-  const handleAccept = () => { setShowConsentModal(false); signIn('google'); };
-  const handleReject = () => setShowConsentModal(false);
-
-  const handleTimeSelection = (e) => {
-    const value = e.target.value;
-    const [hours, minutes] = value.split(':').map(Number);
-    if (hours < 7 || hours > 20 || (hours === 20 && minutes > 0)) {
-      setMessage('Por favor selecciona una hora entre las 07:00 y las 20:00.');
-      setSelectedTime('');
-    } else {
-      setMessage('');
-      setSelectedTime(value);
-    }
-  };
-
-  const handleReservation = async () => {
-    if (!selectedDate) { setMessage('Por favor selecciona una fecha'); return; }
-    if (!selectedTime) { setMessage('Por favor selecciona una hora válida'); return; }
-
-    const [h, m] = selectedTime.split(':').map(Number);
-    const when = new Date(selectedDate);
-    when.setHours(h); when.setMinutes(m); when.setSeconds(0); when.setMilliseconds(0);
-
-    const now = new Date();
-    const hoursDiff = (when.getTime() - now.getTime()) / (1000 * 60 * 60);
-    if (hoursDiff < 18) { setMessage('Las reservas deben hacerse al menos 18 horas antes.'); return; }
-
-    try {
-      const res = await axios.post('/api/check-reservations', {
-        date: toISODate(selectedDate),
-        time: selectedTime,
-      });
-
-      const count = res.data?.count ?? 0;
-      setReservationsAtTime(count);
-
-      if (res.data?.isPrivate) { setShowPrivateSlotModal(true); return; }
-      if (count >= 3) { setShowNoSpaceModal(true); return; }
-
-      if (count === 0) {
-        setIsFirstReservation(true);
-        setShowReservationModal(true);
-      } else {
-        setIsFirstReservation(false);
-        setShowConfirmModal(true);
-      }
-    } catch (error) {
-      setMessage(error?.response?.data?.message ?? 'Error al verificar disponibilidad');
-    }
-  };
-
-  const finalizeReservation = async () => {
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      const payload = {
-        date: toISODate(selectedDate),
-        time: selectedTime,
-        isPrivate,
-      };
-      const res = await axios.post('/api/reserve', payload);
-      setMessage(res.data?.message ?? 'Reserva realizada');
-
-      const updated = await axios.get('/api/user');
-      setUserData(updated.data);
-
-      setShowConfirmModal(false);
-      setShowReservationModal(false);
-    } catch (error) {
-      setMessage(error?.response?.data?.message ?? 'Error al reservar');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const go = (i) => setIdx(i);
 
   return (
-    <Container>
-      {!session ? (
-        <Card>
-          <WelcomeRow>Bienvenid@ a la reserva de</WelcomeRow>
-          <BrushTitle>La Moon de CrashPath</BrushTitle>
-          <Body>
-            <p><strong>CrashPath Moon</strong> es una plataforma donde puedes reservar el tiempo de uso de la moonboard y la zona de entrenamiento de CrashPath.</p>
-            <p>Puedes elegir la <strong>fecha y hora</strong>, automáticamente la reservamos para ti y se agendará en tu calendario de Google.</p>
-            <SmallNote>Inicia sesión para ver tus créditos disponibles y hacer una reserva</SmallNote>
-          </Body>
-          <ReserveBtn onClick={handleSignIn}>Inicia sesión con Google</ReserveBtn>
-          <FooterLink href="/privacy">Conoce nuestra política de privacidad</FooterLink>
-        </Card>
-      ) : (
-        <Card>
-          <WelcomeRow>
-            Bienvenid@, <BrushName>{session.user.name}</BrushName>
-          </WelcomeRow>
-          <Credits>Tienes <strong>{userData.credits}</strong> créditos disponibles</Credits>
-          <Sub>Selecciona fecha y hora para tu reserva</Sub>
+    <Page $t={t} $mode={mode}>
+      <GlobalStyle $t={t} $mode={mode} />
 
-          <CalendarWrap>
-            <Calendar compact onSelect={(date) => setSelectedDate(date)} value={selectedDate} />
-          </CalendarWrap>
+      {/* Fixed transparent header */}
+      <Header>
+        <HeaderInner>
+          <NavLeft>
+            <Link href="#home" passHref legacyBehavior>
+              <NavLink $t={t}>Home</NavLink>
+            </Link>
+            <Link href="#services" passHref legacyBehavior>
+              <NavLink $t={t}>Servicios</NavLink>
+            </Link>
+            <Link href="#about" passHref legacyBehavior>
+              <NavLink $t={t}>CrashPath</NavLink>
+            </Link>
+          </NavLeft>
 
-          <Controls>
-            <TimePill
-              type="time"
-              value={selectedTime}
-              onChange={handleTimeSelection}
-              min="07:00"
-              max="20:00"
-              step="1800"
-            />
-            <ReserveBtn onClick={handleReservation} disabled={!selectedDate || userData.credits <= 0}>
-              Reservar
-            </ReserveBtn>
-          </Controls>
+          {/* Center logo */}
+          <CenterLogo>
+            <LogoMark $t={t}>CRASHPATH</LogoMark>
+            <LogoSub $t={t}>MOON</LogoSub>
+          </CenterLogo>
 
-          <SectionTitle>Tus reservas</SectionTitle>
+          <NavRight>
+            <IconBtn onClick={toggleMode} $t={t} aria-label="Cambiar tema">
+              {mode === "dark" ? "☀" : "🌙"}
+            </IconBtn>
+            <CTA href="/login" $t={t}>LOGIN</CTA>
+            <CTA href="/reserve" $t={t}>RESERVA</CTA>
+          </NavRight>
+        </HeaderInner>
+      </Header>
 
-          {Array.isArray(userData.reservations) && userData.reservations.length > 0 ? (
-            <ResList>
-              {userData.reservations.map((r, idx) => {
-                const key = r._id || `${r.date}-${r.time}-${idx}`;
-                const dateObj = r.date ? new Date(r.date) : null;
-                const dateStr = r.date
-                  ? (isNaN(dateObj?.getTime?.()) ? String(r.date) : dateObj.toLocaleDateString())
-                  : '';
-                const timeStr = r.time || r.hour || '';
-                const isPriv = !!r.isPrivate;
-                return (
-                  <ResItem key={key}>
-                    <div>
-                      <ResTitle>{dateStr}{timeStr ? ` — ${timeStr}` : ''}</ResTitle>
-                      <ResMeta>{isPriv ? 'Sesión privada' : 'Sesión pública'}</ResMeta>
-                    </div>
-                    <Badge $private={isPriv}>{isPriv ? 'Privada' : 'Pública'}</Badge>
-                  </ResItem>
-                );
-              })}
-            </ResList>
-          ) : (
-            <SmallNote>No tienes reservas activas.</SmallNote>
-          )}
+      {/* HERO */}
+      <Hero id="home">
+        {slides.map((src, i) => (
+          <Slide key={src} $src={src} $active={i === idx} $mode={mode} />
+        ))}
+        <HeroShade $t={t} />
 
-          <Logout onClick={() => signOut()}>Cerrar sesión</Logout>
-          <FooterLink href="/privacy">Conoce nuestra política de privacidad</FooterLink>
-          {message && <SmallNote>{message}</SmallNote>}
-        </Card>
-      )}
+        <HeroContent>
+          <HeroBox>
+            <HeroTitle $t={t}>
+              CrashPath es marca. <br />
+              No solo un muro.
+            </HeroTitle>
+            <HeroLead $t={t}>
+              Reservas Moonboard, entrenos, guiadas a roca, productos y hospedaje.
+              Vibra under pero pro — sin drama, con progreso.
+            </HeroLead>
 
-      {showReservationModal && (
-        <ModalOverlay>
-          <FrogCard>
-            <FrogClose onClick={() => setShowReservationModal(false)}>×</FrogClose>
-            <FrogImg src="/gecko.png" alt="Gecko" />
-            <FrogSub>¿Cómo deseas reservar</FrogSub>
-            <FrogBrush>La Moonboard?</FrogBrush>
-            <FrogBody>Si eliges privada, nadie más podrá reservar en esta franja horaria. Si eliges pública, se pueden agregar hasta 3 personas más.</FrogBody>
-            <FrogRow>
-              <PublicBtn onClick={() => { setIsPrivate(false); setShowReservationModal(false); setShowConfirmModal(true); }}>PÚBLICA</PublicBtn>
-              <PrivateBtn onClick={() => { setIsPrivate(true); setShowReservationModal(false); setShowConfirmModal(true); }}>PRIVADA</PrivateBtn>
-            </FrogRow>
-          </FrogCard>
-        </ModalOverlay>
-      )}
+            <HeroActions>
+              <HeroBtn href="#services" $t={t} $kind="ghost">
+                VER SERVICIOS
+              </HeroBtn>
+              <HeroBtn href="/reserve" $t={t} $kind="primary">
+                RESERVAR
+              </HeroBtn>
+            </HeroActions>
+          </HeroBox>
+        </HeroContent>
 
-      {showConfirmModal && (
-        <ModalOverlay>
-          <FrogCard>
-            <FrogClose onClick={() => setShowConfirmModal(false)}>×</FrogClose>
-            <FrogImg src="/gecko.png" alt="Gecko" />
-            <FrogSub>Confirmar</FrogSub>
-            <FrogBrush>Tu reserva</FrogBrush>
-            <FrogBody>
-              ¿Reservar a las <strong>{selectedTime}</strong> del día <strong>{selectedDate ? new Date(selectedDate).toLocaleDateString() : ''}</strong>?
-            </FrogBody>
-            <FrogRow>
-              <PublicBtn onClick={finalizeReservation} disabled={isSubmitting}>
-                {isSubmitting ? 'Reservando...' : 'CONFIRMAR'}
-              </PublicBtn>
-              <NeutralBtn onClick={() => setShowConfirmModal(false)} disabled={isSubmitting}>
-                CANCELAR
-              </NeutralBtn>
-            </FrogRow>
-          </FrogCard>
-        </ModalOverlay>
-      )}
+        <Dots>
+          {slides.map((_, i) => (
+            <Dot key={i} onClick={() => go(i)} $active={i === idx} aria-label={`Slide ${i + 1}`} />
+          ))}
+        </Dots>
+      </Hero>
 
-      {showPrivateSlotModal && (
-        <ModalOverlay>
-          <FrogCard>
-            <FrogClose onClick={() => setShowPrivateSlotModal(false)}>×</FrogClose>
-            <FrogImg src="/gecko.png" alt="Gecko" />
-            <FrogSub>Ups…</FrogSub>
-            <FrogBrush>Franja privada</FrogBrush>
-            <FrogBody>Esta franja horaria ya es privada. Por favor, selecciona otra hora.</FrogBody>
-            <FrogRow>
-              <PublicBtn onClick={() => setShowPrivateSlotModal(false)}>ENTENDIDO</PublicBtn>
-            </FrogRow>
-          </FrogCard>
-        </ModalOverlay>
-      )}
+      {/* SERVICES (Collections-like) */}
+      <Section id="services">
+        <SectionInner>
+          <SectionTitle>Servicios</SectionTitle>
+          <SectionKicker $t={t}>
+            5 líneas claras. click y te lleva. sin hablar paja.
+          </SectionKicker>
 
-      {showNoSpaceModal && (
-        <ModalOverlay>
-          <FrogCard>
-            <FrogClose onClick={() => setShowNoSpaceModal(false)}>×</FrogClose>
-            <FrogImg src="/gecko.png" alt="Gecko" />
-            <FrogSub>Lo sentimos</FrogSub>
-            <FrogBrush>Sin cupos</FrogBrush>
-            <FrogBody>No quedan cupos para esta hora/día.</FrogBody>
-            <FrogRow>
-              <PublicBtn onClick={() => setShowNoSpaceModal(false)}>OK</PublicBtn>
-            </FrogRow>
-          </FrogCard>
-        </ModalOverlay>
-      )}
+          <Tiles>
+            {services.map((s) => (
+              <TileWrap key={s.title} $span={s.span} $tall={s.tall}>
+                <Tile href={s.href} $t={t} $mode={mode}>
+                  <TileImg $src={s.img} />
+                  <TileShade />
 
-      {showConsentModal && (
-        <ModalOverlay>
-          <FrogCard>
-            <FrogClose onClick={() => setShowConsentModal(false)}>×</FrogClose>
-            <FrogImg src="/gecko.png" alt="Gecko" />
-            <FrogSub>Consentimiento para utilizar</FrogSub>
-            <FrogBrush>Google Calendar</FrogBrush>
-            <FrogBody>Esta aplicación requiere acceso a tu Google Calendar para poder agregar eventos.</FrogBody>
-            <FrogRow>
-              <PublicBtn onClick={handleAccept}>ACEPTAR</PublicBtn>
-              <NeutralBtn onClick={handleReject}>RECHAZAR</NeutralBtn>
-            </FrogRow>
-          </FrogCard>
-        </ModalOverlay>
-      )}
-    </Container>
+                  <TileTopRow>
+                    <TileLabel>{s.tag}</TileLabel>
+                    <TileArrow>↗</TileArrow>
+                  </TileTopRow>
+
+                  <TileContent>
+                    <TileTitle>{s.title}</TileTitle>
+                    <TileSub>{s.subtitle}</TileSub>
+                  </TileContent>
+                </Tile>
+              </TileWrap>
+            ))}
+          </Tiles>
+        </SectionInner>
+      </Section>
+
+      {/* ABOUT / MOONBOARD & RESERVAS */}
+      <Section id="about">
+        <SectionInner>
+          <SectionTitle>CrashPath Moon</SectionTitle>
+          <SectionKicker $t={t}>
+            un espacio de entrenamiento + una marca para escalar y salir a roca.
+          </SectionKicker>
+
+          <AboutGrid>
+            <AboutCard $t={t} $mode={mode}>
+              <AboutTitle>El muro, las reservas y el sistema</AboutTitle>
+              <AboutText $t={t}>
+                Creamos sesiones de 1h30 con cupos controlados para que entrenes sin caos.
+                Si estás en modo performance, tienes entrenos y seguimiento. Si estás en modo
+                aventura, te llevamos a roca con guiadas.
+              </AboutText>
+              <Bullets $t={t}>
+                <li>Reservas simples, cupos claros, menos fricción.</li>
+                <li>Entrenos (fuerza / resistencia / potencia) con progresión.</li>
+                <li>Guiadas: logística + coaching + seguridad.</li>
+                <li>Productos y hospedaje para temporadas.</li>
+              </Bullets>
+              <HeroActions style={{ marginTop: 14 }}>
+                <HeroBtn href="/reserve" $t={t} $kind="primary">RESERVAR</HeroBtn>
+                <HeroBtn href="/training" $t={t} $kind="ghost">VER ENTRENOS</HeroBtn>
+              </HeroActions>
+            </AboutCard>
+
+            <VideoBox $t={t} $mode={mode}>
+              {/* Reemplaza este bloque por <video ...> o embed */}
+              <VideoHint $t={t}>
+                VIDEO PLACEHOLDER<br />
+                Aquí va un reel del Moonboard / trips / vibe de marca.<br />
+                (pon un mp4 en /public/landing/intro.mp4 y lo incrustamos)
+              </VideoHint>
+            </VideoBox>
+          </AboutGrid>
+        </SectionInner>
+      </Section>
+
+      <Footer $t={t}>
+        © {new Date().getFullYear()} CrashPath · Bucaramanga · IG @crashpath · WhatsApp +57 …
+      </Footer>
+    </Page>
   );
 }
