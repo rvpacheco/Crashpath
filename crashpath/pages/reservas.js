@@ -84,18 +84,22 @@ const Controls = styled.div`
   max-width: 360px;
 `;
 
-const TimePill = styled.input`
+const TimePill = styled.select`
   width: 100%;
   border: 0;
   border-radius: 10px;
   height: 44px;
   text-align: center;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: .02em;
   background: #9a4a23;
   color: #fff;
   box-shadow: 0 2px 0 rgba(0,0,0,.12);
   cursor: pointer;
+  appearance: none;
+
+  /* opcional: centrar el texto en algunos móviles */
+  padding: 0 12px;
 `;
 
 const ReserveBtn = styled.button`
@@ -297,7 +301,20 @@ const Badge = styled.span`
 `;
 
 const toISODate = (d) => new Date(d).toISOString().split('T')[0];
+const pad2 = (n) => String(n).padStart(2, '0');
 
+const buildTimeSlots = (startHour = 8, endHour = 20, stepMinutes = 30) => {
+  const out = [];
+  for (let h = startHour; h <= endHour; h++) {
+    for (let m = 0; m < 60; m += stepMinutes) {
+      if (h === endHour && m > 0) break; // solo permite 20:00 exacto
+      out.push(`${pad2(h)}:${pad2(m)}`);
+    }
+  }
+  return out;
+};
+
+const TIME_SLOTS = buildTimeSlots(8, 20, 30);
 export default function Home() {
   const { data: session } = useSession();
   const [userData, setUserData] = useState({ credits: 0, reservations: [] });
@@ -336,7 +353,7 @@ export default function Home() {
             setUserData(u => ({ ...u, reservations: r.data }));
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [session, userData.reservations]);
 
@@ -346,16 +363,22 @@ export default function Home() {
 
   const handleTimeSelection = (e) => {
     const value = e.target.value;
-    const [hours, minutes] = value.split(':').map(Number);
-    if (hours < 7 || hours > 20 || (hours === 20 && minutes > 0)) {
-      setMessage('Por favor selecciona una hora entre las 07:00 y las 20:00.');
-      setSelectedTime('');
-    } else {
-      setMessage('');
-      setSelectedTime(value);
-    }
-  };
+    if (!value) { setSelectedTime(''); return; }
 
+    const [hours, minutes] = value.split(':').map(Number);
+
+    const isTooEarly = hours < 8;
+    const isTooLate = hours > 20 || (hours === 20 && minutes > 0);
+
+    if (isTooEarly || isTooLate) {
+      setMessage('Por favor selecciona una hora entre las 08:00 y las 20:00.');
+      setSelectedTime('');
+      return;
+    }
+
+    setMessage('');
+    setSelectedTime(value);
+  };
   const handleReservation = async () => {
     if (!selectedDate) { setMessage('Por favor selecciona una fecha'); return; }
     if (!selectedTime) { setMessage('Por favor selecciona una hora válida'); return; }
@@ -443,15 +466,16 @@ export default function Home() {
           </CalendarWrap>
 
           <Controls>
-            <TimePill
-              type="time"
-              value={selectedTime}
-              onChange={handleTimeSelection}
-              min="07:00"
-              max="20:00"
-              step="1800"
-            />
-            <ReserveBtn onClick={handleReservation} disabled={!selectedDate || userData.credits <= 0}>
+            <TimePill value={selectedTime} onChange={handleTimeSelection}>
+              <option value="">--:--</option>
+              {TIME_SLOTS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </TimePill>
+            <ReserveBtn
+              onClick={handleReservation}
+              disabled={!selectedDate || !selectedTime || userData.credits <= 0}
+            >
               Reservar
             </ReserveBtn>
           </Controls>
