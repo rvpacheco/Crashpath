@@ -5,13 +5,10 @@ import Link from "next/link";
 import styled, { createGlobalStyle } from "styled-components";
 
 /** =========================
- * CrashPath Landing (from zero)
- * Quantum-ish layout:
- * - Full hero carousel
- * - Transparent header with centered logo
- * - Services tiles like "Collections" (5) + MOBILE carousel
- * - About/Reservations section + video placeholder
- * - Day/Dark toggle (persisted)
+ * CrashPath Landing (updated)
+ * - CrashPath is now a full climbing gym (not hourly sessions)
+ * - Open 2pm–8pm (mornings via WhatsApp)
+ * - App CTA: "Registrar visita" (1 crédito)
  * ========================= */
 
 const themes = {
@@ -72,10 +69,7 @@ const GlobalStyle = createGlobalStyle`
   }
 `;
 
-const Page = styled.div`
-
-  
-`;
+const Page = styled.div``;
 
 const Header = styled.header`
   position: fixed;
@@ -83,7 +77,7 @@ const Header = styled.header`
   left: 0;
   right: 0;
   z-index: 50;
-  pointer-events: none; /* re-enable on children */
+  pointer-events: none;
 `;
 
 const HeaderInner = styled.div`
@@ -102,7 +96,7 @@ const NavLeft = styled.nav`
   align-items: center;
   pointer-events: auto;
 
-  @media (min-width: 860px){
+  @media (min-width: 860px) {
     display: flex;
   }
 `;
@@ -116,7 +110,8 @@ const NavRight = styled.nav`
 `;
 
 const NavLink = styled.a`
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
   font-size: 12px;
   letter-spacing: 0.02em;
   color: ${(p) => p.$t.heroMuted};
@@ -124,10 +119,10 @@ const NavLink = styled.a`
   border-radius: 999px;
   border: 1px solid transparent;
 
-  &:hover{
+  &:hover {
     color: ${(p) => p.$t.heroText};
-    border-color: rgba(255,255,255,0.25);
-    background: rgba(0,0,0,0.18);
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.18);
   }
 `;
 
@@ -140,36 +135,28 @@ const CenterLogo = styled.div`
 
 const LogoMark = styled.div`
   font-weight: 950;
-  letter-spacing: 0.10em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: ${(p) => p.$t.heroText};
   font-size: 12px;
-`;
-
-const LogoSub = styled.div`
-  margin-top: 3px;
-  font-weight: 900;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  font-size: 10px;
-  color: ${(p) => p.$t.heroMuted};
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 `;
 
 const IconBtn = styled.button`
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.20);
-  background: rgba(0,0,0,0.22);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.22);
   color: ${(p) => p.$t.heroText};
   cursor: pointer;
   display: grid;
   place-items: center;
   font-weight: 900;
 
-  &:hover { background: rgba(0,0,0,0.30); }
-  &:focus-visible{
+  &:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+  &:focus-visible {
     outline: none;
     box-shadow: 0 0 0 4px ${(p) => p.$t.focus};
   }
@@ -182,16 +169,19 @@ const CTA = styled(Link)`
   min-height: 40px;
   padding: 9px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.22);
-  background: rgba(0,0,0,0.22);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.22);
   color: ${(p) => p.$t.heroText};
   font-weight: 900;
   letter-spacing: 0.02em;
   font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
 
-  &:hover { background: rgba(0,0,0,0.30); }
-  &:focus-visible{
+  &:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+  &:focus-visible {
     outline: none;
     box-shadow: 0 0 0 4px ${(p) => p.$t.focus};
   }
@@ -206,37 +196,17 @@ const Hero = styled.section`
   background: #000;
 `;
 
-const Slide = styled.div`
-  position: absolute;
-  inset: 0;
-  background-image: url(${(p) => p.$src});
-  background-size: cover;
-
-  /* 👇 esto ayuda a que el sujeto quede “bien encuadrado” en móvil */
-  background-position: center 35%;
-
-  opacity: ${(p) => (p.$active ? 1 : 0)};
-  transition: opacity 600ms ease;
-  filter: ${(p) =>
-    p.$mode === "dark"
-      ? "contrast(1.05) saturate(1.0)"
-      : "contrast(1.05) saturate(1.05)"};
-`;
-
 const HeroShade = styled.div`
   position: absolute;
   inset: 0;
   pointer-events: none;
-
-  /* Oscurece fuerte abajo para legibilidad, suave arriba para no “ensuciar” */
-  background:
-    linear-gradient(
-      180deg,
-      rgba(0,0,0,0.05) 0%,
-      rgba(0,0,0,0.10) 45%,
-      rgba(0,0,0,0.55) 75%,
-      rgba(0,0,0,0.78) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.05) 0%,
+    rgba(0, 0, 0, 0.1) 45%,
+    rgba(0, 0, 0, 0.55) 75%,
+    rgba(0, 0, 0, 0.78) 100%
+  );
 `;
 
 const HeroContent = styled.div`
@@ -250,11 +220,10 @@ const HeroContent = styled.div`
 
   padding: 92px 14px 32px;
 
-  @media (min-width: 900px){
+  @media (min-width: 900px) {
     padding: 96px 18px 44px;
   }
 `;
-
 
 const HeroBox = styled.div`
   width: 100%;
@@ -264,34 +233,35 @@ const HeroBox = styled.div`
 
 const HeroTitle = styled.h1`
   margin: 0;
-  color: rgba(255,255,255,0.92);
+  color: rgba(255, 255, 255, 0.92);
 
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.02;
 
-  /* serif editorial */
   font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
 
   font-size: 38px;
 
-  @media (min-width: 900px){
+  @media (min-width: 900px) {
     font-size: 64px;
   }
 `;
 
 const HeroLead = styled.p`
-  margin: 10px 0 0;
+  margin: 10px auto 0;
   color: ${(p) => p.$t.heroMuted};
   font-size: 13px;
   line-height: 1.7;
   max-width: 70ch;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
 
-  @media (min-width: 900px){
+  @media (min-width: 900px) {
     font-size: 14px;
   }
 `;
+
 const HeroPill = styled.div`
   margin: 18px auto 0;
   width: min(520px, 100%);
@@ -302,16 +272,16 @@ const HeroPill = styled.div`
   grid-template-columns: 1fr 1px 1fr;
   align-items: center;
 
-  border: 1px solid rgba(255,255,255,0.22);
-  background: rgba(10,10,10,0.22);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(10, 10, 10, 0.22);
   backdrop-filter: blur(12px);
-  box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
 `;
 
 const PillDivider = styled.div`
   height: 26px;
   width: 1px;
-  background: rgba(255,255,255,0.22);
+  background: rgba(255, 255, 255, 0.22);
   justify-self: center;
 `;
 
@@ -327,26 +297,30 @@ const PillLink = styled(Link)`
   text-transform: uppercase;
   font-size: 12px;
 
-  color: rgba(255,255,255,0.92);
+  color: rgba(255, 255, 255, 0.92);
 
-  &:hover { background: rgba(255,255,255,0.08); }
-  &:focus-visible{
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 4px rgba(255,255,255,0.18);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
   }
 `;
 
 const PillPrimary = styled(PillLink)`
-  background: rgba(194,106,52,0.30);
-  &:hover { background: rgba(194,106,52,0.38); }
+  background: rgba(194, 106, 52, 0.3);
+  &:hover {
+    background: rgba(194, 106, 52, 0.38);
+  }
 `;
-
 
 const HeroActions = styled.div`
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   margin-top: 14px;
+  justify-content: center;
 `;
 
 const HeroBtn = styled(Link)`
@@ -358,42 +332,20 @@ const HeroBtn = styled(Link)`
   border-radius: 12px;
   font-weight: 950;
   letter-spacing: 0.02em;
-  border: 1px solid ${(p) =>
-    p.$kind === "primary" ? "transparent" : "rgba(255,255,255,0.22)"};
+  border: 1px solid
+    ${(p) =>
+      p.$kind === "primary" ? "transparent" : "rgba(255,255,255,0.22)"};
   background: ${(p) =>
     p.$kind === "primary"
       ? `linear-gradient(180deg, ${p.$t.accent}, ${p.$t.accent2})`
       : "rgba(0,0,0,0.22)"};
   color: ${(p) => p.$t.heroText};
 
-  &:hover { filter: brightness(0.96); transform: translateY(-1px); }
-  &:focus-visible{
-    outline: none;
-    box-shadow: 0 0 0 4px ${(p) => p.$t.focus};
+  &:hover {
+    filter: brightness(0.96);
+    transform: translateY(-1px);
   }
-`;
-
-const Dots = styled.div`
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-  margin-top: 10px;
-
-  @media (min-width: 1040px){
-    display: none;
-  }
-`;
-
-const Dot = styled.button`
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  border: 1px solid ${(p) => p.$t.border};
-  background: ${(p) => (p.$active ? p.$t.accent : "transparent")};
-  cursor: pointer;
-  padding: 0;
-
-  &:focus-visible{
+  &:focus-visible {
     outline: none;
     box-shadow: 0 0 0 4px ${(p) => p.$t.focus};
   }
@@ -404,7 +356,7 @@ const Section = styled.section`
   z-index: 1;
   padding: 60px 14px;
 
-  @media (min-width: 900px){
+  @media (min-width: 900px) {
     padding: 80px 18px;
   }
 `;
@@ -420,7 +372,7 @@ const SectionTitle = styled.h2`
   font-size: 28px;
   letter-spacing: -0.01em;
 
-  @media (min-width: 900px){
+  @media (min-width: 900px) {
     font-size: 34px;
   }
 `;
@@ -430,7 +382,8 @@ const SectionKicker = styled.div`
   text-align: center;
   color: ${(p) => p.$t.muted};
   font-size: 13px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
 `;
 
 const Tiles = styled.div`
@@ -438,8 +391,6 @@ const Tiles = styled.div`
 
   display: grid;
   grid-auto-flow: column;
-
-  /* 1 card por vista pero con aire lateral (se ve pro) */
   grid-auto-columns: calc(100% - 56px);
   gap: 14px;
 
@@ -452,15 +403,17 @@ const Tiles = styled.div`
   -webkit-overflow-scrolling: touch;
 
   scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
+  &::-webkit-scrollbar {
+    display: none;
+  }
 
-  @media (min-width: 700px){
+  @media (min-width: 700px) {
     grid-auto-columns: 70%;
     padding: 0 22px 20px;
     scroll-padding: 22px;
   }
 
-  @media (min-width: 1040px){
+  @media (min-width: 1040px) {
     padding: 0;
     overflow: visible;
     grid-auto-flow: initial;
@@ -477,18 +430,16 @@ const TileWrap = styled.div`
   width: 100%;
   scroll-snap-align: center;
   scroll-snap-stop: always;
-
-  /* 👇 ayuda táctil */
   touch-action: pan-x;
 
-  @media (min-width: 1040px){
+  @media (min-width: 1040px) {
     scroll-snap-align: initial;
     scroll-snap-stop: normal;
     grid-column: span ${(p) => p.$span || 4};
   }
 `;
+
 const Tile = styled(Link)`
-  /* ✅ FIX: <a> inline => colapsa. */
   display: block;
   width: 100%;
 
@@ -507,37 +458,34 @@ const Tile = styled(Link)`
       : "0 14px 40px rgba(0,0,0,0.10)"};
 
   transform: translateZ(0);
-  transition:
-    transform 220ms ease,
-    box-shadow 220ms ease,
-    border-color 220ms ease,
-    filter 220ms ease;
+  transition: transform 220ms ease, box-shadow 220ms ease,
+    border-color 220ms ease, filter 220ms ease;
 
-  &:active{
+  &:active {
     transform: scale(0.99);
   }
 
-  &:hover{
+  &:hover {
     transform: translateY(-3px);
     border-color: ${(p) =>
-    p.$mode === "dark" ? "rgba(255,255,255,0.22)" : "rgba(43,38,32,0.24)"};
+      p.$mode === "dark"
+        ? "rgba(255,255,255,0.22)"
+        : "rgba(43,38,32,0.24)"};
     box-shadow: ${(p) =>
-    p.$mode === "dark"
-      ? "0 26px 80px rgba(0,0,0,0.65)"
-      : "0 22px 70px rgba(0,0,0,0.14)"};
+      p.$mode === "dark"
+        ? "0 26px 80px rgba(0,0,0,0.65)"
+        : "0 22px 70px rgba(0,0,0,0.14)"};
   }
 
-  &:focus-visible{
+  &:focus-visible {
     outline: none;
-    box-shadow:
-      0 0 0 4px ${(p) => `${p.$t.accent}33`},
+    box-shadow: 0 0 0 4px ${(p) => `${p.$t.accent}33`},
       ${(p) =>
-    p.$mode === "dark"
-      ? "0 26px 80px rgba(0,0,0,0.65)"
-      : "0 22px 70px rgba(0,0,0,0.14)"};
+        p.$mode === "dark"
+          ? "0 26px 80px rgba(0,0,0,0.65)"
+          : "0 22px 70px rgba(0,0,0,0.14)"};
   }
 `;
-
 
 const TileImg = styled.div`
   position: absolute;
@@ -547,34 +495,26 @@ const TileImg = styled.div`
   background-size: cover;
   background-position: center;
 
-  /* tratamiento más editorial */
   filter: contrast(1.05) saturate(0.98);
   transform: scale(1.03);
   transition: transform 520ms ease, filter 520ms ease;
 
-  ${Tile}:hover &{
+  ${Tile}:hover & {
     transform: scale(1.08);
     filter: contrast(1.08) saturate(1.02);
   }
 `;
 
-/**
- * Overlay PRO:
- * - no tapa toda la foto
- * - concentra contraste abajo donde va el texto
- * - añade “wash” suave arriba para que el chip respire
- */
 const TileShade = styled.div`
   position: absolute;
   inset: 0;
   pointer-events: none;
 
-  /* SOLO contraste abajo para texto, arriba limpio */
   background: linear-gradient(
     180deg,
-    rgba(0,0,0,0.00) 40%,
-    rgba(0,0,0,0.35) 70%,
-    rgba(0,0,0,0.70) 100%
+    rgba(0, 0, 0, 0) 40%,
+    rgba(0, 0, 0, 0.35) 70%,
+    rgba(0, 0, 0, 0.7) 100%
   );
 `;
 
@@ -588,47 +528,51 @@ const TileTopRow = styled.div`
   display: grid;
   gap: 8px;
 `;
+
 const TileLabel = styled.div`
   justify-self: start;
   padding: 5px 9px;
   border-radius: 999px;
 
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(0,0,0,0.22);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(10px);
 
-  color: rgba(255,255,255,0.92);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   font-weight: 800;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
 `;
+
 const TileTitle = styled.div`
-  color: rgba(255,255,255,0.96);
+  color: rgba(255, 255, 255, 0.96);
   font-weight: 900;
   font-size: 18px;
   letter-spacing: -0.02em;
   line-height: 1.05;
+  text-shadow: 0 10px 22px rgba(0, 0, 0, 0.55);
 
-  /* pequeño glow para legibilidad */
-  text-shadow: 0 10px 22px rgba(0,0,0,0.55);
-
-  @media (min-width: 900px){
+  @media (min-width: 900px) {
     font-size: 20px;
   }
 `;
+
 const TileSub = styled.div`
-  color: rgba(255,255,255,0.78);
+  color: rgba(255, 255, 255, 0.78);
   font-size: 12px;
   line-height: 1.45;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
 
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 `;
+
 const HeroBg = styled.div`
   position: absolute;
   inset: 0;
@@ -641,27 +585,6 @@ const HeroBg = styled.div`
       : "contrast(1.05) saturate(1.05)"};
 `;
 
-const TileArrow = styled.div`
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
-
-  border: 1px solid rgba(255,255,255,0.16);
-  background: rgba(0,0,0,0.22);
-  backdrop-filter: blur(10px);
-
-  display: grid;
-  place-items: center;
-
-  color: rgba(255,255,255,0.92);
-  font-weight: 900;
-  transition: transform 220ms ease, background 220ms ease;
-
-  ${Tile}:hover &{
-    transform: translateY(-1px);
-    background: rgba(0,0,0,0.30);
-  }
-`;
 const TileContent = styled.div`
   position: absolute;
   left: 12px;
@@ -670,25 +593,49 @@ const TileContent = styled.div`
   z-index: 2;
 
   border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(10,10,10,0.34);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 10, 10, 0.34);
   backdrop-filter: blur(14px);
 
-  padding: 12px 12px 12px;
+  padding: 12px;
   display: grid;
   gap: 6px;
 
-  /* micro detalle para que no se vea “plano” */
-  box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
 `;
 
+const Dots = styled.div`
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
+
+  @media (min-width: 1040px) {
+    display: none;
+  }
+`;
+
+const Dot = styled.button`
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  border: 1px solid ${(p) => p.$t.border};
+  background: ${(p) => (p.$active ? p.$t.accent : "transparent")};
+  cursor: pointer;
+  padding: 0;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px ${(p) => p.$t.focus};
+  }
+`;
 
 const AboutGrid = styled.div`
   margin-top: 26px;
   display: grid;
   gap: 16px;
 
-  @media (min-width: 980px){
+  @media (min-width: 980px) {
     grid-template-columns: 1.1fr 0.9fr;
     align-items: start;
   }
@@ -726,14 +673,17 @@ const Bullets = styled.ul`
   font-size: 13px;
   line-height: 1.7;
 
-  li { margin: 6px 0; }
+  li {
+    margin: 6px 0;
+  }
 `;
 
 const VideoBox = styled.div`
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid ${(p) => p.$t.border};
-  background: ${(p) => (p.$mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.55)")};
+  background: ${(p) =>
+    p.$mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.55)"};
   min-height: 320px;
   display: grid;
   place-items: center;
@@ -743,7 +693,8 @@ const VideoBox = styled.div`
 const VideoHint = styled.div`
   color: ${(p) => p.$t.muted};
   font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
   text-align: center;
   padding: 18px;
 `;
@@ -755,7 +706,8 @@ const Footer = styled.footer`
   text-align: center;
   color: ${(p) => p.$t.muted};
   font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
 `;
 
 function getInitialMode() {
@@ -767,14 +719,16 @@ function getInitialMode() {
 }
 
 /** Replace these with your real images in /public */
-const heroImage = "/landing/hero-2.jpg"; // <-- cámbiala por la definitiva
+const heroImage = "/landing/hero-2.jpg";
 
+/** ✅ Replace with your real WhatsApp number */
+const WHATSAPP_URL = "https://wa.me/57XXXXXXXXXX";
 
 const services = [
   {
-    tag: "RESERVAS",
-    title: "Moonboard Sessions",
-    subtitle: "1h30 · cupos controlados · progreso medible.",
+    tag: "GIMNASIO",
+    title: "Entrenamiento Libre",
+    subtitle: "Acceso 2pm–8pm · MoonBoard + placa principal · enfoque en progreso.",
     href: "/reservas",
     img: "/landing/service-reserve.jpg",
     span: 6,
@@ -792,7 +746,7 @@ const services = [
   {
     tag: "ENTRENOS",
     title: "Entrenos",
-    subtitle: "Fuerza, resistencia",
+    subtitle: "Fuerza, resistencia y técnica aplicada.",
     href: "/training",
     img: "/landing/service-training.jpg",
     span: 4,
@@ -816,17 +770,11 @@ const services = [
 ];
 
 export default function CrashPathLanding() {
-  // services carousel state
   const [activeIdx, setActiveIdx] = useState(0);
   const railRef = useRef(null);
 
-  // theme
   const [mode, setMode] = useState("day");
   const t = useMemo(() => themes[mode], [mode]);
-
-  // hero carousel
-  const [idx, setIdx] = useState(0);
-  const timerRef = useRef(null);
 
   useEffect(() => setMode(getInitialMode()), []);
   useEffect(() => {
@@ -835,24 +783,16 @@ export default function CrashPathLanding() {
 
   const toggleMode = () => setMode((m) => (m === "dark" ? "day" : "dark"));
 
-  // auto-rotate hero
-
-
-  const go = (i) => setIdx(i);
-
   const scrollToIdx = (i) => {
     const el = railRef.current;
     if (!el) return;
     const child = el.children?.[i];
     if (!child) return;
 
-    const targetLeft =
-      child.offsetLeft - (el.clientWidth - child.clientWidth) / 2;
-
+    const targetLeft = child.offsetLeft - (el.clientWidth - child.clientWidth) / 2;
     el.scrollTo({ left: targetLeft, behavior: "smooth" });
   };
 
-  // detect active item in services carousel on scroll (mobile/tablet)
   useEffect(() => {
     const el = railRef.current;
     if (!el) return;
@@ -890,7 +830,6 @@ export default function CrashPathLanding() {
     el.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", computeActive);
 
-    // initial sync
     computeActive();
 
     return () => {
@@ -899,7 +838,6 @@ export default function CrashPathLanding() {
       window.removeEventListener("resize", computeActive);
     };
   }, []);
-
 
   return (
     <Page $t={t} $mode={mode}>
@@ -920,21 +858,22 @@ export default function CrashPathLanding() {
             </Link>
           </NavLeft>
 
-          {/* Center logo */}
           <CenterLogo>
             <LogoMark $t={t}>CRASHPATH</LogoMark>
-
           </CenterLogo>
 
           <NavRight>
             <IconBtn onClick={toggleMode} $t={t} aria-label="Cambiar tema">
               {mode === "dark" ? "☀" : "🌙"}
             </IconBtn>
+
             <CTA href="/login" $t={t}>
               LOGIN
             </CTA>
-            <CTA href="/reservas" $t={t}>
-              RESERVA
+
+            {/* WhatsApp quick access (mornings + general contact) */}
+            <CTA href={WHATSAPP_URL} $t={t}>
+              WHATSAPP
             </CTA>
           </NavRight>
         </HeaderInner>
@@ -949,19 +888,45 @@ export default function CrashPathLanding() {
           <HeroBox>
             <HeroTitle>
               CrashPath
+              <br />
+              Gimnasio de Escalada
+              <br />
+              y Entrenamiento
             </HeroTitle>
 
+            <HeroLead $t={t}>
+              Un espacio dedicado a entrenar, progresar y escalar con intención.
+              <br />
+              MoonBoard + placa principal + programación de entrenamientos.
+              <br />
+              Abierto en la tarde de <b>2:00 PM</b> a <b>8:00 PM</b>. Mañanas: coordinación por WhatsApp.
+            </HeroLead>
 
+            <HeroPill>
+              <PillPrimary href="/reservas">REGISTRAR VISITA</PillPrimary>
+              <PillDivider />
+              <PillLink href={WHATSAPP_URL}>MAÑANAS (WA)</PillLink>
+            </HeroPill>
+
+            <HeroActions>
+              <HeroBtn href="#services" $t={t} $kind="ghost">
+                VER SERVICIOS
+              </HeroBtn>
+              <HeroBtn href="#about" $t={t} $kind="primary">
+                CÓMO FUNCIONA
+              </HeroBtn>
+            </HeroActions>
           </HeroBox>
         </HeroContent>
       </Hero>
 
-
-      {/* SERVICES (Collections-like) */}
+      {/* SERVICES */}
       <Section id="services">
         <SectionInner>
           <SectionTitle>Servicios</SectionTitle>
-
+          <SectionKicker $t={t}>
+            Entrenamiento · guiadas · productos · hospedaje
+          </SectionKicker>
 
           <Tiles ref={railRef}>
             {services.map((s) => (
@@ -974,6 +939,7 @@ export default function CrashPathLanding() {
                     <TileLabel>{s.tag}</TileLabel>
                     <TileTitle>{s.title}</TileTitle>
                   </TileTopRow>
+
                   <TileContent>
                     <TileTitle>{s.title}</TileTitle>
                     <TileSub>{s.subtitle}</TileSub>
@@ -983,7 +949,6 @@ export default function CrashPathLanding() {
             ))}
           </Tiles>
 
-          {/* dots for services carousel (mobile/tablet) */}
           <Dots>
             {services.map((_, i) => (
               <Dot
@@ -998,47 +963,50 @@ export default function CrashPathLanding() {
         </SectionInner>
       </Section>
 
-      {/* ABOUT / MOONBOARD & RESERVAS */}
+      {/* ABOUT / HOW IT WORKS NOW */}
       <Section id="about">
         <SectionInner>
-          <SectionTitle>Moonboard · Reservas</SectionTitle>
+          <SectionTitle>CrashPath — Cómo entrenas hoy</SectionTitle>
           <SectionKicker $t={t}>
-            sesiones de 90 minutos con cupos limitados y flujo simple de reserva.
+            Ya no trabajamos por horas. Llegas, entrenas y te enfocas en tu progreso.
           </SectionKicker>
 
           <AboutGrid>
             <AboutCard $t={t} $mode={mode}>
-              <AboutTitle>Reservas Moonboard</AboutTitle>
+              <AboutTitle>Entrenamiento en CrashPath</AboutTitle>
 
               <AboutText $t={t}>
-                Reserva tu sesión de Moonboard en bloques de 90 minutos con cupos limitados.
-                Así entrenas con espacio, orden y un ritmo constante. El sistema está diseñado
-                para que entres, escales y salgas sin fricción.
+                CrashPath ahora es un gimnasio de escalada enfocado en entrenamiento real.
+                Puedes escalar libremente dentro del horario de la tarde (<b>2:00 PM – 8:00 PM</b>),
+                usando tanto la <b>MoonBoard</b> como nuestra <b>placa principal</b>.
+                <br />
+                <br />
+                Para mañanas, escríbenos por WhatsApp y coordinamos según disponibilidad.
               </AboutText>
 
               <Bullets $t={t}>
-                <li>Sesiones de 1h30 con cupos controlados.</li>
-                <li>Confirmación inmediata y acceso rápido desde el móvil.</li>
-                <li>Políticas claras: cancelaciones, cambios y puntualidad.</li>
-                <li>Enfocado en consistencia: menos caos, más calidad de entrenamiento.</li>
+                <li>Acceso libre en horario de tarde (2pm–8pm).</li>
+                <li>MoonBoard a 25° y 40° disponible.</li>
+                <li>Nueva placa principal de escalada.</li>
+                <li>Enfoque en técnica, fuerza y resistencia.</li>
+                <li>Para entrenar en la mañana: coordinación por WhatsApp.</li>
               </Bullets>
 
               <HeroActions style={{ marginTop: 14 }}>
                 <HeroBtn href="/reservas" $t={t} $kind="primary">
-                  RESERVAR SESIÓN
+                  REGISTRAR VISITA
                 </HeroBtn>
-                <HeroBtn href="#services" $t={t} $kind="ghost">
-                  VER OPCIONES
+                <HeroBtn href={WHATSAPP_URL} $t={t} $kind="ghost">
+                  WHATSAPP (MAÑANAS)
                 </HeroBtn>
               </HeroActions>
             </AboutCard>
 
             <VideoBox $t={t} $mode={mode}>
-              {/* Reemplaza este bloque por <video ...> o embed */}
               <VideoHint $t={t}>
                 VIDEO PLACEHOLDER
                 <br />
-                Aquí va un reel del Moonboard / trips / vibe de marca.
+                Aquí va un reel de la placa / MoonBoard / vibe del gimnasio.
                 <br />
                 (pon un mp4 en /public/landing/intro.mp4 y lo incrustamos)
               </VideoHint>
@@ -1048,7 +1016,7 @@ export default function CrashPathLanding() {
       </Section>
 
       <Footer $t={t}>
-        © {new Date().getFullYear()} CrashPath · Bucaramanga · IG @crashpath · WhatsApp +57 …
+        © {new Date().getFullYear()} CrashPath · Bucaramanga · Gimnasio de Escalada y Entrenamiento · IG @crashpath · WhatsApp +57 …
       </Footer>
     </Page>
   );

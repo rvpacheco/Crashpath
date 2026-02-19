@@ -2,11 +2,17 @@
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import axios from 'axios';
+import { getToken } from "next-auth/jwt";
 import { getSession } from 'next-auth/react'; // Cambia o añade esta importación
 
 
 // Lista de correos electrónicos de administradores
-const adminEmails = [' santistebanfabi@gmail.com','jeevanobando97@gmail.com','mattucm01@gmail.com','rvpacheco17@gmail.com'];
+const adminEmails = [
+  "santistebanfabi@gmail.com",
+  "jeevanobando97@gmail.com",
+  "mattucm01@gmail.com",
+  "rvpacheco17@gmail.com",
+].map((e) => e.trim().toLowerCase());
 
 // Función para refrescar el token de acceso
 async function refreshAccessToken(token) {
@@ -56,51 +62,51 @@ export default NextAuth({
     strategy: 'jwt',
   },
   callbacks: {
-    async jwt({ token, account, user }) {
-      // Si es el primer inicio de sesión, adjunta los datos del usuario al token
-      if (account && user) {
-        return {
-          ...token,
-          accessToken: account.access_token,
-          accessTokenExpires: Date.now() + account.expires_in * 1000,
-          refreshToken: account.refresh_token,
-          user: { name: user.name, email: user.email },  // Adjuntar detalles del usuario
-          isAdmin: adminEmails.includes(user.email), // Verificar si es admin y adjuntar al token
-        };
-      }
+  async jwt({ token, account, user }) {
+    // primer login
+    if (account && user) {
+      const email = String(user.email || "").trim().toLowerCase();
 
-      // Si el token aún no ha expirado, devolverlo tal cual
-      if (Date.now() < token.accessTokenExpires) {
-        return token;
-      }
+      return {
+        ...token,
+        accessToken: account.access_token,
+        accessTokenExpires: Date.now() + (Number(account.expires_in || 3600) * 1000),
+        refreshToken: account.refresh_token ?? token.refreshToken, // conserva el anterior si no viene
+        user: { name: user.name, email },
+        isAdmin: adminEmails.includes(email),
+      };
+    }
 
-      // Refrescar el token si ha expirado
-      return refreshAccessToken(token);
-    },
-    async session({ session, token }) {
-      // Adjuntar el usuario y el token de acceso a la sesión
-      session.user = token.user;
-      session.user.role = token.role;
-      session.accessToken = token.accessToken;
-      session.error = token.error;
-      session.isAdmin = token.isAdmin; // Adjuntar el flag de admin a la sesión
-      return session;
-    },
+    // si no tenemos expiración, no intentes refrescar
+    if (!token.accessTokenExpires) return token;
+
+    // token vigente
+    if (Date.now() < token.accessTokenExpires) return token;
+
+    // refrescar
+    return refreshAccessToken(token);
   },
+
+  async session({ session, token }) {
+    session.user = token.user || session.user;
+    session.accessToken = token.accessToken;
+    session.error = token.error;
+    session.isAdmin = !!token.isAdmin;
+    return session;
+  },
+},
 });
 
 // Función para verificar si la solicitud proviene de un administrador
 export async function isAdminRequest(req, res) {
-  try {
-    // Obtener la sesión actual
-    const session = await getSession({ req });
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-    // Verificar si el usuario tiene un correo y si pertenece a los administradores
-    if (!session?.user?.email || !adminEmails.includes(session.user.email)) {
-      return res.status(401).json({ message: 'No autorizado' });
-    }
-  } catch (error) {
-    console.error('Error verificando el administrador:', error.message);
-    return res.status(500).json({ message: 'Error en el servidor' });
+  const email = String(token?.user?.email || token?.email || "")
+    .trim()
+    .toLowerCase();
+
+  if (!email || !adminEmails.includes(email)) {
+    res.status(401).json({ message: "No autorizado" });
+    throw new Error("Not authorized");
   }
 }
