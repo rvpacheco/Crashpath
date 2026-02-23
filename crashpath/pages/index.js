@@ -21,26 +21,10 @@ const themes = {
     grain: 0.1,
     focus: "rgba(156,79,36,0.20)",
   },
-  dark: {
-    bg: "#0F0D0B",
-    text: "rgba(255,255,255,0.90)",
-    muted: "rgba(255,255,255,0.65)",
-    border: "rgba(255,255,255,0.14)",
-    panel: "rgba(255,255,255,0.06)",
-    panelSolid: "rgba(255,255,255,0.08)",
-    accent: "#C26A34",
-    accent2: "#9C4F24",
-    overlay: "rgba(0,0,0,0.55)",
-    heroText: "rgba(255,255,255,0.92)",
-    heroMuted: "rgba(255,255,255,0.72)",
-    chipBg: "rgba(0,0,0,0.45)",
-    grain: 0.16,
-    focus: "rgba(194,106,52,0.24)",
-  },
 };
-
+const t = themes.day;
 const GlobalStyle = createGlobalStyle`
-  :root { color-scheme: ${(p) => (p.$mode === "dark" ? "dark" : "light")}; }
+  :root { color-scheme: light; }
   *{ box-sizing:border-box; }
   html, body { height:100%; }
   body{
@@ -814,13 +798,7 @@ const HeroLocation = styled.div`
   color: rgba(255, 255, 255, 0.78);
 `;
 
-function getInitialMode() {
-  if (typeof window === "undefined") return "day";
-  const saved = window.localStorage.getItem("cp_theme");
-  if (saved === "day" || saved === "dark") return saved;
-  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
-  return prefersDark ? "dark" : "day";
-}
+
 
 /** Replace these with your real images in /public */
 const heroImage = "/landing/hero-2.jpg";
@@ -876,16 +854,7 @@ const services = [
 export default function CrashPathLanding() {
   const [activeIdx, setActiveIdx] = useState(0);
   const railRef = useRef(null);
-
-  const [mode, setMode] = useState("day");
-  const t = useMemo(() => themes[mode], [mode]);
-
-  useEffect(() => setMode(getInitialMode()), []);
-  useEffect(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem("cp_theme", mode);
-  }, [mode]);
-
-  const toggleMode = () => setMode((m) => (m === "dark" ? "day" : "dark"));
+  const mode = "day";
 
   const scrollToIdx = (i) => {
     const el = railRef.current;
