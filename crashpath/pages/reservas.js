@@ -618,7 +618,7 @@ export default function Reservas() {
     setMessage("");
 
     try {
-      await axios.post("/api/access/set", { accessType: accessTypeChoice });
+      await axios.post("/api/user/set-access", { accessType: accessTypeChoice });
       setShowAccessModal(false);
       await refreshUser({ autoOpenGates: true }); // sigue con waiver/perfil
     } catch (e) {
