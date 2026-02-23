@@ -913,7 +913,7 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
             <>
               <Body>
                 <p>
-                  Registrar visita descuenta <strong>1 crédito</strong>. Si no asistes, el crédito igual se pierde (Flow B).
+                  Registrar visita descuenta <strong>1 crédito</strong>. 
                 </p>
               </Body>
 

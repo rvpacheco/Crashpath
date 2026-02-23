@@ -3,14 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import styled, { createGlobalStyle } from "styled-components";
-
-/** =========================
- * CrashPath Landing (updated)
- * - CrashPath is now a full climbing gym (not hourly sessions)
- * - Open 2pm–8pm (mornings via WhatsApp)
- * - App CTA: "Registrar visita" (1 crédito)
- * ========================= */
-
+ 
 const themes = {
   day: {
     bg: "#E7E1D2",
@@ -973,20 +966,7 @@ export default function CrashPathLanding() {
             <LogoMark $t={t}>CRASHPATH</LogoMark>
           </CenterLogo>
 
-          <NavRight>
-            <IconBtn onClick={toggleMode} $t={t} aria-label="Cambiar tema">
-              {mode === "dark" ? "☀" : "🌙"}
-            </IconBtn>
 
-            <CTA href="/login" $t={t}>
-              LOGIN
-            </CTA>
-
-            {/* WhatsApp quick access (mornings + general contact) */}
-            <CTA href={WHATSAPP_URL} $t={t}>
-              WHATSAPP
-            </CTA>
-          </NavRight>
         </HeaderInner>
       </Header>
 
@@ -1042,7 +1022,7 @@ export default function CrashPathLanding() {
                 MoonBoard a 25° y 40°, placa principal, enfoque en progreso real.
                 Sin reserva previa — llegas y entrenas.
               </ServiceDesc>
-              <ServiceMeta $t={t}>Lunes a Sábado · 2:00 PM – 8:00 PM</ServiceMeta>
+              <ServiceMeta $t={t}>Lunes a Sábado · 3:00 PM – 10:00 PM</ServiceMeta>
               <ServiceCTA href="/reservas" $t={t} $kind="primary">
                 REGISTRAR VISITA
               </ServiceCTA>
@@ -1095,7 +1075,7 @@ export default function CrashPathLanding() {
 
               <AboutText $t={t}>
                 CrashPath ahora es un gimnasio de escalada enfocado en entrenamiento real.
-                Puedes escalar libremente dentro del horario de la tarde (<b>2:00 PM – 8:00 PM</b>),
+                Puedes escalar libremente dentro del horario de la tarde (<b>3:00 PM – 10:00 PM</b>),
                 usando tanto la <b>MoonBoard</b> como nuestra <b>placa principal</b>.
                 <br />
                 <br />
@@ -1103,7 +1083,7 @@ export default function CrashPathLanding() {
               </AboutText>
 
               <Bullets $t={t}>
-                <li>Acceso libre en horario de tarde (2pm–8pm).</li>
+                <li>Acceso libre en horario de tarde (3pm–10pm).</li>
                 <li>MoonBoard a 25° y 40° disponible.</li>
                 <li>Nueva placa principal de escalada.</li>
                 <li>Enfoque en técnica, fuerza y resistencia.</li>
@@ -1120,7 +1100,7 @@ export default function CrashPathLanding() {
               </HeroActions>
             </AboutCard>
 
-            <VideoBox $t={t} $mode={mode}>
+            {/* Fixed transparent header <VideoBox $t={t} $mode={mode}>
               <VideoHint $t={t}>
                 VIDEO PLACEHOLDER
                 <br />
@@ -1128,7 +1108,7 @@ export default function CrashPathLanding() {
                 <br />
                 (pon un mp4 en /public/landing/intro.mp4 y lo incrustamos)
               </VideoHint>
-            </VideoBox>
+            </VideoBox> */}
           </AboutGrid>
         </SectionInner>
       </Section>
