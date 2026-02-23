@@ -6,15 +6,18 @@ import styled from "styled-components";
 import axios from "axios";
 import { useRouter } from "next/router";
 import Link from "next/link";
+import { getWaiverSnapshot } from "@/lib/waiver";
 
 /**
- * CrashPath /reservas (FINAL - Waiver + Profile)
+ * CrashPath /reservas (FINAL - Waiver + Perfil + Acceso por Tiquetera/Mensualidad)
  * - Login Google
  * - Gate 1: Waiver (checkbox + firma en canvas)
- * - Gate 2: Perfil (phone + EPS + emergencias)
- * - Registrar Visita (1 crédito) SOLO si waiver signed + profile complete
+ * - Gate 2: Perfil (documento + phone + EPS + emergencias)
+ * - Registrar Visita:
+ *    - ticketera: descuenta 1 crédito
+ *    - mensualidad: requiere mensualidad activa (no descuenta créditos)
  *
- * Endpoints:
+ * Endpoints esperados:
  *  - GET  /api/user
  *  - POST /api/waiver/sign
  *  - POST /api/profile/update
@@ -216,7 +219,6 @@ const ResMeta = styled.span`
   margin-top: 2px;
 `;
 
-/** Modal */
 const ModalOverlay = styled.div`
   position: fixed;
   inset: 0;
@@ -228,7 +230,6 @@ const ModalOverlay = styled.div`
   z-index: 50;
 `;
 
-/* Modales con gecko */
 const FrogCard = styled.div`
   position: relative;
   background: #fff;
@@ -415,7 +416,7 @@ const Select = styled.select`
   background: #fff;
 `;
 
-const WHATSAPP_URL = "https://wa.me/57XXXXXXXXXX"; // <-- pon tu número real
+const WHATSAPP_URL = "https://wa.me/57XXXXXXXXXX";
 
 function safeArray(v) {
   return Array.isArray(v) ? v : [];
@@ -435,7 +436,7 @@ function endOfTodayLocal() {
 
 function formatDateShort(d) {
   try {
-    return new Date(d).toLocaleDateString();
+    return new Date(d).toLocaleDateString("es-CO");
   } catch {
     return String(d);
   }
@@ -460,11 +461,25 @@ function visitBadgeColor(v) {
 }
 
 function isProfileComplete(u) {
+  const dt = (u?.documentType || "").trim();
+  const dn = (u?.documentNumber || "").trim();
   const phone = (u?.phone || "").trim();
   const epsName = (u?.epsName || "").trim();
   const ecn = (u?.emergencyContactName || "").trim();
   const ecp = (u?.emergencyContactPhone || "").trim();
-  return !!(phone && epsName && ecn && ecp);
+  return !!(dt && dn && phone && epsName && ecn && ecp);
+}
+
+function getMensualidadStatus(mensualidad) {
+  if (!mensualidad?.endDate) return { active: false, label: "Sin mensualidad", days: null };
+  const now = new Date();
+  const end = new Date(mensualidad.endDate);
+  const active = end > now;
+  const days = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+  const label = active
+    ? `Activa · vence ${end.toLocaleDateString("es-CO")}`
+    : `Vencida ${end.toLocaleDateString("es-CO")}`;
+  return { active, label, days };
 }
 
 export default function Reservas() {
@@ -472,14 +487,22 @@ export default function Reservas() {
   const router = useRouter();
 
   const [userData, setUserData] = useState({
+    accessType: "ticketera",
     credits: 0,
+    mensualidad: null,
     waiverStatus: "unknown",
+    waiverSignedAt: null,
+    waiverVersion: null,
+    waiverMethod: null,
     visits: [],
     profileStatus: "incomplete",
+    documentType: "CC",
+    documentNumber: "",
     phone: "",
     epsName: "",
     emergencyContactName: "",
     emergencyContactPhone: "",
+    esMinor: false,
     missingFields: [],
   });
 
@@ -487,13 +510,11 @@ export default function Reservas() {
   const [isLoadingUser, setIsLoadingUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // modals
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showWaiverModal, setShowWaiverModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showConfirmRegister, setShowConfirmRegister] = useState(false);
 
-  // waiver ui
   const [waiverAccepted, setWaiverAccepted] = useState(false);
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
@@ -502,11 +523,11 @@ export default function Reservas() {
 
   const [documentType, setDocumentType] = useState("CC");
   const [documentNumber, setDocumentNumber] = useState("");
-
   const [phone, setPhone] = useState("");
   const [epsName, setEpsName] = useState("");
   const [emergencyContactName, setEmergencyContactName] = useState("");
   const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
+
   const waiverSigned = userData?.waiverStatus === "signed";
   const profileComplete = userData?.profileStatus === "complete" || isProfileComplete(userData);
 
@@ -524,12 +545,18 @@ export default function Reservas() {
     });
   }, [visits]);
 
-  const canRegister =
-    !!session &&
-    waiverSigned &&
-    profileComplete &&
-    (userData?.credits ?? 0) >= 1 &&
-    !todaysVisit;
+  const accessType = (userData?.accessType || "ticketera").toLowerCase();
+  const mensualidadInfo = useMemo(() => getMensualidadStatus(userData?.mensualidad), [userData?.mensualidad]);
+
+  const canRegister = useMemo(() => {
+    if (!session) return false;
+    if (!waiverSigned) return false;
+    if (!profileComplete) return false;
+    if (todaysVisit) return false;
+
+    if (accessType === "mensualidad") return !!mensualidadInfo.active;
+    return (userData?.credits ?? 0) >= 1;
+  }, [session, waiverSigned, profileComplete, todaysVisit, accessType, mensualidadInfo.active, userData?.credits]);
 
   async function refreshUser({ autoOpenGates = false } = {}) {
     if (!session) return;
@@ -537,10 +564,19 @@ export default function Reservas() {
     setMessage("");
     try {
       const res = await axios.get("/api/user");
-      const u = res.data;
-      setUserData(u);
+      const u = res.data || {};
 
-      // precargar form de perfil
+      setUserData((prev) => ({
+        ...prev,
+        ...u,
+        accessType: u?.accessType || prev.accessType || "ticketera",
+        credits: typeof u?.credits === "number" ? u.credits : prev.credits,
+        mensualidad: u?.mensualidad ?? prev.mensualidad,
+        visits: safeArray(u?.visits),
+        waiverStatus: u?.waiverStatus || prev.waiverStatus,
+        profileStatus: u?.profileStatus || prev.profileStatus,
+      }));
+
       setDocumentType(u?.documentType || "CC");
       setDocumentNumber(u?.documentNumber || "");
       setPhone(u?.phone || "");
@@ -551,7 +587,7 @@ export default function Reservas() {
       if (autoOpenGates) {
         if (u?.waiverStatus !== "signed") {
           setShowWaiverModal(true);
-        } else if (u?.profileStatus !== "complete") {
+        } else if (!(u?.profileStatus === "complete" || isProfileComplete(u))) {
           setShowProfileModal(true);
         }
       }
@@ -570,12 +606,10 @@ export default function Reservas() {
       return;
     }
 
-    // al entrar logeado: abre gates automáticamente para user nuevo
     refreshUser({ autoOpenGates: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, router]);
 
-  // ===== Login =====
   const handleSignIn = () => setShowLoginModal(true);
   const handleAcceptLogin = () => {
     setShowLoginModal(false);
@@ -583,12 +617,10 @@ export default function Reservas() {
   };
   const handleRejectLogin = () => setShowLoginModal(false);
 
-  // ===== Canvas utils =====
   function getCanvasCtx() {
     const c = canvasRef.current;
     if (!c) return null;
-    const ctx = c.getContext("2d");
-    return ctx;
+    return c.getContext("2d");
   }
 
   function resizeCanvasToDevicePixels() {
@@ -598,14 +630,15 @@ export default function Reservas() {
     const rect = c.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
 
-    // set real buffer size
     c.width = Math.floor(rect.width * dpr);
     c.height = Math.floor(rect.height * dpr);
 
     const ctx = c.getContext("2d");
+    if (!ctx) return;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
 
-    // baseline style
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -614,7 +647,6 @@ export default function Reservas() {
 
   useEffect(() => {
     if (showWaiverModal) {
-      // small delay to ensure modal rendered
       setTimeout(() => {
         resizeCanvasToDevicePixels();
         clearSignature();
@@ -625,14 +657,10 @@ export default function Reservas() {
 
   function getLocalPos(e) {
     const c = canvasRef.current;
+    if (!c) return { x: 0, y: 0 };
     const rect = c.getBoundingClientRect();
 
-    // mouse
-    if (e?.clientX != null) {
-      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    }
-
-    // touch
+    if (e?.clientX != null) return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     const t = e?.touches?.[0] || e?.changedTouches?.[0];
     if (t) return { x: t.clientX - rect.left, y: t.clientY - rect.top };
 
@@ -641,17 +669,14 @@ export default function Reservas() {
 
   function startDraw(e) {
     drawingRef.current = true;
-    const p = getLocalPos(e);
-    lastPointRef.current = p;
-    // prevent scroll on touch
+    lastPointRef.current = getLocalPos(e);
     e?.preventDefault?.();
   }
 
   function moveDraw(e) {
     if (!drawingRef.current) return;
-    const c = canvasRef.current;
     const ctx = getCanvasCtx();
-    if (!c || !ctx) return;
+    if (!ctx) return;
 
     const p = getLocalPos(e);
     ctx.beginPath();
@@ -665,7 +690,6 @@ export default function Reservas() {
   }
 
   function endDraw(e) {
-    if (!drawingRef.current) return;
     drawingRef.current = false;
     e?.preventDefault?.();
   }
@@ -674,20 +698,30 @@ export default function Reservas() {
     const c = canvasRef.current;
     const ctx = getCanvasCtx();
     if (!c || !ctx) return;
-    const rect = c.getBoundingClientRect();
-    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, c.width, c.height);
     hasInkRef.current = false;
   }
 
   function exportSignatureDataUrl() {
     const c = canvasRef.current;
     if (!c) return "";
-    // PNG base64
     return c.toDataURL("image/png");
   }
 
-  // ===== Waiver =====
   const handleOpenWaiver = () => setShowWaiverModal(true);
+
+  const waiverCityLine = useMemo(() => {
+    return `Bucaramanga, Santander — ${new Date().toLocaleDateString("es-CO")}`;
+  }, []);
+
+  const waiverSnapshot = useMemo(() => {
+    return getWaiverSnapshot({
+      cityLine: waiverCityLine,
+      isMinor: !!userData?.esMinor,
+      participantName: session?.user?.name || "",
+    });
+  }, [waiverCityLine, userData?.esMinor, session?.user?.name]);
 
   const handleSignWaiver = async () => {
     if (isSubmitting) return;
@@ -705,24 +739,22 @@ export default function Reservas() {
     setMessage("");
 
     try {
-      const signatureImageUrl = exportSignatureDataUrl(); // base64 PNG
+      const signatureImageUrl = exportSignatureDataUrl();
+      const { text: waiverTextSnapshot, version } = waiverSnapshot;
 
-      const waiverTextSnapshot = `
-CRASHPATH – CONSENTIMIENTO Y EXONERACIÓN (BORRADOR v1)
-
-Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y uso de instalaciones conlleva riesgos...
-(pon aquí el texto completo EXACTO que muestras en el modal)
-`.trim();
-
-      await axios.post("/api/admin/waiver/sign", {
-        version: "v1",
+      await axios.post("/api/waiver/sign", {
+        version,
         method: "signature",
         waiverTextSnapshot,
-        signatureImageUrl, // ✅ nombre correcto
-        // signatureText: session?.user?.name, // opcional si también quieres guardar texto
+        signatureImageUrl,
+        signatureText: session?.user?.name || "",
+        esMinor: !!userData?.esMinor,
       });
 
       setShowWaiverModal(false);
+      setWaiverAccepted(false);
+      clearSignature();
+
       await refreshUser({ autoOpenGates: true });
       setMessage("✅ Waiver firmado. Ahora completa tus datos y listo.");
     } catch (e) {
@@ -732,18 +764,17 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
     }
   };
 
-  // ===== Profile =====
   const openProfile = () => setShowProfileModal(true);
 
   const handleSaveProfile = async () => {
     if (isSubmitting) return;
 
-    const dt = (documentType || "").trim();
+    const dt = (documentType || "").trim().toUpperCase();
     const dn = (documentNumber || "").trim();
-    const p = phone.trim();
-    const eps = epsName.trim();
-    const ecn = emergencyContactName.trim();
-    const ecp = emergencyContactPhone.trim();
+    const p = (phone || "").trim();
+    const eps = (epsName || "").trim();
+    const ecn = (emergencyContactName || "").trim();
+    const ecp = (emergencyContactPhone || "").trim();
 
     if (!dt || !dn || !p || !eps || !ecn || !ecp) {
       setMessage("Completa: tipo y número de documento, teléfono, EPS y datos de emergencia.");
@@ -771,7 +802,6 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
     }
   };
 
-  // ===== Register visit =====
   const handleRegisterVisit = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -795,6 +825,8 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
         setShowProfileModal(true);
       } else if (code === "INSUFFICIENT_CREDITS") {
         setMessage("⚠️ No tienes créditos disponibles.");
+      } else if (code === "MENSUALIDAD_EXPIRED") {
+        setMessage("⚠️ Tu mensualidad está vencida. Escríbenos para renovarla.");
       } else if (code === "VISIT_ALREADY_EXISTS") {
         setMessage("ℹ️ Ya tienes una visita registrada hoy.");
       } else {
@@ -805,7 +837,6 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
     }
   };
 
-  // UI helpers
   const topStatus = useMemo(() => {
     if (!session) return null;
     if (isLoadingUser) return { label: "Cargando…", bg: "#6b6b6b" };
@@ -827,9 +858,46 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
   const gateText = useMemo(() => {
     if (!session) return "";
     if (!waiverSigned) return "Primero firma el waiver (checkbox + firma).";
-    if (!profileComplete) return "Luego completa tus datos (EPS + emergencia + teléfono).";
+    if (!profileComplete) return "Luego completa tus datos (documento + EPS + emergencia + teléfono).";
+    if (accessType === "mensualidad") {
+      return mensualidadInfo.active
+        ? "Listo: puedes registrar tu visita."
+        : "Tu mensualidad está vencida. Escríbenos por WhatsApp para renovarla.";
+    }
     return "Listo: puedes registrar tu visita.";
-  }, [session, waiverSigned, profileComplete]);
+  }, [session, waiverSigned, profileComplete, accessType, mensualidadInfo.active]);
+
+  const accessChip = useMemo(() => {
+    if (!session) return null;
+
+    if (accessType === "mensualidad") {
+      return {
+        label: `Mensualidad · ${mensualidadInfo.label}`,
+        bg: mensualidadInfo.active ? "#2f6f7a" : "#b5632e",
+      };
+    }
+    const c = userData?.credits ?? 0;
+    return {
+      label: `Tiquetera · ${c} crédito(s)`,
+      bg: c >= 1 ? "#2f6f7a" : "#b5632e",
+    };
+  }, [session, accessType, mensualidadInfo, userData?.credits]);
+
+  const registerButtonTitle = useMemo(() => {
+    if (todaysVisit) return "Ya tienes una visita registrada hoy";
+    if (!waiverSigned) return "Debes firmar el waiver";
+    if (!profileComplete) return "Completa tus datos";
+    if (accessType === "mensualidad") {
+      return mensualidadInfo.active ? "" : "Mensualidad vencida";
+    }
+    return (userData?.credits ?? 0) < 1 ? "No tienes créditos" : "";
+  }, [todaysVisit, waiverSigned, profileComplete, accessType, mensualidadInfo.active, userData?.credits]);
+
+  const registerButtonText = useMemo(() => {
+    if (todaysVisit) return "VISITA DE HOY YA REGISTRADA";
+    if (accessType === "mensualidad") return "REGISTRAR VISITA";
+    return "REGISTRAR VISITA (1 CRÉDITO)";
+  }, [todaysVisit, accessType]);
 
   return (
     <Container>
@@ -843,7 +911,7 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
               <strong>CrashPath</strong> es un gimnasio de escalada y entrenamiento en Bucaramanga.
             </p>
             <p>
-              Inicia sesión con Google para: <strong>firmar el waiver</strong>, completar tus <strong>datos de emergencia</strong> y usar tus créditos.
+              Inicia sesión con Google para: <strong>firmar el waiver</strong>, completar tus <strong>datos de emergencia</strong> y registrar tus visitas.
             </p>
             <p>
               Horario: <strong>2:00 PM – 8:00 PM</strong>. Mañanas: coordinación por WhatsApp.
@@ -864,9 +932,15 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
             Bienvenid@, <BrushName>{session.user?.name}</BrushName>
           </WelcomeRow>
 
-          <Credits>
-            Tienes <strong>{userData?.credits ?? 0}</strong> crédito(s) disponible(s)
-          </Credits>
+          {accessType === "mensualidad" ? (
+            <Credits>
+              Acceso por <strong>mensualidad</strong>
+            </Credits>
+          ) : (
+            <Credits>
+              Tienes <strong>{userData?.credits ?? 0}</strong> crédito(s) disponible(s)
+            </Credits>
+          )}
 
           <ChipRow>
             {topStatus && (
@@ -874,9 +948,14 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
                 <Badge $bg={topStatus.bg}>{topStatus.label}</Badge>
               </Chip>
             )}
+            {accessChip && (
+              <Chip>
+                <Badge $bg={accessChip.bg}>{accessChip.label}</Badge>
+              </Chip>
+            )}
             <Chip>
               <span>Horario:</span>
-              <strong>2pm–8pm</strong>
+              <strong>3pm–10pm</strong>
             </Chip>
             <Chip>
               <span>Mañanas:</span>
@@ -890,7 +969,6 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
             <p>{gateText}</p>
           </Body>
 
-          {/* Gate buttons */}
           {!waiverSigned ? (
             <>
               <PrimaryBtn onClick={handleOpenWaiver} disabled={isSubmitting || isLoadingUser}>
@@ -913,22 +991,24 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
             <>
               <Body>
                 <p>
-                  Registrar visita descuenta <strong>1 crédito</strong>. 
+                  {accessType === "mensualidad" ? (
+                    <>
+                      Tu acceso es por <strong>mensualidad</strong>. Registra tu visita para llevar el control.
+                    </>
+                  ) : (
+                    <>
+                      Registrar visita descuenta <strong>1 crédito</strong>.
+                    </>
+                  )}
                 </p>
               </Body>
 
               <PrimaryBtn
                 onClick={() => setShowConfirmRegister(true)}
                 disabled={!canRegister || isSubmitting || isLoadingUser}
-                title={
-                  todaysVisit
-                    ? "Ya tienes una visita registrada hoy"
-                    : (userData?.credits ?? 0) < 1
-                      ? "No tienes créditos"
-                      : ""
-                }
+                title={registerButtonTitle}
               >
-                {todaysVisit ? "VISITA DE HOY YA REGISTRADA" : "REGISTRAR VISITA (1 CRÉDITO)"}
+                {registerButtonText}
               </PrimaryBtn>
 
               <SecondaryBtn as="a" href={WHATSAPP_URL}>
@@ -969,7 +1049,6 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
         </Card>
       )}
 
-      {/* MODAL: Login */}
       {showLoginModal && (
         <ModalOverlay>
           <FrogCard>
@@ -990,7 +1069,6 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
         </ModalOverlay>
       )}
 
-      {/* MODAL: Waiver (texto + checkbox + firma) */}
       {showWaiverModal && (
         <ModalOverlay>
           <FrogCard>
@@ -1010,29 +1088,10 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
             <FrogBody>
               <WaiverBox>
                 <p style={{ margin: "0 0 10px" }}>
-                  <strong>CRASHPATH – CONSENTIMIENTO Y EXONERACIÓN (BORRADOR v1)</strong>
+                  <strong>{waiverSnapshot?.title || "CRASHPATH – CONSENTIMIENTO INFORMADO (v1)"}</strong>
                 </p>
-                <p style={{ margin: "0 0 10px" }}>
-                  Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y uso de instalaciones conlleva riesgos
-                  (caídas, golpes, lesiones musculares/articulares u otras) y acepto entrenar bajo mi propia responsabilidad.
-                </p>
-                <p style={{ margin: "0 0 10px" }}>
-                  <strong>1) Aceptación de riesgos:</strong> Reconozco los riesgos inherentes y asumo plena responsabilidad por mi participación.
-                </p>
-                <p style={{ margin: "0 0 10px" }}>
-                  <strong>2) Salud:</strong> Declaro estar apto para realizar actividad física. En caso de condición médica, me responsabilizo de informar
-                  y entrenar con precaución.
-                </p>
-                <p style={{ margin: "0 0 10px" }}>
-                  <strong>3) Normas:</strong> Me comprometo a seguir indicaciones del staff y a respetar normas del gimnasio.
-                </p>
-                <p style={{ margin: "0 0 10px" }}>
-                  <strong>4) Emergencias:</strong> Autorizo a CrashPath a contactar a mi persona de emergencia y facilitar la atención necesaria.
-                </p>
-                <p style={{ margin: 0 }}>
-                  <strong>5) Exoneración:</strong> Libero a CrashPath y su personal de responsabilidad por lesiones/daños derivados de mi participación,
-                  salvo dolo comprobado según normativa aplicable.
-                </p>
+                <p style={{ margin: "0 0 10px", fontSize: 12.5, color: "#6b6b6b" }}>{waiverCityLine}</p>
+                <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{waiverSnapshot?.text || ""}</p>
               </WaiverBox>
 
               <div style={{ marginTop: 10 }}>
@@ -1097,7 +1156,6 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
         </ModalOverlay>
       )}
 
-      {/* MODAL: Perfil */}
       {showProfileModal && (
         <ModalOverlay>
           <FrogCard>
@@ -1108,7 +1166,8 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
 
             <FrogBody>
               <p style={{ margin: "0 0 10px" }}>
-                Para entrenar, necesitamos tu <strong>EPS</strong> y un <strong>contacto de emergencia</strong>.
+                Para entrenar, necesitamos tu <strong>documento</strong>, <strong>EPS</strong> y un{" "}
+                <strong>contacto de emergencia</strong>.
               </p>
 
               <Form>
@@ -1126,12 +1185,9 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
 
                 <Field>
                   <Label>Número de documento</Label>
-                  <Input
-                    value={documentNumber}
-                    onChange={(e) => setDocumentNumber(e.target.value)}
-                    placeholder="Ej: 1098xxxxxx"
-                  />
+                  <Input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} placeholder="Ej: 1098xxxxxx" />
                 </Field>
+
                 <Field>
                   <Label>Teléfono</Label>
                   <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Ej: 3001234567" />
@@ -1160,9 +1216,7 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
                   />
                 </Field>
 
-                <Helper>
-                  Esto no es “por molestar”: si pasa algo, el admin ya tiene lo necesario para actuar rápido.
-                </Helper>
+                <Helper>Esto es para poder actuar rápido si pasa algo.</Helper>
               </Form>
             </FrogBody>
 
@@ -1178,7 +1232,6 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
         </ModalOverlay>
       )}
 
-      {/* MODAL: Confirm register */}
       {showConfirmRegister && (
         <ModalOverlay>
           <FrogCard>
@@ -1188,7 +1241,15 @@ Al firmar este documento, declaro que entiendo que la escalada, entrenamiento y 
             <FrogBrush>Visita</FrogBrush>
             <FrogBody>
               <p style={{ margin: 0 }}>
-                Vas a registrar tu visita de hoy. Se descuenta <strong>1 crédito</strong> y no es reembolsable si no asistes.
+                {accessType === "mensualidad" ? (
+                  <>
+                    Vas a registrar tu visita de hoy. Esto ayuda a llevar el control de asistencia.
+                  </>
+                ) : (
+                  <>
+                    Vas a registrar tu visita de hoy. Se descuenta <strong>1 crédito</strong> y no es reembolsable si no asistes.
+                  </>
+                )}
               </p>
             </FrogBody>
             <FrogRow>
