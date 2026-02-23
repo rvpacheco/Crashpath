@@ -6,8 +6,8 @@ import axios from "axios";
 import styled, { createGlobalStyle } from "styled-components";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
+import { getWaiverSnapshot, waiverToParagraphs } from "@/lib/waiver";
 
-/* -------------------- THEME -------------------- */
 const palette = {
   bg: "#E7E1D2",
   card: "rgba(255,255,255,0.55)",
@@ -207,7 +207,7 @@ const SecondaryButton = styled.button`
 `;
 
 const Button = styled.button`
-  background: ${(p) => (p.variant === "danger" ? palette.danger : palette.success)};
+  background: ${(p) => (p.$variant === "danger" ? palette.danger : palette.success)};
   color: #fff;
   padding: 11px 12px;
   border: none;
@@ -276,7 +276,7 @@ const PrivacyTag = styled.span`
   border-radius: 999px;
   font-size: 12px;
   border: 1px solid ${palette.border};
-  background: ${(p) => (p.private ? "rgba(156,79,36,0.14)" : "rgba(46,158,86,0.12)")};
+  background: ${(p) => (p.$private ? "rgba(156,79,36,0.14)" : "rgba(46,158,86,0.12)")};
 `;
 
 const IconButton = styled.button`
@@ -351,20 +351,6 @@ const AuditPanel = styled.aside`
     top: 18px;
     max-height: calc(100vh - 48px);
     overflow: auto;
-  }
-`;
-
-const AuditTitle = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-
-  h3 {
-    margin: 0;
-    font-size: 14px;
-    color: ${palette.text};
-    letter-spacing: .02em;
   }
 `;
 
@@ -515,7 +501,7 @@ const Pill = styled.span`
 
 /* -------------------- MODALS -------------------- */
 const Overlay = styled.div`
-  display: ${({ show }) => (show ? "block" : "none")};
+  display: ${({ $show }) => ($show ? "block" : "none")};
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.55);
@@ -523,7 +509,7 @@ const Overlay = styled.div`
 `;
 
 const Modal = styled.div`
-  display: ${({ show }) => (show ? "block" : "none")};
+  display: ${({ $show }) => ($show ? "block" : "none")};
   position: fixed;
   z-index: 9999;
   left: 50%;
@@ -840,13 +826,6 @@ function sameDay(a, b) {
   );
 }
 
-/**
- * Para "check-in hoy" en UI:
- * - soporta:
- *   - user.checkedInToday (ideal)
- *   - user.lastCheckinAt
- *   - user.lastVisitAt
- */
 function hasCheckedInToday(user) {
   const today = new Date();
   if (user?.checkedInToday === true) return true;
@@ -936,47 +915,29 @@ const INITIAL_FORM = {
   esMinor: false,
 };
 
-/**
- * -------------------- Audit event shape (desde backend) --------------------
- * {
- *   _id,
- *   ts,                // Date
- *   action,            // "CHECKIN" | "ADJUST_CREDITS" | ...
- *   actorEmail,        // admin email
- *   actorName,
- *   userId,
- *   userName,
- *   userEmail,
- *   summary,           // string listo para UI
- *   meta: {}           // opcional
- * }
- */
-function AuditFeed({ events, onReload, loading }) {
+function AuditFeed({ events }) {
   return (
     <AuditPanel>
-
-
-        <AuditList>
-          {events.map((e) => (
-            <AuditItem key={e._id || `${e.ts}-${e.action}-${e.userId || "x"}`}>
-              <AuditLine>
-                {e.summary ? (
-                  <span>{e.summary}</span>
-                ) : (
-                  <>
-                    <b>{e.action}</b> · {e.userName || e.userEmail || "Usuario"} · por{" "}
-                    <b>{e.actorName || e.actorEmail || "admin"}</b>
-                  </>
-                )}
-              </AuditLine>
-              <AuditMeta>
-                <span>{formatDateTime(e.ts)}</span>
-                {e.userEmail ? <span>· {e.userEmail}</span> : null}
-              </AuditMeta>
-            </AuditItem>
-          ))}
-        </AuditList>
- 
+      <AuditList>
+        {(events || []).map((e) => (
+          <AuditItem key={e._id || `${e.ts}-${e.action}-${e.userId || "x"}`}>
+            <AuditLine>
+              {e.summary ? (
+                <span>{e.summary}</span>
+              ) : (
+                <>
+                  <b>{e.action}</b> · {e.userName || e.userEmail || "Usuario"} · por{" "}
+                  <b>{e.actorName || e.actorEmail || "admin"}</b>
+                </>
+              )}
+            </AuditLine>
+            <AuditMeta>
+              <span>{formatDateTime(e.ts)}</span>
+              {e.userEmail ? <span>· {e.userEmail}</span> : null}
+            </AuditMeta>
+          </AuditItem>
+        ))}
+      </AuditList>
     </AuditPanel>
   );
 }
@@ -988,12 +949,10 @@ export default function AdminPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Audit
   const [auditEvents, setAuditEvents] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
-  // Quick filters
-  const [quickFilter, setQuickFilter] = useState("all"); // all | waiver | mensualidadVencida | sinCreditos | menores | checkinHoy
+  const [quickFilter, setQuickFilter] = useState("all");
 
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   const [showReservationModal, setShowReservationModal] = useState(false);
@@ -1001,8 +960,10 @@ export default function AdminPage() {
   const [showNewUserModal, setShowNewUserModal] = useState(false);
   const [showRenovarModal, setShowRenovarModal] = useState(false);
   const [showCheckinModal, setShowCheckinModal] = useState(false);
-  const [newUserStep, setNewUserStep] = useState(1);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showWaiverModal, setShowWaiverModal] = useState(false);
 
+  const [newUserStep, setNewUserStep] = useState(1);
   const [newUserForm, setNewUserForm] = useState(INITIAL_FORM);
 
   const [waiverAccepted, setWaiverAccepted] = useState(false);
@@ -1013,6 +974,8 @@ export default function AdminPage() {
 
   const [selectedUser, setSelectedUser] = useState(null);
   const [viewingUser, setViewingUser] = useState(null);
+  const [waiverUser, setWaiverUser] = useState(null);
+
   const [checkinUser, setCheckinUser] = useState(null);
   const [checkinSuccess, setCheckinSuccess] = useState("");
 
@@ -1028,19 +991,74 @@ export default function AdminPage() {
   const [uiError, setUiError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const [historyUser, setHistoryUser] = useState(null);
+  const [historyVisits, setHistoryVisits] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   const didInit = useRef(false);
 
-  const waiverCityLine = `Bucaramanga, Santander — ${new Date().toLocaleDateString("es-CO")}`;
+  const waiverCityLine = useMemo(
+    () => `Bucaramanga, Santander — ${new Date().toLocaleDateString("es-CO")}`,
+    []
+  );
+
+  const waiverSnapshotNewUser = useMemo(() => {
+    return getWaiverSnapshot({
+      cityLine: waiverCityLine,
+      isMinor: !!newUserForm.esMinor,
+      participantName: (newUserForm.name || "").trim(),
+    });
+  }, [waiverCityLine, newUserForm.esMinor, newUserForm.name]);
+
+  const waiverSnapshotExistingUser = useMemo(() => {
+    return getWaiverSnapshot({
+      cityLine: waiverCityLine,
+      isMinor: !!waiverUser?.esMinor,
+      participantName: (waiverUser?.name || "").trim(),
+    });
+  }, [waiverCityLine, waiverUser?.esMinor, waiverUser?.name]);
 
   useEffect(() => {
     if (didInit.current) return;
     if (status === "loading") return;
     didInit.current = true;
-    if (!session) { signIn(); return; }
-    if (!session.isAdmin) { router.push("/"); return; }
+
+    if (!session) {
+      signIn();
+      return;
+    }
+    if (!session.isAdmin) {
+      router.push("/");
+      return;
+    }
+
     fetchUsers();
-    fetchAudit(); // ✅ inicial
+    fetchAudit();
   }, [session, status, router]);
+
+  useEffect(() => {
+    const open =
+      showCreditsModal ||
+      showReservationModal ||
+      showProfileModal ||
+      showNewUserModal ||
+      showRenovarModal ||
+      showCheckinModal ||
+      showHistoryModal ||
+      showWaiverModal;
+
+    document.body.classList.toggle("modal-open", open);
+    return () => document.body.classList.remove("modal-open");
+  }, [
+    showCreditsModal,
+    showReservationModal,
+    showProfileModal,
+    showNewUserModal,
+    showRenovarModal,
+    showCheckinModal,
+    showHistoryModal,
+    showWaiverModal,
+  ]);
 
   const fetchUsers = async () => {
     setUiError("");
@@ -1062,21 +1080,25 @@ export default function AdminPage() {
       const res = await axios.get("/api/admin/audit?limit=40");
       setAuditEvents(Array.isArray(res.data?.events) ? res.data.events : []);
     } catch (e) {
-      // no bloquea el panel si falla
       console.warn("Audit fetch failed:", e?.message);
     } finally {
       setAuditLoading(false);
     }
   };
 
+  const appendAuditEvent = (evt) => {
+    if (!evt) return;
+    setAuditEvents((prev) => [evt, ...(prev || [])].slice(0, 80));
+  };
+
   const counts = useMemo(() => {
     const total = users.length;
     const waiverPend = users.filter((u) => u?.waiverStatus !== "signed").length;
-    const mensualidadVencida = users.filter((u) =>
-      u?.accessType === "mensualidad" && !getMensualidadStatus(u?.mensualidad).active
+    const mensualidadVencida = users.filter(
+      (u) => u?.accessType === "mensualidad" && !getMensualidadStatus(u?.mensualidad).active
     ).length;
-    const sinCreditos = users.filter((u) =>
-      u?.accessType === "ticketera" && (u?.credits ?? 0) <= 0
+    const sinCreditos = users.filter(
+      (u) => u?.accessType === "ticketera" && (u?.credits ?? 0) <= 0
     ).length;
     const menores = users.filter((u) => !!u?.esMinor).length;
     const checkinHoy = users.filter((u) => hasCheckedInToday(u)).length;
@@ -1086,10 +1108,8 @@ export default function AdminPage() {
 
   const filteredUsers = useMemo(() => {
     const q = query.trim().toLowerCase();
-
     let list = users;
 
-    // Search
     if (q) {
       list = list.filter((u) => {
         const name = (u?.name || "").toLowerCase();
@@ -1098,13 +1118,14 @@ export default function AdminPage() {
       });
     }
 
-    // Quick filter
     switch (quickFilter) {
       case "waiver":
         list = list.filter((u) => u?.waiverStatus !== "signed");
         break;
       case "mensualidadVencida":
-        list = list.filter((u) => u?.accessType === "mensualidad" && !getMensualidadStatus(u?.mensualidad).active);
+        list = list.filter(
+          (u) => u?.accessType === "mensualidad" && !getMensualidadStatus(u?.mensualidad).active
+        );
         break;
       case "sinCreditos":
         list = list.filter((u) => u?.accessType === "ticketera" && (u?.credits ?? 0) <= 0);
@@ -1121,11 +1142,6 @@ export default function AdminPage() {
 
     return list;
   }, [users, query, quickFilter]);
-
-  const appendAuditEvent = (evt) => {
-    if (!evt) return;
-    setAuditEvents((prev) => [evt, ...(prev || [])].slice(0, 80));
-  };
 
   const handleAddCredits = (userId) => {
     setUiError("");
@@ -1149,6 +1165,27 @@ export default function AdminPage() {
     setShowProfileModal(true);
   };
 
+  const openWaiverForUser = (user) => {
+    setUiError("");
+    setWaiverAccepted(false);
+    hasInkRef.current = false;
+    setWaiverUser(user);
+    setShowWaiverModal(true);
+
+    setTimeout(() => {
+      resizeCanvasToDevicePixels();
+      clearSignature();
+    }, 0);
+  };
+
+  const closeWaiverModal = () => {
+    if (busy) return;
+    setShowWaiverModal(false);
+    setWaiverUser(null);
+    setWaiverAccepted(false);
+    clearSignature();
+  };
+
   const handleRenovar = (userId) => {
     setUiError("");
     setSelectedUser(userId);
@@ -1167,6 +1204,7 @@ export default function AdminPage() {
     setUiError("");
     setCheckinSuccess("");
     if (!checkinUser) return;
+
     setBusy(true);
     try {
       const res = await axios.post("/api/admin/visits/checkin", {
@@ -1178,18 +1216,13 @@ export default function AdminPage() {
         setCheckinSuccess("✅ Este usuario ya hizo check-in hoy.");
       } else {
         const creditsMsg =
-          checkinUser.accessType === "ticketera"
-            ? ` Créditos restantes: ${res.data.credits}`
-            : "";
+          checkinUser.accessType === "ticketera" ? ` Créditos restantes: ${res.data?.credits ?? ""}` : "";
         setCheckinSuccess(`✅ Check-in registrado.${creditsMsg}`);
       }
 
-      // ✅ Auditoría (persistida por backend)
       if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
 
       await fetchUsers();
-      // opcional: refetchAudit si quieres “source of truth”
-      // await fetchAudit();
     } catch (error) {
       const msg = error?.response?.data?.message || "No se pudo registrar el check-in.";
       setUiError(msg);
@@ -1224,14 +1257,23 @@ export default function AdminPage() {
   const submitCredits = async () => {
     setUiError("");
     const amount = Number(credits);
-    if (!selectedUser) { setUiError("Selecciona un usuario antes de modificar créditos."); return; }
-    if (!Number.isFinite(amount)) { setUiError("Créditos inválidos."); return; }
+
+    if (!selectedUser) {
+      setUiError("Selecciona un usuario antes de modificar créditos.");
+      return;
+    }
+    if (!Number.isFinite(amount)) {
+      setUiError("Créditos inválidos.");
+      return;
+    }
+
     setBusy(true);
     try {
       const res = await axios.post("/api/admin/adjust-credits", {
         userId: selectedUser,
         credits: parseInt(amount, 10),
       });
+
       setShowCreditsModal(false);
       setCredits(0);
 
@@ -1249,9 +1291,14 @@ export default function AdminPage() {
   const submitRenovar = async () => {
     setUiError("");
     if (!selectedUser) return;
+
     setBusy(true);
     try {
-      const res = await axios.post("/api/admin/mensualidad/renovar", { userId: selectedUser, months: renovarMonths });
+      const res = await axios.post("/api/admin/mensualidad/renovar", {
+        userId: selectedUser,
+        months: renovarMonths,
+      });
+
       setShowRenovarModal(false);
 
       if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
@@ -1266,16 +1313,24 @@ export default function AdminPage() {
 
   const addReservation = async () => {
     setUiError("");
-    if (!selectedUser) { setUiError("Selecciona un usuario antes de crear una reserva."); return; }
-    if (!selectedDate || !selectedTime) { setUiError("Selecciona una fecha y una hora."); return; }
+    if (!selectedUser) {
+      setUiError("Selecciona un usuario antes de crear una reserva.");
+      return;
+    }
+    if (!selectedDate || !selectedTime) {
+      setUiError("Selecciona una fecha y una hora.");
+      return;
+    }
+
     const formattedDate = selectedDate.toISOString().split("T")[0];
+
     setBusy(true);
     try {
       const res = await axios.post("/api/reserve", {
         userId: selectedUser,
         date: formattedDate,
         time: selectedTime,
-        isPrivate
+        isPrivate,
       });
 
       setShowReservationModal(false);
@@ -1294,8 +1349,10 @@ export default function AdminPage() {
   const removeReservation = async (userId, reservationId) => {
     setUiError("");
     if (!userId || !reservationId) return;
+
     const ok = window.confirm("¿Eliminar esta reserva?");
     if (!ok) return;
+
     setBusy(true);
     try {
       const res = await axios.post("/api/admin/remove-reservation", { userId, reservationId });
@@ -1311,6 +1368,24 @@ export default function AdminPage() {
     }
   };
 
+  const openHistory = async (user) => {
+    setUiError("");
+    setHistoryUser(user);
+    setHistoryVisits([]);
+    setShowHistoryModal(true);
+    setHistoryLoading(true);
+
+    try {
+      const res = await axios.get(`/api/admin/users/${user._id}/visits?limit=80`);
+      setHistoryVisits(Array.isArray(res.data?.visits) ? res.data.visits : []);
+    } catch (e) {
+      console.error(e);
+      setUiError(e?.response?.data?.message || "No se pudo cargar el historial.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   function getCanvasCtx() {
     const c = canvasRef.current;
     if (!c) return null;
@@ -1320,13 +1395,17 @@ export default function AdminPage() {
   function resizeCanvasToDevicePixels() {
     const c = canvasRef.current;
     if (!c) return;
+
     const rect = c.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
+
     c.width = Math.floor(rect.width * dpr);
     c.height = Math.floor(rect.height * dpr);
+
     const ctx = c.getContext("2d");
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
+
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -1336,36 +1415,50 @@ export default function AdminPage() {
   function getLocalPos(e) {
     const c = canvasRef.current;
     const rect = c.getBoundingClientRect();
+
     if (e?.clientX != null) return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
     const t = e?.touches?.[0] || e?.changedTouches?.[0];
     if (t) return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+
     return { x: 0, y: 0 };
   }
 
-  function startDraw(e) { drawingRef.current = true; lastPointRef.current = getLocalPos(e); e?.preventDefault?.(); }
+  function startDraw(e) {
+    drawingRef.current = true;
+    lastPointRef.current = getLocalPos(e);
+    e?.preventDefault?.();
+  }
 
   function moveDraw(e) {
     if (!drawingRef.current) return;
     const ctx = getCanvasCtx();
     if (!ctx) return;
+
     const p = getLocalPos(e);
     ctx.beginPath();
     ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
+
     lastPointRef.current = p;
     hasInkRef.current = true;
     e?.preventDefault?.();
   }
 
-  function endDraw(e) { drawingRef.current = false; e?.preventDefault?.(); }
+  function endDraw(e) {
+    drawingRef.current = false;
+    e?.preventDefault?.();
+  }
 
   function clearSignature() {
     const c = canvasRef.current;
     const ctx = getCanvasCtx();
     if (!c || !ctx) return;
-    const rect = c.getBoundingClientRect();
-    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, c.width, c.height);
+    resizeCanvasToDevicePixels();
     hasInkRef.current = false;
   }
 
@@ -1396,6 +1489,7 @@ export default function AdminPage() {
 
   const createNewUser = async () => {
     setUiError("");
+
     const payload = {
       ...newUserForm,
       name: (newUserForm.name || "").trim(),
@@ -1426,10 +1520,19 @@ export default function AdminPage() {
       const response = await axios.post("/api/admin/users/create", payload);
       const createdUser = response.data?.user;
       const userId = createdUser?._id || response.data?.userId;
-      if (!userId) { setUiError("No llegó el userId del backend."); return; }
+
+      if (!userId) {
+        setUiError("No llegó el userId del backend.");
+        return;
+      }
+
       setSelectedUser(userId);
       setNewUserStep(2);
-      setTimeout(() => { resizeCanvasToDevicePixels(); clearSignature(); }, 0);
+
+      setTimeout(() => {
+        resizeCanvasToDevicePixels();
+        clearSignature();
+      }, 0);
 
       if (response.data?.auditEvent) appendAuditEvent(response.data.auditEvent);
     } catch (error) {
@@ -1440,64 +1543,30 @@ export default function AdminPage() {
     }
   };
 
-  const buildWaiverSnapshot = () => {
-    const isMinor = newUserForm.esMinor;
-    const clause5 = isMinor
-      ? `5) Representante legal (MENOR DE EDAD): El participante es menor de edad. Este consentimiento es aceptado por su padre, madre o representante legal, quien declara tener la autoridad legal para firmar en nombre del menor, asume todas las obligaciones aquí descritas y autoriza su participación en las actividades de CrashPath.`
-      : `5) Menores de edad: Si el participante es menor de edad, este documento debe ser aceptado por su padre, madre o representante legal. El adulto responsable declara y garantiza que tiene la autoridad legal para aceptar en nombre del menor y asume las obligaciones aquí descritas.`;
-
-    return `CRASHPATH – CONSENTIMIENTO INFORMADO, ASUNCIÓN DE RIESGO Y EXONERACIÓN DE RESPONSABILIDAD (v1)
-${isMinor ? "[PARTICIPANTE MENOR DE EDAD]" : ""}
-Bucaramanga, Santander
-
-Yo, como participante/usuario de CrashPath, declaro que he leído y entendido el presente documento y que acepto voluntariamente entrenar, escalar y/o utilizar las instalaciones, equipos y servicios ofrecidos por CrashPath.
-
-1) Naturaleza de la actividad y riesgos: Entiendo que la escalada, el entrenamiento físico y el uso de muros, presas, colchonetas, pesas, barras, campus/board, máquinas u otros elementos conllevan riesgos inherentes, incluyendo pero no limitados a: caídas, golpes, lesiones musculares, tendinosas o articulares, fracturas, esguinces, laceraciones, sobreesfuerzo, mareos, lesiones por uso indebido del equipo y accidentes derivados de mi actuación o la de terceros.
-
-2) Asunción de riesgo: Acepto y asumo plenamente todos los riesgos conocidos y desconocidos relacionados con mi participación, incluso aquellos que puedan derivarse de condiciones del entorno, de otros usuarios o de mis propias decisiones. Reconozco que estos riesgos pueden resultar en lesiones graves, incapacidad permanente o, en casos extremos, muerte.
-
-3) Condición de salud y aptitud: Declaro que me encuentro en condiciones físicas y de salud adecuadas para realizar actividad física. Me comprometo a informar de manera veraz cualquier condición médica relevante (por ejemplo: lesiones previas, enfermedades, embarazo, uso de medicamentos, alergias, problemas cardiacos o respiratorios). Entiendo que CrashPath no realiza diagnósticos médicos y que es mi responsabilidad consultar a un profesional de la salud si tengo dudas sobre mi aptitud.
-
-4) Normas y uso responsable: Me comprometo a cumplir las normas internas, instrucciones del staff y señalización del lugar, así como a utilizar correctamente el equipo y mantener una conducta segura. Entiendo que el incumplimiento de normas o la conducta imprudente aumenta el riesgo de accidentes y puede dar lugar a la suspensión del servicio y/o retiro de las instalaciones.
-
-${clause5}
-
-6) Emergencias y atención: Autorizo a CrashPath a contactar a mi persona de emergencia y a solicitar asistencia médica o ambulancia si el staff lo considera necesario. Entiendo que cualquier costo de atención médica, traslado o tratamiento será de mi cuenta o de mi seguro, y que el personal de CrashPath no sustituye servicios profesionales de salud.
-
-7) Exoneración y limitación de responsabilidad: En la máxima medida permitida por la ley aplicable, libero y exonero a CrashPath, sus propietarios, administradores, empleados, instructores y colaboradores de toda responsabilidad por lesiones, pérdidas o daños sufridos durante o con ocasión de mi participación, incluyendo daños derivados de mi propia negligencia, imprudencia o la de terceros. Esta exoneración no pretende cubrir conductas dolosas o culpa grave cuando la ley no lo permita.
-
-8) Daños a instalaciones y equipo: Me hago responsable por los daños que cause por mal uso intencional o negligente de las instalaciones o equipos, y autorizo a CrashPath a cobrar o reclamar el valor de reposición o reparación cuando aplique.
-
-9) Tratamiento de datos personales: Autorizo el tratamiento de mis datos personales y de contacto de emergencia para fines operativos y de seguridad (por ejemplo: control de acceso, emergencias, registro de visitas), conforme a la política de privacidad de CrashPath y a la normativa vigente sobre protección de datos personales en Colombia.
-
-10) Firma electrónica: Entiendo y acepto que mi aceptación mediante checkbox y mi firma digital (trazo en pantalla o nombre digitado) constituyen una manifestación de voluntad válida y equivalente a una firma manuscrita para efectos de este consentimiento.
-
-Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto entrenar bajo mi propia responsabilidad y confirmo que la información suministrada es veraz.`.trim();
-  };
-
   const submitNewUserWaiver = async () => {
     setUiError("");
     if (!selectedUser) return setUiError("No hay userId seleccionado.");
     if (!waiverAccepted) return setUiError("Debes aceptar el waiver.");
+
     const canvas = canvasRef.current;
     if (!canvas) return setUiError("Canvas no disponible.");
     if (isCanvasBlank(canvas) || !hasInkRef.current) return setUiError("La firma es obligatoria.");
 
     const signatureImageUrl = exportSignatureDataUrl();
-    const waiverTextSnapshot = buildWaiverSnapshot();
+    const { text: waiverTextSnapshot, version } = waiverSnapshotNewUser;
 
     setBusy(true);
     try {
       const res = await axios.post("/api/admin/waiver/sign", {
         userId: selectedUser,
-        version: "v1",
+        version,
         method: "signature",
         waiverTextSnapshot,
         signatureImageUrl,
         signatureText: newUserForm.esMinor
-          ? `Representante legal de ${newUserForm.name?.trim() || ""}`
-          : newUserForm.name?.trim() || "",
-        esMinor: newUserForm.esMinor,
+          ? `Representante legal de ${(newUserForm.name || "").trim()}`
+          : (newUserForm.name || "").trim(),
+        esMinor: !!newUserForm.esMinor,
       });
 
       if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
@@ -1511,6 +1580,51 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
       setBusy(false);
     }
   };
+
+  const submitExistingUserWaiver = async () => {
+    setUiError("");
+    if (!waiverUser?._id) return setUiError("No hay usuario seleccionado.");
+    if (!waiverAccepted) return setUiError("Debes aceptar el waiver.");
+
+    const canvas = canvasRef.current;
+    if (!canvas) return setUiError("Canvas no disponible.");
+    if (isCanvasBlank(canvas) || !hasInkRef.current) return setUiError("La firma es obligatoria.");
+
+    const signatureImageUrl = exportSignatureDataUrl();
+    const { text: waiverTextSnapshot, version } = waiverSnapshotExistingUser;
+
+    setBusy(true);
+    try {
+      const res = await axios.post("/api/admin/waiver/sign", {
+        userId: waiverUser._id,
+        version,
+        method: "signature",
+        waiverTextSnapshot,
+        signatureImageUrl,
+        signatureText: waiverUser.esMinor
+          ? `Representante legal de ${(waiverUser.name || "").trim()}`
+          : (waiverUser.name || "").trim(),
+        esMinor: !!waiverUser.esMinor,
+      });
+
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+
+      await fetchUsers();
+
+      if (viewingUser?._id && String(viewingUser._id) === String(waiverUser._id)) {
+        const updated = res.data?.user;
+        if (updated) setViewingUser(updated);
+      }
+
+      closeWaiverModal();
+    } catch (error) {
+      console.error(error);
+      setUiError(error?.response?.data?.message || "No se pudo firmar el waiver.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const formatPrettyDayTime = (date) => {
     try {
       const d = new Date(date);
@@ -1529,45 +1643,6 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
       case "no_show": return "No asistió";
       case "cancelled": return "Cancelado";
       default: return v || "—";
-    }
-  };
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [historyUser, setHistoryUser] = useState(null);
-  const [historyVisits, setHistoryVisits] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  useEffect(() => {
-    const open =
-      showCreditsModal ||
-      showReservationModal ||
-      showProfileModal ||
-      showNewUserModal ||
-      showRenovarModal ||
-      showCheckinModal ||
-      showHistoryModal;
-
-    document.body.classList.toggle("modal-open", open);
-    return () => document.body.classList.remove("modal-open");
-  }, [showCreditsModal, showReservationModal, showProfileModal, showNewUserModal, showRenovarModal, showCheckinModal]);
-
-  const userAudit = useMemo(() => {
-    if (!viewingUser?._id) return [];
-    return (auditEvents || []).filter((e) => String(e.userId) === String(viewingUser._id)).slice(0, 12);
-  }, [auditEvents, viewingUser]);
-  const openHistory = async (user) => {
-    setUiError("");
-    setHistoryUser(user);
-    setHistoryVisits([]);
-    setShowHistoryModal(true);
-    setHistoryLoading(true);
-
-    try {
-      const res = await axios.get(`/api/admin/users/${user._id}/visits?limit=80`);
-      setHistoryVisits(Array.isArray(res.data?.visits) ? res.data.visits : []);
-    } catch (e) {
-      console.error(e);
-      setUiError(e?.response?.data?.message || "No se pudo cargar el historial.");
-    } finally {
-      setHistoryLoading(false);
     }
   };
 
@@ -1611,7 +1686,6 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
           </TopActions>
         </TopBar>
 
-        {/* ✅ FILTROS RÁPIDOS */}
         <FiltersBar>
           <FilterChip $active={quickFilter === "all"} onClick={() => setQuickFilter("all")}>
             Todos · {counts.total}
@@ -1638,7 +1712,6 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
         <Divider />
 
         <Row>
-          {/* LEFT: USERS */}
           <div>
             {loading ? (
               <Muted>Cargando usuarios...</Muted>
@@ -1651,7 +1724,6 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
               </EmptyState>
             ) : (
               <>
-                {/* ── MOBILE CARDS ── */}
                 <CardsGrid>
                   {filteredUsers.map((user) => (
                     <UserCard key={user._id}>
@@ -1679,7 +1751,7 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
                                     <b>{formatDate(r.date)}</b>
                                     <Muted>·</Muted>
                                     <span>{r.time}</span>
-                                    <PrivacyTag private={r.isPrivate}>{r.isPrivate ? "Privada" : "Pública"}</PrivacyTag>
+                                    <PrivacyTag $private={!!r.isPrivate}>{r.isPrivate ? "Privada" : "Pública"}</PrivacyTag>
                                   </Pill>
                                   <IconButton title="Eliminar reserva" onClick={() => removeReservation(user._id, r._id)} disabled={busy}>×</IconButton>
                                 </ReservationRow>
@@ -1692,7 +1764,13 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
 
                         <Actions>
                           {user?.waiverStatus === "signed" ? (
-                            <LinkButton href={`/api/admin/waiver/pdf?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer" style={{ flex: "1" }} title="Descargar Waiver firmado">
+                            <LinkButton
+                              href={`/api/admin/waiver/pdf?email=${encodeURIComponent(user.email)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ flex: "1" }}
+                              title="Descargar Waiver firmado"
+                            >
                               <LinkPill>⬇️</LinkPill>
                               Waiver PDF
                             </LinkButton>
@@ -1716,7 +1794,6 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
                   ))}
                 </CardsGrid>
 
-                {/* ── DESKTOP TABLE ── */}
                 <TableWrapper>
                   <Table>
                     <thead>
@@ -1740,7 +1817,12 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
                           <Td><AccessInfo user={user} onRenovar={handleRenovar} busy={busy} /></Td>
                           <Td>
                             {user?.waiverStatus === "signed" ? (
-                              <LinkButton href={`/api/admin/waiver/pdf?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer" title="Descargar Waiver firmado">
+                              <LinkButton
+                                href={`/api/admin/waiver/pdf?email=${encodeURIComponent(user.email)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="Descargar Waiver firmado"
+                              >
                                 <LinkPill>⬇️</LinkPill>
                                 Descargar PDF
                               </LinkButton>
@@ -1757,7 +1839,7 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
                                       <b>{formatDate(r.date)}</b>
                                       <Muted>·</Muted>
                                       <span>{r.time}</span>
-                                      <PrivacyTag private={r.isPrivate}>{r.isPrivate ? "Privada" : "Pública"}</PrivacyTag>
+                                      <PrivacyTag $private={!!r.isPrivate}>{r.isPrivate ? "Privada" : "Pública"}</PrivacyTag>
                                     </Pill>
                                     <IconButton title="Eliminar reserva" onClick={() => removeReservation(user._id, r._id)} disabled={busy}>×</IconButton>
                                   </ReservationRow>
@@ -1792,19 +1874,13 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
             )}
           </div>
 
-          {/* RIGHT: AUDIT */}
-          <AuditFeed events={auditEvents} onReload={fetchAudit} loading={auditLoading} />
+          <AuditFeed events={auditEvents} loading={auditLoading} />
         </Row>
       </AdminContainer>
 
       <ModalPortal>
-        {/* ── MODAL: HISTORIAL ── */}
-        <Overlay
-          show={showHistoryModal}
-          onClick={() => (!busy ? setShowHistoryModal(false) : null)}
-        />
-
-        <Modal show={showHistoryModal} role="dialog" aria-modal="true">
+        <Overlay $show={showHistoryModal} onClick={() => (!busy ? setShowHistoryModal(false) : null)} />
+        <Modal $show={showHistoryModal} role="dialog" aria-modal="true">
           <SheetHandle />
           <ModalTitle>Historial de ingresos</ModalTitle>
 
@@ -1829,11 +1905,10 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
           ) : (
             <div style={{ display: "grid", gap: 8 }}>
               {historyVisits.map((v) => {
-                // Usa checkedInAt si existe (más “real”), si no date
                 const ts = v.checkedInAt || v.date;
                 return (
                   <div
-                    key={v.id}
+                    key={v._id || v.id}
                     style={{
                       border: "1px solid rgba(0,0,0,0.06)",
                       borderRadius: 12,
@@ -1870,21 +1945,26 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
             </SecondaryButton>
           </Actions>
         </Modal>
-        {/* ── MODAL: CRÉDITOS ── */}
-        <Overlay show={showCreditsModal} onClick={() => (!busy ? setShowCreditsModal(false) : null)} />
-        <Modal show={showCreditsModal} role="dialog" aria-modal="true">
+
+        <Overlay $show={showCreditsModal} onClick={() => (!busy ? setShowCreditsModal(false) : null)} />
+        <Modal $show={showCreditsModal} role="dialog" aria-modal="true">
           <SheetHandle />
           <ModalTitle>Modificar Créditos</ModalTitle>
-          <Input type="number" value={credits} onChange={(e) => setCredits(e.target.value)} placeholder="Ingrese la cantidad (+ o -)" inputMode="numeric" />
+          <Input
+            type="number"
+            value={credits}
+            onChange={(e) => setCredits(e.target.value)}
+            placeholder="Ingrese la cantidad (+ o -)"
+            inputMode="numeric"
+          />
           <Actions style={{ justifyContent: "flex-end" }}>
             <Button onClick={submitCredits} disabled={busy}>{busy ? "Guardando..." : "Confirmar"}</Button>
             <SecondaryButton onClick={() => setShowCreditsModal(false)} disabled={busy}>Cancelar</SecondaryButton>
           </Actions>
         </Modal>
 
-        {/* ── MODAL: RENOVAR MENSUALIDAD ── */}
-        <Overlay show={showRenovarModal} onClick={() => (!busy ? setShowRenovarModal(false) : null)} />
-        <Modal show={showRenovarModal} role="dialog" aria-modal="true">
+        <Overlay $show={showRenovarModal} onClick={() => (!busy ? setShowRenovarModal(false) : null)} />
+        <Modal $show={showRenovarModal} role="dialog" aria-modal="true">
           <SheetHandle />
           <ModalTitle>Renovar Mensualidad</ModalTitle>
           <p style={{ margin: "0 0 12px", fontSize: 14, color: palette.muted }}>
@@ -1901,9 +1981,8 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
           </Actions>
         </Modal>
 
-        {/* ── MODAL: CHECK-IN ── */}
-        <Overlay show={showCheckinModal} onClick={() => (!busy ? setShowCheckinModal(false) : null)} />
-        <Modal show={showCheckinModal} role="dialog" aria-modal="true">
+        <Overlay $show={showCheckinModal} onClick={() => (!busy ? setShowCheckinModal(false) : null)} />
+        <Modal $show={showCheckinModal} role="dialog" aria-modal="true">
           <SheetHandle />
           <ModalTitle>Registrar Check-in</ModalTitle>
 
@@ -1939,7 +2018,6 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
                 <SuccessBox role="status">✅ Ya aparece con check-in hoy.</SuccessBox>
               ) : null}
 
-              {/* Alertas de acceso denegado */}
               {checkinUser.accessType === "ticketera" && (checkinUser.credits ?? 0) <= 0 && (
                 <ErrorBox role="alert" style={{ marginTop: 8 }}>
                   ⚠️ Sin créditos — no se puede registrar el check-in.
@@ -1965,15 +2043,17 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
                 {busy ? "Registrando..." : "✓ Confirmar Check-in"}
               </CheckinButton>
             ) : null}
-            <SecondaryButton onClick={() => { setShowCheckinModal(false); setCheckinSuccess(""); setUiError(""); }} disabled={busy}>
+            <SecondaryButton
+              onClick={() => { setShowCheckinModal(false); setCheckinSuccess(""); setUiError(""); }}
+              disabled={busy}
+            >
               {checkinSuccess ? "Cerrar" : "Cancelar"}
             </SecondaryButton>
           </Actions>
         </Modal>
 
-        {/* ── MODAL: RESERVA ── */}
-        <Overlay show={showReservationModal} onClick={() => (!busy ? setShowReservationModal(false) : null)} />
-        <Modal show={showReservationModal} role="dialog" aria-modal="true">
+        <Overlay $show={showReservationModal} onClick={() => (!busy ? setShowReservationModal(false) : null)} />
+        <Modal $show={showReservationModal} role="dialog" aria-modal="true">
           <SheetHandle />
           <ModalTitle>Crear Nueva Reserva</ModalTitle>
           <Calendar onClickDay={handleDateSelection} />
@@ -1990,9 +2070,8 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
           </Actions>
         </Modal>
 
-        {/* ── MODAL: VER DATOS ── */}
-        <Overlay show={showProfileModal} onClick={() => (!busy ? setShowProfileModal(false) : null)} />
-        <Modal show={showProfileModal} role="dialog" aria-modal="true">
+        <Overlay $show={showProfileModal} onClick={() => (!busy ? setShowProfileModal(false) : null)} />
+        <Modal $show={showProfileModal} role="dialog" aria-modal="true">
           <SheetHandle />
           <ModalTitle>Datos del usuario</ModalTitle>
           {viewingUser ? (
@@ -2051,20 +2130,32 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
                     <>
                       <Divider />
                       <b>Firma digital</b>
-                      <img src={viewingUser.waiverSignatureUrl} alt="Firma del usuario" style={{ maxWidth: "100%", borderRadius: 10, border: `1px solid ${palette.border}`, background: "rgba(255,255,255,0.85)", padding: 8 }} />
+                      <img
+                        src={viewingUser.waiverSignatureUrl}
+                        alt="Firma del usuario"
+                        style={{
+                          maxWidth: "100%",
+                          borderRadius: 10,
+                          border: `1px solid ${palette.border}`,
+                          background: "rgba(255,255,255,0.85)",
+                          padding: 8,
+                        }}
+                      />
                     </>
                   ) : null}
                   <Divider />
-                  <LinkButton href={`/api/admin/waiver/pdf?email=${encodeURIComponent(viewingUser.email || "")}`} target="_blank" rel="noreferrer" title="Abrir PDF del Waiver" style={{ justifyContent: "center" }}>
+                  <LinkButton
+                    href={`/api/admin/waiver/pdf?email=${encodeURIComponent(viewingUser.email || "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Abrir PDF del Waiver"
+                    style={{ justifyContent: "center" }}
+                  >
                     <LinkPill>⬇️</LinkPill>
                     Abrir Waiver PDF
                   </LinkButton>
                 </>
               ) : null}
-
-              {/* ✅ Historial por usuario */}
-              <Divider />
-              
 
               <Actions style={{ justifyContent: "flex-end", marginTop: 12 }}>
                 <Button onClick={() => setShowProfileModal(false)} disabled={busy}>Cerrar</Button>
@@ -2073,11 +2164,26 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
           ) : (
             <Muted>No hay datos para mostrar.</Muted>
           )}
+
+          {viewingUser && viewingUser.waiverStatus !== "signed" ? (
+            <>
+              <ErrorBox role="alert" style={{ marginTop: 10 }}>
+                ⚠️ Waiver pendiente — este usuario no puede entrenar sin firmar.
+              </ErrorBox>
+
+              <Button
+                onClick={() => openWaiverForUser(viewingUser)}
+                disabled={busy}
+                style={{ marginTop: 10 }}
+              >
+                ✍️ Agregar Waiver (firmar aquí)
+              </Button>
+            </>
+          ) : null}
         </Modal>
 
-        {/* ── MODAL: NUEVO MIEMBRO ── */}
-        <Overlay show={showNewUserModal} onClick={() => (!busy ? closeNewUser() : null)} />
-        <Modal show={showNewUserModal} role="dialog" aria-modal="true">
+        <Overlay $show={showNewUserModal} onClick={() => (!busy ? closeNewUser() : null)} />
+        <Modal $show={showNewUserModal} role="dialog" aria-modal="true">
           <SheetHandle />
           <ModalTitle>
             {newUserStep === 1
@@ -2145,14 +2251,11 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
               )}
 
               <WaiverBox>
-                <p style={{ margin: "0 0 10px" }}>
-                  <strong>CRASHPATH – CONSENTIMIENTO INFORMADO, ASUNCIÓN DE RIESGO Y EXONERACIÓN DE RESPONSABILIDAD (v1)</strong>
-                </p>
-                <p style={{ margin: "0 0 10px", fontSize: 12.5, color: "#6b6b6b" }}>{waiverCityLine}</p>
-
-                <p style={{ margin: 0 }}>
-                  (Texto del waiver igual que tu versión actual…)
-                </p>
+                {waiverToParagraphs(waiverSnapshotNewUser.text).map((p, idx) => (
+                  <p key={idx} style={{ margin: idx === 0 ? "0 0 10px" : "0 0 10px" }}>
+                    {p}
+                  </p>
+                ))}
               </WaiverBox>
 
               <CheckboxRow>
@@ -2199,6 +2302,89 @@ Declaro que he leído, entendido y acepto este documento en su totalidad. Acepto
               </Actions>
             </>
           )}
+        </Modal>
+
+        <Overlay $show={showWaiverModal} onClick={() => (!busy ? closeWaiverModal() : null)} />
+        <Modal $show={showWaiverModal} role="dialog" aria-modal="true">
+          <SheetHandle />
+          <ModalTitle>
+            Firmar Waiver — {waiverUser?.name || "Usuario"}
+          </ModalTitle>
+
+          {waiverUser?.esMinor ? (
+            <MinorBanner>
+              ⚠️ Participante menor de edad — debe firmar el representante legal.
+            </MinorBanner>
+          ) : null}
+
+          <WaiverBox>
+            {waiverToParagraphs(waiverSnapshotExistingUser.text).map((p, idx) => (
+              <p key={idx} style={{ margin: idx === 0 ? "0 0 10px" : "0 0 10px" }}>
+                {p}
+              </p>
+            ))}
+          </WaiverBox>
+
+          <CheckboxRow>
+            <input
+              type="checkbox"
+              checked={waiverAccepted}
+              onChange={(e) => setWaiverAccepted(e.target.checked)}
+              style={{ marginTop: 2 }}
+            />
+            <span>
+              {waiverUser?.esMinor
+                ? "Acepto el consentimiento como representante legal del menor"
+                : "Acepto el consentimiento"}
+            </span>
+          </CheckboxRow>
+
+          <SigWrap>
+            <Muted style={{ display: "block", marginBottom: 6 }}>
+              {waiverUser?.esMinor ? "Firma del representante legal (dibuja aquí)" : "Firma (dibuja aquí)"}
+            </Muted>
+
+            <SigCanvas
+              ref={canvasRef}
+              onMouseDown={startDraw}
+              onMouseMove={moveDraw}
+              onMouseUp={endDraw}
+              onMouseLeave={endDraw}
+              onTouchStart={startDraw}
+              onTouchMove={moveDraw}
+              onTouchEnd={endDraw}
+            />
+
+            <SigRow>
+              <Muted>
+                Firmando como:{" "}
+                <b style={{ color: palette.text }}>
+                  {waiverUser?.esMinor
+                    ? `Representante legal de ${waiverUser?.name || "—"}`
+                    : waiverUser?.name || "—"}
+                </b>
+              </Muted>
+
+              <TinyBtn
+                type="button"
+                onClick={() => { setUiError(""); clearSignature(); }}
+                disabled={busy}
+              >
+                Limpiar
+              </TinyBtn>
+            </SigRow>
+          </SigWrap>
+
+          {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
+
+          <Actions style={{ marginTop: 12 }}>
+            <Button onClick={submitExistingUserWaiver} disabled={busy}>
+              {busy ? "Guardando..." : "Guardar waiver firmado"}
+            </Button>
+            <SecondaryButton onClick={closeWaiverModal} disabled={busy}>
+              Cancelar
+            </SecondaryButton>
+          </Actions>
         </Modal>
       </ModalPortal>
     </PageShell>
