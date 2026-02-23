@@ -8,21 +8,6 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import { getWaiverSnapshot } from "@/lib/waiver";
 
-/**
- * CrashPath /reservas (FINAL - Waiver + Perfil + Acceso por Tiquetera/Mensualidad)
- * - Login Google
- * - Gate 1: Waiver (checkbox + firma en canvas)
- * - Gate 2: Perfil (documento + phone + EPS + emergencias)
- * - Registrar Visita:
- *    - ticketera: descuenta 1 crédito
- *    - mensualidad: requiere mensualidad activa (no descuenta créditos)
- *
- * Endpoints esperados:
- *  - GET  /api/user
- *  - POST /api/waiver/sign
- *  - POST /api/profile/update
- *  - POST /api/visits/register
- */
 
 const Container = styled.main`
   min-height: 100vh;
@@ -547,6 +532,8 @@ export default function Reservas() {
 
   const accessType = (userData?.accessType || "ticketera").toLowerCase();
   const mensualidadInfo = useMemo(() => getMensualidadStatus(userData?.mensualidad), [userData?.mensualidad]);
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const [accessTypeChoice, setAccessTypeChoice] = useState("ticketera");
 
   const canRegister = useMemo(() => {
     if (!session) return false;
@@ -585,7 +572,10 @@ export default function Reservas() {
       setEmergencyContactPhone(u?.emergencyContactPhone || "");
 
       if (autoOpenGates) {
-        if (u?.waiverStatus !== "signed") {
+        // Gate 0: elegir modalidad
+        if (!u?.accessType) {
+          setShowAccessModal(true);
+        } else if (u?.waiverStatus !== "signed") {
           setShowWaiverModal(true);
         } else if (!(u?.profileStatus === "complete" || isProfileComplete(u))) {
           setShowProfileModal(true);
@@ -622,6 +612,21 @@ export default function Reservas() {
     if (!c) return null;
     return c.getContext("2d");
   }
+  const handleSaveAccessType = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setMessage("");
+
+    try {
+      await axios.post("/api/access/set", { accessType: accessTypeChoice });
+      setShowAccessModal(false);
+      await refreshUser({ autoOpenGates: true }); // sigue con waiver/perfil
+    } catch (e) {
+      setMessage(e?.response?.data?.message || "Error guardando modalidad.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   function resizeCanvasToDevicePixels() {
     const c = canvasRef.current;
@@ -914,7 +919,7 @@ export default function Reservas() {
               Inicia sesión con Google para: <strong>firmar el waiver</strong>, completar tus <strong>datos de emergencia</strong> y registrar tus visitas.
             </p>
             <p>
-              Horario: <strong>2:00 PM – 8:00 PM</strong>. Mañanas: coordinación por WhatsApp.
+              Horario: <strong>3:00 PM – 10:00 PM</strong>. Mañanas: coordinación por WhatsApp.
             </p>
             <SmallNote>Login con Google = fácil para ti y fácil para nosotros 😄</SmallNote>
           </Body>
@@ -1258,6 +1263,45 @@ export default function Reservas() {
               </PublicBtn>
               <NeutralModalBtn onClick={() => setShowConfirmRegister(false)} disabled={isSubmitting}>
                 CANCELAR
+              </NeutralModalBtn>
+            </FrogRow>
+          </FrogCard>
+        </ModalOverlay>
+      )}
+      {showAccessModal && (
+        <ModalOverlay>
+          <FrogCard>
+            <FrogClose onClick={() => setShowAccessModal(false)}>×</FrogClose>
+            <FrogImg src="/gecko.png" alt="Gecko" />
+            <FrogSub>Antes de continuar</FrogSub>
+            <FrogBrush>Modalidad</FrogBrush>
+
+            <FrogBody>
+              <p style={{ margin: "0 0 10px" }}>
+                ¿Cómo vas a entrenar en <strong>CrashPath</strong>?
+              </p>
+
+              <Form>
+                <Field>
+                  <Label>Selecciona una opción</Label>
+                  <Select value={accessTypeChoice} onChange={(e) => setAccessTypeChoice(e.target.value)}>
+                    <option value="ticketera">Tiquetera (por créditos)</option>
+                    <option value="mensualidad">Mensualidad</option>
+                  </Select>
+                </Field>
+
+                <Helper>
+                  Esto define cómo se registra tu visita: con créditos o por mensualidad activa.
+                </Helper>
+              </Form>
+            </FrogBody>
+
+            <FrogRow>
+              <PublicBtn onClick={handleSaveAccessType} disabled={isSubmitting}>
+                {isSubmitting ? "GUARDANDO..." : "CONTINUAR"}
+              </PublicBtn>
+              <NeutralModalBtn onClick={() => signOut()} disabled={isSubmitting}>
+                SALIR
               </NeutralModalBtn>
             </FrogRow>
           </FrogCard>

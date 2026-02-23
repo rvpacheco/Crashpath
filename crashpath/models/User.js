@@ -108,7 +108,7 @@ const UserSchema = new mongoose.Schema(
     accessType: {
       type: String,
       enum: ["ticketera", "mensualidad"],
-      default: "ticketera",
+      default: null, // importante: nuevo usuario => null => gate de selección
     },
 
     // Solo aplica si accessType === "ticketera"

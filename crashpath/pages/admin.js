@@ -996,7 +996,19 @@ export default function AdminPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const didInit = useRef(false);
-
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const [accessUser, setAccessUser] = useState(null);
+  const [accessTypeDraft, setAccessTypeDraft] = useState("ticketera");
+  const [accessMonthsDraft, setAccessMonthsDraft] = useState(1);
+  const [accessCreditsDraft, setAccessCreditsDraft] = useState(0);
+  const openAccessModal = (user) => {
+    setUiError("");
+    setAccessUser(user);
+    setAccessTypeDraft(user?.accessType || "ticketera");
+    setAccessMonthsDraft(1);
+    setAccessCreditsDraft(0);
+    setShowAccessModal(true);
+  };
   const waiverCityLine = useMemo(
     () => `Bucaramanga, Santander — ${new Date().toLocaleDateString("es-CO")}`,
     []
@@ -1045,7 +1057,8 @@ export default function AdminPage() {
       showRenovarModal ||
       showCheckinModal ||
       showHistoryModal ||
-      showWaiverModal;
+      showWaiverModal ||
+      showAccessModal;
 
     document.body.classList.toggle("modal-open", open);
     return () => document.body.classList.remove("modal-open");
@@ -1635,6 +1648,39 @@ export default function AdminPage() {
       return "—";
     }
   };
+  const submitAccessType = async () => {
+    setUiError("");
+    if (!accessUser?._id) return;
+
+    setBusy(true);
+    try {
+      const payload = {
+        userId: accessUser._id,
+        accessType: accessTypeDraft,
+        months: accessTypeDraft === "mensualidad" ? accessMonthsDraft : undefined,
+        credits: accessTypeDraft === "ticketera" ? Number(accessCreditsDraft || 0) : undefined,
+      };
+
+      const res = await axios.post("/api/admin/users/set-access-type", payload);
+
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+
+      setShowAccessModal(false);
+      setAccessUser(null);
+
+      await fetchUsers();
+
+      // si estás viendo el perfil, actualiza el viewingUser también
+      if (viewingUser?._id && String(viewingUser._id) === String(payload.userId)) {
+        const updated = res.data?.user;
+        if (updated) setViewingUser(updated);
+      }
+    } catch (e) {
+      setUiError(e?.response?.data?.message || "No se pudo cambiar la modalidad.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const statusLabel = (v) => {
     switch (v) {
@@ -1879,6 +1925,7 @@ export default function AdminPage() {
       </AdminContainer>
 
       <ModalPortal>
+
         <Overlay $show={showHistoryModal} onClick={() => (!busy ? setShowHistoryModal(false) : null)} />
         <Modal $show={showHistoryModal} role="dialog" aria-modal="true">
           <SheetHandle />
@@ -1962,7 +2009,58 @@ export default function AdminPage() {
             <SecondaryButton onClick={() => setShowCreditsModal(false)} disabled={busy}>Cancelar</SecondaryButton>
           </Actions>
         </Modal>
+        <Overlay $show={showAccessModal} onClick={() => (!busy ? setShowAccessModal(false) : null)} />
+        <Modal $show={showAccessModal} role="dialog" aria-modal="true">
+          <SheetHandle />
+          <ModalTitle>Cambiar modalidad</ModalTitle>
 
+          {accessUser ? (
+            <>
+              <div style={{ fontWeight: 900, color: palette.text }}>{accessUser.name}</div>
+              <Muted style={{ display: "block", marginBottom: 10 }}>{accessUser.email}</Muted>
+
+              <Select value={accessTypeDraft} onChange={(e) => setAccessTypeDraft(e.target.value)}>
+                <option value="ticketera">Tiquetera (créditos)</option>
+                <option value="mensualidad">Mensualidad</option>
+              </Select>
+
+              {accessTypeDraft === "mensualidad" ? (
+                <>
+                  <Muted>¿Cuántos meses?</Muted>
+                  <Select value={accessMonthsDraft} onChange={(e) => setAccessMonthsDraft(Number(e.target.value))}>
+                    {[1, 2, 3, 6, 12].map((m) => (
+                      <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>
+                    ))}
+                  </Select>
+                </>
+              ) : (
+                <>
+                  <Muted>Créditos iniciales (opcional)</Muted>
+                  <Input
+                    type="number"
+                    value={accessCreditsDraft}
+                    onChange={(e) => setAccessCreditsDraft(e.target.value)}
+                    placeholder="0"
+                    inputMode="numeric"
+                  />
+                </>
+              )}
+
+              {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
+
+              <Actions style={{ marginTop: 12 }}>
+                <Button onClick={submitAccessType} disabled={busy}>
+                  {busy ? "Guardando..." : "Confirmar"}
+                </Button>
+                <SecondaryButton onClick={() => setShowAccessModal(false)} disabled={busy}>
+                  Cancelar
+                </SecondaryButton>
+              </Actions>
+            </>
+          ) : (
+            <Muted>No hay usuario seleccionado.</Muted>
+          )}
+        </Modal>
         <Overlay $show={showRenovarModal} onClick={() => (!busy ? setShowRenovarModal(false) : null)} />
         <Modal $show={showRenovarModal} role="dialog" aria-modal="true">
           <SheetHandle />
@@ -2100,6 +2198,9 @@ export default function AdminPage() {
                   })()}
                 </div>
               )}
+              <SecondaryButton onClick={() => openAccessModal(viewingUser)} disabled={busy}>
+                Cambiar modalidad
+              </SecondaryButton>
 
               <Divider />
 
