@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 const VisitSchema = new mongoose.Schema(
   {
     date: { type: Date, required: true },
@@ -16,11 +15,33 @@ const VisitSchema = new mongoose.Schema(
     checkedInAt: Date,
     checkedOutAt: Date,
     notes: String,
+
+    // ✅ auditoría
+    events: { type: [VisitEventSchema], default: [] },
   },
   { _id: true }
 );
 
 VisitSchema.index({ date: 1 });
+
+// ── Mensualidad ──────────────────────────────────────────────
+const MensualidadSchema = new mongoose.Schema(
+  {
+    active: { type: Boolean, default: false },
+    startDate: { type: Date },
+    endDate: { type: Date },
+    // historial de renovaciones para llevar registro
+    renewals: [
+      {
+        renewedAt: { type: Date },
+        renewedBy: { type: String, enum: ["admin"] },
+        adminEmail: { type: String },
+        newEndDate: { type: Date },
+      },
+    ],
+  },
+  { _id: false }
+);
 
 const UserSchema = new mongoose.Schema(
   {
@@ -38,7 +59,18 @@ const UserSchema = new mongoose.Schema(
     emergencyContactPhone: { type: String },
     epsName: { type: String },
 
+    // ── Tipo de acceso ───────────────────────────────────────
+    accessType: {
+      type: String,
+      enum: ["ticketera", "mensualidad"],
+      default: "ticketera",
+    },
+
+    // Solo aplica si accessType === "ticketera"
     credits: { type: Number, default: 0 },
+
+    // Solo aplica si accessType === "mensualidad"
+    mensualidad: { type: MensualidadSchema, default: () => ({}) },
 
     visits: [VisitSchema],
 
@@ -93,7 +125,24 @@ const UserSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// ── Virtual: mensualidad vencida ─────────────────────────────
+// Útil para lógica en backend sin guardar dato redundante
+UserSchema.virtual("mensualidadVencida").get(function () {
+  if (this.accessType !== "mensualidad") return null;
+  if (!this.mensualidad?.endDate) return true;
+  return new Date() > new Date(this.mensualidad.endDate);
+});
+
 UserSchema.pre("save", function (next) {
+  // Auto-desactivar mensualidad si endDate ya pasó
+  if (
+    this.accessType === "mensualidad" &&
+    this.mensualidad?.endDate &&
+    new Date() > new Date(this.mensualidad.endDate)
+  ) {
+    this.mensualidad.active = false;
+  }
+
   const clean = (k) => {
     if (this[k] === "") this[k] = undefined;
   };

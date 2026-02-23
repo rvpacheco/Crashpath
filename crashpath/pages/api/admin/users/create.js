@@ -34,6 +34,16 @@ export default async function handler(req, res) {
   const emergencyContactName = String(body.emergencyContactName || "").trim();
   const emergencyContactPhone = String(body.emergencyContactPhone || "").trim();
 
+  const resolvedAccessType =
+    body.accessType === "mensualidad" ? "mensualidad" : "ticketera";
+
+  const esMinor = body.esMinor === true || body.esMinor === "true";
+
+  const mensualidadMeses =
+    resolvedAccessType === "mensualidad"
+      ? Math.min(Math.max(parseInt(body.mensualidadMeses, 10) || 1, 1), 12)
+      : null;
+
   if (!name) return res.status(400).json({ message: "Missing name" });
 
   await dbConnect();
@@ -49,6 +59,28 @@ export default async function handler(req, res) {
       });
     }
 
+    const now = new Date();
+
+    let mensualidadData = undefined;
+    if (resolvedAccessType === "mensualidad") {
+      const endDate = new Date(now);
+      endDate.setMonth(endDate.getMonth() + mensualidadMeses);
+
+      mensualidadData = {
+        active: true,
+        startDate: now,
+        endDate,
+        renewals: [
+          {
+            renewedAt: now,
+            renewedBy: "admin",
+            adminEmail: token?.email ?? "desconocido",
+            newEndDate: endDate,
+          },
+        ],
+      };
+    }
+
     const user = await User.create({
       name,
       email,
@@ -60,13 +92,26 @@ export default async function handler(req, res) {
       insurancePolicyNumber,
       emergencyContactName,
       emergencyContactPhone,
-      credits: 0,
+      esMinor,
+      accessType: resolvedAccessType,
+      credits: resolvedAccessType === "ticketera" ? 0 : undefined,
+      mensualidad: mensualidadData,
       waiverStatus: "pending",
     });
 
     return res.status(200).json({ message: "User created", user });
   } catch (error) {
     console.error("admin users create error:", error);
+
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0];
+      const msg =
+        field === "phone"
+          ? "Phone already exists"
+          : "Email already exists";
+      return res.status(409).json({ message: msg, code: "DUPLICATE" });
+    }
+
     return res.status(500).json({ message: "Failed to create user" });
   }
 }

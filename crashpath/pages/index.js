@@ -334,7 +334,7 @@ const HeroBtn = styled(Link)`
   letter-spacing: 0.02em;
   border: 1px solid
     ${(p) =>
-      p.$kind === "primary" ? "transparent" : "rgba(255,255,255,0.22)"};
+    p.$kind === "primary" ? "transparent" : "rgba(255,255,255,0.22)"};
   background: ${(p) =>
     p.$kind === "primary"
       ? `linear-gradient(180deg, ${p.$t.accent}, ${p.$t.accent2})`
@@ -468,22 +468,22 @@ const Tile = styled(Link)`
   &:hover {
     transform: translateY(-3px);
     border-color: ${(p) =>
-      p.$mode === "dark"
-        ? "rgba(255,255,255,0.22)"
-        : "rgba(43,38,32,0.24)"};
+    p.$mode === "dark"
+      ? "rgba(255,255,255,0.22)"
+      : "rgba(43,38,32,0.24)"};
     box-shadow: ${(p) =>
-      p.$mode === "dark"
-        ? "0 26px 80px rgba(0,0,0,0.65)"
-        : "0 22px 70px rgba(0,0,0,0.14)"};
+    p.$mode === "dark"
+      ? "0 26px 80px rgba(0,0,0,0.65)"
+      : "0 22px 70px rgba(0,0,0,0.14)"};
   }
 
   &:focus-visible {
     outline: none;
     box-shadow: 0 0 0 4px ${(p) => `${p.$t.accent}33`},
       ${(p) =>
-        p.$mode === "dark"
-          ? "0 26px 80px rgba(0,0,0,0.65)"
-          : "0 22px 70px rgba(0,0,0,0.14)"};
+    p.$mode === "dark"
+      ? "0 26px 80px rgba(0,0,0,0.65)"
+      : "0 22px 70px rgba(0,0,0,0.14)"};
   }
 `;
 
@@ -709,6 +709,117 @@ const Footer = styled.footer`
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", monospace;
 `;
+const ServiceGrid = styled.div`
+  margin-top: 32px;
+  display: grid;
+  gap: 14px;
+
+  @media (min-width: 860px) {
+    grid-template-columns: repeat(3, 1fr);
+    align-items: start;
+  }
+`;
+
+const ServiceBlock = styled.div`
+  border: 1px solid ${(p) =>
+    p.$highlight ? p.$t.accent : p.$t.border};
+  border-radius: 20px;
+  background: ${(p) => p.$t.panel};
+  padding: 24px 20px;
+  backdrop-filter: blur(10px);
+  display: grid;
+  gap: 10px;
+  box-shadow: ${(p) =>
+    p.$highlight
+      ? `0 0 0 1px ${p.$t.accent}44, 0 20px 60px rgba(0,0,0,0.12)`
+      : p.$mode === "dark"
+        ? "0 20px 60px rgba(0,0,0,0.45)"
+        : "0 14px 40px rgba(0,0,0,0.07)"};
+  transition: transform 220ms ease, box-shadow 220ms ease;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+`;
+
+const ServiceTag = styled.div`
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: ${(p) => (p.$highlight ? p.$t.accent : p.$t.muted)};
+`;
+
+const ServiceName = styled.h3`
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: ${(p) => p.$t.text};
+`;
+
+const ServiceDesc = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: ${(p) => p.$t.muted};
+`;
+
+const ServiceMeta = styled.div`
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 11px;
+  color: ${(p) => p.$t.muted};
+  padding: 6px 0;
+  border-top: 1px solid ${(p) => p.$t.border};
+`;
+
+const ServiceCTA = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+  border: 1px solid ${(p) =>
+    p.$kind === "primary" ? "transparent" : p.$t.border};
+  background: ${(p) =>
+    p.$kind === "primary"
+      ? `linear-gradient(180deg, ${p.$t.accent}, ${p.$t.accent2})`
+      : "transparent"};
+  color: ${(p) =>
+    p.$kind === "primary" ? "#fff" : p.$t.text};
+  transition: filter 180ms ease, transform 180ms ease;
+
+  &:hover {
+    filter: brightness(0.94);
+    transform: translateY(-1px);
+  }
+`;
+const HeroLocation = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(10px);
+
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.78);
+`;
 
 function getInitialMode() {
   if (typeof window === "undefined") return "day";
@@ -890,17 +1001,11 @@ export default function CrashPathLanding() {
               CrashPath
               <br />
               Gimnasio de Escalada
-              <br />
-              y Entrenamiento
-            </HeroTitle>
 
-            <HeroLead $t={t}>
-              Un espacio dedicado a entrenar, progresar y escalar con intención.
-              <br />
-              MoonBoard + placa principal + programación de entrenamientos.
-              <br />
-              Abierto en la tarde de <b>2:00 PM</b> a <b>8:00 PM</b>. Mañanas: coordinación por WhatsApp.
-            </HeroLead>
+            </HeroTitle>
+            <HeroLocation>📍 Bucaramanga, Colombia · Roca natural · Guiadas en español & English</HeroLocation>
+
+
 
             <HeroPill>
               <PillPrimary href="/reservas">REGISTRAR VISITA</PillPrimary>
@@ -919,47 +1024,60 @@ export default function CrashPathLanding() {
           </HeroBox>
         </HeroContent>
       </Hero>
-
       {/* SERVICES */}
       <Section id="services">
         <SectionInner>
-          <SectionTitle>Servicios</SectionTitle>
+          <SectionTitle>Lo que hacemos</SectionTitle>
           <SectionKicker $t={t}>
-            Entrenamiento · guiadas · productos · hospedaje
+            Gimnasio · Entrenamiento · Guiadas en roca
           </SectionKicker>
 
-          <Tiles ref={railRef}>
-            {services.map((s) => (
-              <TileWrap key={s.title} $span={s.span} $tall={s.tall}>
-                <Tile href={s.href} $t={t} $mode={mode}>
-                  <TileImg $src={s.img} />
-                  <TileShade />
+          <ServiceGrid>
+            {/* GIMNASIO */}
+            <ServiceBlock $t={t} $mode={mode}>
+              <ServiceTag $t={t}>GIMNASIO</ServiceTag>
+              <ServiceName $t={t}>Entrenamiento Libre</ServiceName>
+              <ServiceDesc $t={t}>
+                Escala cuando quieras dentro del horario de tarde.
+                MoonBoard a 25° y 40°, placa principal, enfoque en progreso real.
+                Sin reserva previa — llegas y entrenas.
+              </ServiceDesc>
+              <ServiceMeta $t={t}>Lunes a Sábado · 2:00 PM – 8:00 PM</ServiceMeta>
+              <ServiceCTA href="/reservas" $t={t} $kind="primary">
+                REGISTRAR VISITA
+              </ServiceCTA>
+            </ServiceBlock>
 
-                  <TileTopRow>
-                    <TileLabel>{s.tag}</TileLabel>
-                    <TileTitle>{s.title}</TileTitle>
-                  </TileTopRow>
+            {/* ENTRENAMIENTO */}
+            <ServiceBlock $t={t} $mode={mode}>
+              <ServiceTag $t={t}>ENTRENAMIENTO</ServiceTag>
+              <ServiceName $t={t}>Programación Enfocada</ServiceName>
+              <ServiceDesc $t={t}>
+                Fuerza de dedos, resistencia y técnica aplicada a la escalada.
+                Rutinas diseñadas para escalar mejor en roca y placa.
+                Para todos los niveles.
+              </ServiceDesc>
+              <ServiceMeta $t={t}>Incluido con acceso al gym</ServiceMeta>
+              <ServiceCTA href="#about" $t={t} $kind="ghost">
+                CÓMO FUNCIONA
+              </ServiceCTA>
+            </ServiceBlock>
 
-                  <TileContent>
-                    <TileTitle>{s.title}</TileTitle>
-                    <TileSub>{s.subtitle}</TileSub>
-                  </TileContent>
-                </Tile>
-              </TileWrap>
-            ))}
-          </Tiles>
-
-          <Dots>
-            {services.map((_, i) => (
-              <Dot
-                key={i}
-                $t={t}
-                $active={i === activeIdx}
-                onClick={() => scrollToIdx(i)}
-                aria-label={`Ir al servicio ${i + 1}`}
-              />
-            ))}
-          </Dots>
+            {/* GUIADAS */}
+            <ServiceBlock $t={t} $mode={mode} $highlight>
+              <ServiceTag $t={t} $highlight>GUIADAS · TRIPS</ServiceTag>
+              <ServiceName $t={t}>Escalada en Roca Real</ServiceName>
+              <ServiceDesc $t={t}>
+                Salidas a roca natural cerca de Bucaramanga. Grupos por nivel,
+                logística incluida. Ideal para visitantes y extranjeros.
+                Guías en español e inglés.
+              </ServiceDesc>
+              <ServiceMeta $t={t}>📍 Bucaramanga, Colombia · Sport climbing</ServiceMeta>
+              <ServiceCTA href={WHATSAPP_URL} $t={t} $kind="primary">
+                ESCRIBIR POR WHATSAPP
+              </ServiceCTA>
+            </ServiceBlock>
+          </ServiceGrid>
         </SectionInner>
       </Section>
 
