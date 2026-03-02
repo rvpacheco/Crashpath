@@ -4,17 +4,6 @@ import User from "../../../models/User";
 
 const secret = process.env.NEXTAUTH_SECRET;
 
-/**
- * POST /api/visits/register
- * Body (opcional):
- *  - date: ISO string (si no viene, usa hoy)
- *
- * Reglas:
- *  - user debe estar autenticado
- *  - waiverStatus debe ser 'signed'
- *  - credits >= 1
- *  - solo 1 visita por día (no dup)
- */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method not allowed" });
@@ -38,20 +27,6 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // ====== (OPCIONAL) validar perfil mínimo para emergencias ======
-    // Si quieres hacerlo obligatorio antes de registrar visita:
-    // const missing =
-    //   !user.phone ||
-    //   !user.emergencyContactName ||
-    //   !user.emergencyContactPhone ||
-    //   !user.epsName;
-    // if (missing) {
-    //   return res.status(409).json({
-    //     message: "Complete your profile before registering a visit",
-    //     code: "PROFILE_INCOMPLETE",
-    //   });
-    // }
-
     // ====== Waiver obligatorio ======
     if (user.waiverStatus !== "signed") {
       return res.status(409).json({
@@ -60,22 +35,34 @@ export default async function handler(req, res) {
       });
     }
 
-    // ====== Determinar día objetivo (hoy por defecto) ======
+    // ====== Perfil obligatorio ======
+    const missingProfile =
+      !user.phone ||
+      !user.documentNumber ||
+      !user.emergencyContactName ||
+      !user.emergencyContactPhone ||
+      !user.epsName;
+
+    if (missingProfile) {
+      return res.status(409).json({
+        message: "Complete your profile before registering a visit",
+        code: "PROFILE_INCOMPLETE",
+      });
+    }
+
+    // ====== Determinar día objetivo ======
     const target = req.body?.date ? new Date(req.body.date) : new Date();
     if (Number.isNaN(target.getTime())) {
       return res.status(400).json({ message: "Invalid date" });
     }
 
-    // Normalizamos a inicio/fin del día en hora local del server
-    // (para evitar duplicados por hora).
     const startOfDay = new Date(target);
     startOfDay.setHours(0, 0, 0, 0);
 
     const endOfDay = new Date(target);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // ====== Evitar doble visita ese mismo día ======
-    // Nota: como visits es un array embebido, comprobamos con JS.
+    // ====== Evitar doble visita ======
     const already = (user.visits || []).some((v) => {
       const d = new Date(v.date);
       return d >= startOfDay && d <= endOfDay && v.status !== "cancelled";
@@ -88,15 +75,43 @@ export default async function handler(req, res) {
       });
     }
 
-    // ====== Descontar crédito de forma ATÓMICA ======
-    // Si no hay créditos, no actualiza nada.
+    // ====== Documento de visita ======
     const visitDoc = {
-      date: startOfDay, // guarda normalizado al día
+      date: startOfDay,
       status: "registered",
       createdBy: "user",
       notes: "",
     };
 
+    // ====== Verificar acceso según tipo ======
+    const accessType = user.accessType || "ticketera";
+
+    if (accessType === "mensualidad") {
+      const endDate = user?.mensualidad?.endDate;
+      const isActive = endDate && new Date(endDate) > new Date();
+
+      if (!isActive) {
+        return res.status(409).json({
+          message: "Tu mensualidad está vencida.",
+          code: "MENSUALIDAD_EXPIRED",
+        });
+      }
+
+      const updated = await User.findByIdAndUpdate(
+        user._id,
+        { $push: { visits: visitDoc } },
+        { new: true }
+      );
+
+      const createdVisit = updated.visits?.[updated.visits.length - 1];
+      return res.status(200).json({
+        message: "Visit registered",
+        user: updated,
+        visit: createdVisit,
+      });
+    }
+
+    // ====== Ticketera: descontar crédito ATÓMICO ======
     const updated = await User.findOneAndUpdate(
       { _id: user._id, credits: { $gte: 1 } },
       {
@@ -113,14 +128,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // La visita creada es la última del array
     const createdVisit = updated.visits?.[updated.visits.length - 1];
-
     return res.status(200).json({
       message: "Visit registered",
       user: updated,
       visit: createdVisit,
     });
+
   } catch (error) {
     console.error("register visit error:", error);
     return res.status(500).json({ message: "Failed to register visit" });

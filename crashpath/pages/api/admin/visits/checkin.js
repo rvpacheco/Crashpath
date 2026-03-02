@@ -17,7 +17,6 @@ function getReqMeta(req) {
   };
 }
 
-// “Hoy” en Bogotá => rango UTC equivalente
 function dayRangeBogota(dateLike) {
   const base = dateLike ? new Date(dateLike) : new Date();
   if (Number.isNaN(base.getTime())) return null;
@@ -34,7 +33,6 @@ function dayRangeBogota(dateLike) {
   const d = parts.find((p) => p.type === "day")?.value;
   if (!y || !m || !d) return null;
 
-  // Bogotá ~ -05:00: 00:00 Bogotá == 05:00 UTC
   const start = new Date(`${y}-${m}-${d}T05:00:00.000Z`);
   const end = new Date(`${y}-${m}-${d}T04:59:59.999Z`);
   end.setUTCDate(end.getUTCDate() + 1);
@@ -70,15 +68,28 @@ export default async function handler(req, res) {
 
   const query = userId ? { _id: userId } : { email: normalizeEmail(email) };
   const meta = getReqMeta(req);
-  const actor = { id: token.sub || null, name: token.name || null, email: token.email || null, role: "admin" };
   const now = new Date();
 
+  // ✅ Actor aplanado — compatible con VisitEventSchema
+  const actorRole = "admin";
+  const actorEmail = token.email || null;
+  const actorName = token.name || null;
+
+  // ✅ Evento base de check-in — campos alineados con el schema
+  const buildCheckinEvent = (extraNotes = "") => ({
+    ts: now,
+    action: "CHECKIN",
+    actor: actorRole,
+    actorEmail,
+    actorName,
+    meta,
+    notes: String(extraNotes || notes || "").slice(0, 400),
+  });
+
   try {
-    // 1) leer usuario (1 vez) para saber si existe y validar acceso “amable”
     const user = await User.findOne(query).lean();
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Si ya tiene visita checked_in hoy => idempotente
     const visits = Array.isArray(user.visits) ? user.visits : [];
     const existingToday = visits.find((v) => {
       const vd = new Date(v.date);
@@ -94,22 +105,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // Validación previa (UX). La atómica la reforzamos abajo con condiciones también.
     const access = canAccessOrFail(user);
     if (!access.ok) return res.status(403).json({ message: access.message, code: access.code });
 
     const isTicketera = user.accessType === "ticketera";
     const isMensualidad = user.accessType === "mensualidad";
 
-    const event = {
-      at: now,
-      action: "CHECK_IN",
-      actor,
-      meta,
-      notes: String(notes || "").slice(0, 400),
-    };
-
-    // 2) Caso A: existe visita hoy pero NO checked_in => update atómico esa visita
+    // ── Caso A: existe visita hoy pero no está checked_in ──────────────────
     if (existingToday?._id) {
       const atomicQuery = {
         ...query,
@@ -117,12 +119,11 @@ export default async function handler(req, res) {
           $elemMatch: {
             _id: existingToday._id,
             date: { $gte: range.start, $lte: range.end },
-            status: { $in: ["registered", "no_show"] }, // solo estas pasan a checked_in
+            status: { $in: ["registered", "no_show"] },
           },
         },
       };
 
-      // Reforzar acceso en el query atómico
       if (isTicketera) atomicQuery.credits = { $gt: 0 };
       if (isMensualidad) atomicQuery["mensualidad.endDate"] = { $gt: now };
 
@@ -132,11 +133,11 @@ export default async function handler(req, res) {
           "visits.$[v].checkedInAt": now,
         },
         $push: {
-          "visits.$[v].events": event,
+          "visits.$[v].events": buildCheckinEvent(),
         },
       };
 
-      if (notes) update.$set["visits.$[v].notes"] = event.notes;
+      if (notes) update.$set["visits.$[v].notes"] = String(notes).slice(0, 400);
       if (isTicketera) update.$inc = { credits: -1 };
 
       const updated = await User.findOneAndUpdate(atomicQuery, update, {
@@ -144,7 +145,6 @@ export default async function handler(req, res) {
         arrayFilters: [{ "v._id": existingToday._id }],
       }).lean();
 
-      // Si no matcheó, otro request ganó la carrera => responder idempotente
       if (!updated) {
         return res.status(200).json({ message: "Already processed", code: "ALREADY_CHECKED_IN" });
       }
@@ -157,11 +157,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // 3) Caso B: no existe visita hoy => crear visita + (si ticketera) descontar 1, todo atómico
+    // ── Caso B: no existe visita hoy => crear + check-in atómico ───────────
     if (!createIfMissing) {
       return res.status(404).json({ message: "No visit found for this day", code: "VISIT_NOT_FOUND" });
     }
 
+    // ✅ visitDoc con eventos alineados al schema
     const visitDoc = {
       date: range.start,
       status: "checked_in",
@@ -169,8 +170,15 @@ export default async function handler(req, res) {
       checkedInAt: now,
       notes: String(notes || "").slice(0, 400),
       events: [
-        { at: now, action: "CREATE_VISIT", actor, meta, notes: "Visit created by admin check-in" },
-        event,
+        {
+          ts: now,
+          action: "CHECKIN",
+          actor: actorRole,
+          actorEmail,
+          actorName,
+          meta,
+          notes: "Visit created by admin check-in",
+        },
       ],
     };
 
