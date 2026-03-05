@@ -7,6 +7,7 @@ import axios from "axios";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { getWaiverSnapshot } from "@/lib/waiver";
+import MoonSection from "@/components/MoonSection";
 
 
 const Container = styled.main`
@@ -1043,9 +1044,15 @@ export default function Reservas() {
                 );
               })}
             </ResList>
+
           ) : (
             <SmallNote>Aún no tienes visitas registradas.</SmallNote>
           )}
+          <MoonSection
+            session={session}
+            canUseMoon={waiverSigned && profileComplete && !!userData?.accessType}
+          />
+
 
           <Logout onClick={() => signOut()}>Cerrar sesión</Logout>
           <FooterLink href="/privacy">Conoce nuestra política de privacidad</FooterLink>
