@@ -20,6 +20,9 @@ const palette = {
   success: "#2E9E56",
   danger: "#D84A4A",
   focus: "rgba(156,79,36,0.18)",
+  moon: "#1A1035",
+  moonAccent: "#7C5CBF",
+  moonAccent2: "#A98BEF",
 };
 
 const GlobalStyle = createGlobalStyle`
@@ -205,6 +208,30 @@ const CheckinButton = styled.button`
   &:active { transform: translateY(0px); }
   &:disabled { cursor: not-allowed; transform: none; }
   &:focus-visible { outline: none; box-shadow: 0 0 0 4px ${palette.focus}; }
+`;
+
+/* Moon button - distinct purple style */
+const MoonButton = styled.button`
+  background: linear-gradient(135deg, ${palette.moon}, ${palette.moonAccent});
+  color: #fff;
+  padding: 11px 12px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  min-height: 44px;
+  box-shadow: 0 8px 20px rgba(124,92,191,0.30);
+  transition: transform .12s ease, filter .12s ease;
+  opacity: ${(p) => (p.disabled ? 0.65 : 1)};
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  &:hover { filter: brightness(1.08); transform: translateY(-1px); }
+  &:active { transform: translateY(0px); }
+  &:disabled { cursor: not-allowed; transform: none; }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(124,92,191,0.30); }
 `;
 
 const Muted = styled.span`
@@ -446,6 +473,192 @@ const Pill = styled.span`
   font-size: 13px;
   color: ${palette.text};
   b { font-weight: 800; }
+`;
+
+/* -------------------- MOON SPECIFIC STYLES -------------------- */
+const MoonBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, rgba(26,16,53,0.85), rgba(124,92,191,0.70));
+  color: #E8DCFF;
+  border: 1px solid rgba(124,92,191,0.35);
+`;
+
+const MoonModalHeader = styled.div`
+  background: linear-gradient(135deg, ${palette.moon} 0%, ${palette.moonAccent} 100%);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
+const MoonModalTitle = styled.h2`
+  margin: 0;
+  font-size: 18px;
+  color: #fff;
+  font-weight: 900;
+`;
+
+const MoonModalSub = styled.p`
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
+`;
+
+const DayTabsRow = styled.div`
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+  margin-bottom: 10px;
+`;
+
+const DayTabBtn = styled.button`
+  flex-shrink: 0;
+  border: 1px solid ${(p) => p.$active ? palette.moonAccent : palette.border};
+  border-radius: 10px;
+  padding: 6px 12px;
+  background: ${(p) => p.$active ? `linear-gradient(135deg, ${palette.moon}, ${palette.moonAccent})` : "rgba(255,255,255,0.70)"};
+  color: ${(p) => p.$active ? "#fff" : palette.text};
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+`;
+
+const SlotGrid = styled.div`
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 2px;
+`;
+
+const SlotItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid ${(p) =>
+    p.$mine ? "rgba(124,92,191,0.40)" :
+    p.$taken ? "rgba(0,0,0,0.06)" :
+    palette.border};
+  background: ${(p) =>
+    p.$mine ? "rgba(124,92,191,0.12)" :
+    p.$taken ? "rgba(0,0,0,0.03)" :
+    "rgba(255,255,255,0.75)"};
+  opacity: ${(p) => p.$past ? 0.45 : 1};
+`;
+
+const SlotLabel = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${palette.text};
+`;
+
+const SlotRight = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const SlotStatusText = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${(p) =>
+    p.$mine ? palette.moonAccent :
+    p.$available ? palette.success :
+    palette.muted};
+`;
+
+const BookBtn = styled.button`
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, ${palette.moon}, ${palette.moonAccent});
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
+  &:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  &:disabled { background: #d3d3d3; cursor: not-allowed; transform: none; }
+`;
+
+const CancelMoonBtn = styled.button`
+  border: 1px solid rgba(216,74,74,0.30);
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: rgba(216,74,74,0.08);
+  color: ${palette.danger};
+  font-weight: 800;
+  font-size: 11px;
+  cursor: pointer;
+  &:hover { background: rgba(216,74,74,0.16); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+`;
+
+/* Moon section in attendance modal */
+const MoonSectionWrap = styled.div`
+  margin-top: 14px;
+  border: 1px solid rgba(124,92,191,0.25);
+  border-radius: 14px;
+  overflow: hidden;
+`;
+
+const MoonSectionHeader = styled.div`
+  background: linear-gradient(135deg, ${palette.moon}, ${palette.moonAccent});
+  padding: 10px 14px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const MoonResList = styled.div`
+  display: grid;
+  gap: 0;
+`;
+
+const MoonResItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(124,92,191,0.10);
+  background: rgba(255,255,255,0.60);
+  &:last-child { border-bottom: none; }
+`;
+
+const MoonResLeft = styled.div`
+  display: grid;
+  gap: 2px;
+`;
+
+const MoonResName = styled.div`
+  font-size: 13px;
+  font-weight: 800;
+  color: ${palette.text};
+`;
+
+const MoonResMeta = styled.div`
+  font-size: 12px;
+  color: ${palette.muted};
 `;
 
 /* -------------------- MODALS -------------------- */
@@ -730,7 +943,6 @@ const RenovarBtn = styled.button`
   &:focus-visible { outline: none; box-shadow: 0 0 0 4px ${palette.focus}; }
 `;
 
-/* ---- Edit field row ---- */
 const EditFieldRow = styled.div`
   display: grid;
   gap: 4px;
@@ -776,53 +988,139 @@ const EditSelect = styled.select`
   }
 `;
 
-/* ---- Asistencia stats ---- */
-const StatsGrid = styled.div`
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-  @media (min-width: 600px) { grid-template-columns: repeat(3, 1fr); }
+const StatsRow = styled.div`
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
 `;
 
-const StatCard = styled.div`
+const StatPill = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 12px;
   border: 1px solid ${palette.border};
-  border-radius: 14px;
-  padding: 14px;
   background: rgba(255,255,255,0.70);
-  text-align: center;
 `;
 
-const StatNum = styled.div`
-  font-size: 32px;
+const StatPillNum = styled.span`
   font-weight: 900;
   color: ${palette.accent};
+  font-size: 20px;
   line-height: 1;
 `;
 
-const StatLabel = styled.div`
-  font-size: 12px;
+const StatPillLabel = styled.span`
   color: ${palette.muted};
-  margin-top: 4px;
+  font-size: 11px;
   font-weight: 700;
+  line-height: 1.3;
 `;
 
-const AttendanceList = styled.div`
-  display: grid;
-  gap: 8px;
-  margin-top: 14px;
-  max-height: 380px;
-  overflow-y: auto;
+const AttendanceSearchInput = styled.input`
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid ${palette.border};
+  background: rgba(255,255,255,0.85);
+  font-size: 14px;
+  outline: none;
+  margin-top: 10px;
+  &:focus {
+    border-color: rgba(156,79,36,0.45);
+    box-shadow: 0 0 0 3px ${palette.focus};
+  }
 `;
 
-const AttendanceItem = styled.div`
+const DayGroup = styled.div`
+  margin-top: 8px;
+  border: 1px solid ${palette.border};
+  border-radius: 14px;
+  overflow: hidden;
+`;
+
+const DayGroupHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: linear-gradient(90deg, rgba(156,79,36,0.10), rgba(156,79,36,0.03));
+  border-bottom: 1px solid ${palette.border};
+`;
+
+const DayGroupTitle = styled.span`
+  font-size: 13px;
+  font-weight: 900;
+  color: ${palette.accent};
+  letter-spacing: 0.01em;
+  text-transform: capitalize;
+`;
+
+const DayGroupCount = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${palette.muted};
+  background: rgba(255,255,255,0.70);
+  border: 1px solid ${palette.border};
+  border-radius: 999px;
+  padding: 2px 8px;
+`;
+
+const AttendanceRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.06);
-  background: rgba(255,255,255,0.70);
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+  background: rgba(255,255,255,0.65);
+  &:last-child { border-bottom: none; }
+  &:hover { background: rgba(255,255,255,0.88); }
+`;
+
+const AttendeeInfo = styled.div`
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+`;
+
+const AttendeeName = styled.div`
+  font-size: 13.5px;
+  font-weight: 800;
+  color: ${palette.text};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const AttendeeEmail = styled.div`
+  font-size: 11.5px;
+  color: ${palette.muted};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const AttendeeRight = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+`;
+
+const CheckinTimeBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(43,38,32,0.06);
+  color: ${palette.text};
+  white-space: nowrap;
 `;
 
 const PeriodTabs = styled.div`
@@ -844,7 +1142,6 @@ const PeriodTab = styled.button`
   &:hover { background: rgba(255,255,255,0.85); }
 `;
 
-/* ---- Confirm modal ---- */
 const ConfirmText = styled.p`
   margin: 0 0 16px;
   font-size: 14px;
@@ -853,6 +1150,9 @@ const ConfirmText = styled.p`
 `;
 
 /* -------------------- HELPERS -------------------- */
+const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const MONTH_NAMES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
 const formatDate = (date) => {
   try { return new Date(date).toLocaleDateString("es-CO"); }
   catch { return "Fecha inválida"; }
@@ -907,6 +1207,60 @@ function startOfPeriod(period) {
   return d;
 }
 
+function formatTabDate(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return `${DAY_NAMES[date.getDay()]} ${d} ${MONTH_NAMES[m - 1]}`;
+}
+
+function isTodayStr(dateStr) {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+  return dateStr === todayStr;
+}
+
+function formatCheckinTime(dateInput) {
+  if (!dateInput) return null;
+  try {
+    return new Date(dateInput).toLocaleTimeString("es-CO", {
+      hour: "2-digit", minute: "2-digit", hour12: true,
+    });
+  } catch { return null; }
+}
+
+function formatDayLabel(dateInput) {
+  if (!dateInput) return "Fecha desconocida";
+  try {
+    const d = new Date(dateInput);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (sameDay(d, today)) return "Hoy";
+    if (sameDay(d, yesterday)) return "Ayer";
+    return d.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
+  } catch { return String(dateInput); }
+}
+
+function normalizeDocType(v) {
+  return typeof v === "string" ? v.trim().toUpperCase() : v;
+}
+
+function isCanvasBlank(canvas) {
+  if (!canvas) return true;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return true;
+  const { width, height } = canvas;
+  const data = ctx.getImageData(0, 0, width, height).data;
+  for (let i = 3; i < data.length; i += 4) { if (data[i] !== 0) return false; }
+  return true;
+}
+
+const INITIAL_FORM = {
+  name: "", email: "", documentType: "CC", documentNumber: "",
+  phone: "", epsName: "", emergencyContactName: "", emergencyContactPhone: "",
+  accessType: "ticketera", mensualidadMeses: 1, esMinor: false,
+};
+
 /* -------------------- SUB COMPONENTS -------------------- */
 function AccessInfo({ user, onRenovar, onChangeAccess, busy }) {
   if (user.accessType === "mensualidad") {
@@ -941,26 +1295,6 @@ function ModalPortal({ children }) {
   if (!mounted) return null;
   return createPortal(children, document.body);
 }
-
-function normalizeDocType(v) {
-  return typeof v === "string" ? v.trim().toUpperCase() : v;
-}
-
-function isCanvasBlank(canvas) {
-  if (!canvas) return true;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return true;
-  const { width, height } = canvas;
-  const data = ctx.getImageData(0, 0, width, height).data;
-  for (let i = 3; i < data.length; i += 4) { if (data[i] !== 0) return false; }
-  return true;
-}
-
-const INITIAL_FORM = {
-  name: "", email: "", documentType: "CC", documentNumber: "",
-  phone: "", epsName: "", emergencyContactName: "", emergencyContactPhone: "",
-  accessType: "ticketera", mensualidadMeses: 1, esMinor: false,
-};
 
 function AuditFeed({ events }) {
   return (
@@ -1010,6 +1344,9 @@ export default function AdminPage() {
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
+  // Moon modals
+  const [showMoonModal, setShowMoonModal] = useState(false);
+  const [showCancelMoonModal, setShowCancelMoonModal] = useState(false);
 
   // New user
   const [newUserStep, setNewUserStep] = useState(1);
@@ -1051,6 +1388,7 @@ export default function AdminPage() {
 
   // Attendance
   const [attendancePeriod, setAttendancePeriod] = useState("week");
+  const [attendanceSearch, setAttendanceSearch] = useState("");
 
   // Profile editing
   const [editingProfile, setEditingProfile] = useState(false);
@@ -1061,6 +1399,17 @@ export default function AdminPage() {
   const [historyUser, setHistoryUser] = useState(null);
   const [historyVisits, setHistoryVisits] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // ---- Moon state ----
+  const [moonUser, setMoonUser] = useState(null); // user for whom we're booking
+  const [moonDays, setMoonDays] = useState([]);
+  const [moonSelectedDay, setMoonSelectedDay] = useState(0);
+  const [moonLoading, setMoonLoading] = useState(false);
+  const [moonSubmitting, setMoonSubmitting] = useState(false);
+  const [moonMsg, setMoonMsg] = useState("");
+  const [moonSuccess, setMoonSuccess] = useState("");
+  const [cancelMoonRes, setCancelMoonRes] = useState(null); // { reservationId, userName }
+  const [moonAttendance, setMoonAttendance] = useState([]); // for attendance modal
 
   const [query, setQuery] = useState("");
   const [uiError, setUiError] = useState("");
@@ -1088,12 +1437,13 @@ export default function AdminPage() {
   useEffect(() => {
     const open = showCreditsModal || showReservationModal || showProfileModal ||
       showNewUserModal || showRenovarModal || showCheckinModal || showHistoryModal ||
-      showWaiverModal || showAccessModal || showAttendanceModal || showConfirmDeleteModal;
+      showWaiverModal || showAccessModal || showAttendanceModal || showConfirmDeleteModal ||
+      showMoonModal || showCancelMoonModal;
     document.body.classList.toggle("modal-open", open);
     return () => document.body.classList.remove("modal-open");
   }, [showCreditsModal, showReservationModal, showProfileModal, showNewUserModal,
     showRenovarModal, showCheckinModal, showHistoryModal, showWaiverModal,
-    showAccessModal, showAttendanceModal, showConfirmDeleteModal]);
+    showAccessModal, showAttendanceModal, showConfirmDeleteModal, showMoonModal, showCancelMoonModal]);
 
   // ---- Data fetching ----
   const fetchUsers = useCallback(async () => {
@@ -1119,6 +1469,30 @@ export default function AdminPage() {
       console.warn("Audit fetch failed:", e?.message);
     } finally {
       setAuditLoading(false);
+    }
+  }, []);
+
+  // Fetch moon slots for a specific user context (admin view)
+  const fetchMoonSlots = useCallback(async () => {
+    setMoonLoading(true);
+    setMoonMsg("");
+    try {
+      const res = await axios.get("/api/moon/slots");
+      setMoonDays(res.data?.days || []);
+    } catch {
+      setMoonMsg("No se pudieron cargar los slots.");
+    } finally {
+      setMoonLoading(false);
+    }
+  }, []);
+
+  // Fetch moon reservations for attendance modal
+  const fetchMoonAttendance = useCallback(async () => {
+    try {
+      const res = await axios.get("/api/admin/moon/reservations");
+      setMoonAttendance(Array.isArray(res.data?.reservations) ? res.data.reservations : []);
+    } catch {
+      setMoonAttendance([]);
     }
   }, []);
 
@@ -1165,11 +1539,9 @@ export default function AdminPage() {
     return list;
   }, [users, query, quickFilter]);
 
-  // ---- Attendance data ----
   const attendanceData = useMemo(() => {
     const start = startOfPeriod(attendancePeriod);
     const checkedIn = [];
-
     users.forEach((u) => {
       const visits = u?.visits || [];
       const periodVisits = visits.filter((v) => {
@@ -1180,10 +1552,27 @@ export default function AdminPage() {
         checkedIn.push({ user: u, visits: periodVisits, count: periodVisits.length });
       }
     });
-
     checkedIn.sort((a, b) => b.count - a.count);
     return checkedIn;
   }, [users, attendancePeriod]);
+
+  // Moon slots for current day tab
+  const currentMoonDay = moonDays[moonSelectedDay];
+
+  // Find existing active reservation for moonUser
+  const moonUserActiveRes = useMemo(() => {
+    if (!moonUser || !moonDays.length) return null;
+    for (const day of moonDays) {
+      for (const slot of day.slots) {
+        if (slot.takenBy && slot.takenBy.isMe === false) {
+          // slot taken by someone else, skip
+        }
+        // We need to check from the admin moon endpoint if this user has a reservation
+        // For now we'll rely on slot.isMySlot being false (admin context)
+      }
+    }
+    return null;
+  }, [moonUser, moonDays]);
 
   // ---- Modal openers ----
   const handleAddCredits = (userId) => {
@@ -1245,9 +1634,76 @@ export default function AdminPage() {
     setShowAccessModal(true);
   };
 
-  const openAttendanceModal = () => {
-    setUiError(""); setAttendancePeriod("week");
+  const openAttendanceModal = async () => {
+    setUiError(""); setAttendancePeriod("week"); setAttendanceSearch("");
     setShowAttendanceModal(true);
+    fetchMoonAttendance();
+  };
+
+  // ---- Moon modal opener ----
+  const openMoonModal = (user) => {
+    setMoonUser(user);
+    setMoonMsg("");
+    setMoonSuccess("");
+    setMoonSelectedDay(0);
+    setShowMoonModal(true);
+    fetchMoonSlots();
+  };
+
+  const closeMoonModal = () => {
+    if (moonSubmitting) return;
+    setShowMoonModal(false);
+    setMoonUser(null);
+    setMoonMsg("");
+    setMoonSuccess("");
+  };
+
+  // ---- Moon actions ----
+  const handleAdminMoonReserve = async (dateStr, hour) => {
+    if (!moonUser || moonSubmitting) return;
+    setMoonSubmitting(true);
+    setMoonMsg("");
+    setMoonSuccess("");
+    try {
+      await axios.post("/api/admin/moon/reserve", {
+        userId: moonUser._id,
+        userEmail: moonUser.email,
+        userName: moonUser.name,
+        date: dateStr,
+        startHour: hour,
+      });
+      setMoonSuccess(`✅ Reserva creada para ${moonUser.name}`);
+      await fetchMoonSlots();
+      await fetchMoonAttendance();
+    } catch (e) {
+      const code = e?.response?.data?.code;
+      if (code === "ALREADY_RESERVED") setMoonMsg(`${moonUser.name} ya tiene una reserva activa.`);
+      else if (code === "SLOT_TAKEN") setMoonMsg("Ese slot ya está ocupado.");
+      else setMoonMsg(e?.response?.data?.message || "Error al reservar.");
+    } finally {
+      setMoonSubmitting(false);
+    }
+  };
+
+  const openCancelMoon = (reservationId, userName) => {
+    setCancelMoonRes({ reservationId, userName });
+    setShowCancelMoonModal(true);
+  };
+
+  const handleAdminCancelMoon = async () => {
+    if (!cancelMoonRes || moonSubmitting) return;
+    setMoonSubmitting(true);
+    try {
+      await axios.post("/api/admin/moon/cancel", { reservationId: cancelMoonRes.reservationId });
+      setShowCancelMoonModal(false);
+      setCancelMoonRes(null);
+      await fetchMoonSlots();
+      await fetchMoonAttendance();
+    } catch (e) {
+      setMoonMsg(e?.response?.data?.message || "Error al cancelar.");
+    } finally {
+      setMoonSubmitting(false);
+    }
   };
 
   // ---- Actions ----
@@ -1747,6 +2203,7 @@ export default function AdminPage() {
                           <Button onClick={() => handleAddCredits(user._id)} disabled={busy}>Créditos</Button>
                           <Button onClick={() => handleCreateReservation(user._id)} disabled={busy}>Reserva</Button>
                           <CheckinButton onClick={() => handleCheckin(user)} disabled={busy}>✓ Check-in</CheckinButton>
+                          <MoonButton onClick={() => openMoonModal(user)} disabled={busy}>🌑 Moon</MoonButton>
                           <SecondaryButton onClick={() => openHistory(user)} disabled={busy}>Historial</SecondaryButton>
                         </Actions>
                       </CardBody>
@@ -1802,6 +2259,7 @@ export default function AdminPage() {
                           <Td>
                             <Actions>
                               <CheckinButton onClick={() => handleCheckin(user)} disabled={busy}>✓ Check-in</CheckinButton>
+                              <MoonButton onClick={() => openMoonModal(user)} disabled={busy}>🌑 Moon</MoonButton>
                               <SecondaryButton onClick={() => handleViewProfile(user)} disabled={busy}>Ver datos</SecondaryButton>
                               <Button onClick={() => handleAddCredits(user._id)} disabled={busy}>Modificar créditos</Button>
                               <Button onClick={() => handleCreateReservation(user._id)} disabled={busy}>Crear reserva</Button>
@@ -1837,64 +2295,271 @@ export default function AdminPage() {
           </Actions>
         </Modal>
 
+        {/* ---- MOON RESERVATION MODAL ---- */}
+        <Overlay $show={showMoonModal} onClick={closeMoonModal} />
+        <Modal $show={showMoonModal} role="dialog" aria-modal="true">
+          <SheetHandle />
+          <MoonModalHeader>
+            <span style={{ fontSize: 28 }}>🌑</span>
+            <div>
+              <MoonModalTitle>Moonboard</MoonModalTitle>
+              <MoonModalSub>
+                {moonUser ? `Reservando para: ${moonUser.name}` : "Selecciona un slot"}
+              </MoonModalSub>
+            </div>
+          </MoonModalHeader>
+
+          {moonLoading ? (
+            <Muted>Cargando slots…</Muted>
+          ) : (
+            <>
+              {/* Day tabs */}
+              <DayTabsRow>
+                {moonDays.map((day, i) => (
+                  <DayTabBtn
+                    key={day.date}
+                    $active={moonSelectedDay === i}
+                    onClick={() => { setMoonSelectedDay(i); setMoonMsg(""); setMoonSuccess(""); }}
+                  >
+                    {day.isToday ? "Hoy" : formatTabDate(day.date)}
+                  </DayTabBtn>
+                ))}
+              </DayTabsRow>
+
+              {currentMoonDay && (
+                <SlotGrid>
+                  {currentMoonDay.slots.map((slot) => (
+                    <SlotItem
+                      key={slot.hour}
+                      $mine={slot.isMySlot}
+                      $taken={slot.taken}
+                      $past={slot.isPast}
+                    >
+                      <SlotLabel>{slot.label}</SlotLabel>
+                      <SlotRight>
+                        {slot.isMySlot ? (
+                          <>
+                            <SlotStatusText $mine>Reservado ✓</SlotStatusText>
+                          </>
+                        ) : slot.isPast ? (
+                          <SlotStatusText>—</SlotStatusText>
+                        ) : slot.taken ? (
+                          <>
+                            <SlotStatusText>{slot.takenBy?.name || "Ocupado"}</SlotStatusText>
+                            <CancelMoonBtn
+                              onClick={() => openCancelMoon(slot.reservationId, slot.takenBy?.name)}
+                              disabled={moonSubmitting}
+                            >
+                              Cancelar
+                            </CancelMoonBtn>
+                          </>
+                        ) : (
+                          <BookBtn
+                            onClick={() => handleAdminMoonReserve(currentMoonDay.date, slot.hour)}
+                            disabled={moonSubmitting}
+                          >
+                            {moonSubmitting ? "…" : "Reservar"}
+                          </BookBtn>
+                        )}
+                      </SlotRight>
+                    </SlotItem>
+                  ))}
+                </SlotGrid>
+              )}
+            </>
+          )}
+
+          {moonMsg && <ErrorBox style={{ marginTop: 10 }}>{moonMsg}</ErrorBox>}
+          {moonSuccess && <SuccessBox>{moonSuccess}</SuccessBox>}
+
+          <Actions style={{ marginTop: 14 }}>
+            <SecondaryButton onClick={closeMoonModal} disabled={moonSubmitting}>Cerrar</SecondaryButton>
+          </Actions>
+        </Modal>
+
+        {/* ---- CANCEL MOON CONFIRMATION ---- */}
+        <Overlay $show={showCancelMoonModal} onClick={() => (!moonSubmitting ? setShowCancelMoonModal(false) : null)} />
+        <Modal $show={showCancelMoonModal} role="dialog" aria-modal="true">
+          <SheetHandle />
+          <ModalTitle>¿Cancelar reserva?</ModalTitle>
+          <ConfirmText>
+            Vas a cancelar la reserva de moonboard de <b>{cancelMoonRes?.userName || "este usuario"}</b>. Esta acción no se puede deshacer.
+          </ConfirmText>
+          <Actions>
+            <Button $variant="danger" onClick={handleAdminCancelMoon} disabled={moonSubmitting}>
+              {moonSubmitting ? "Cancelando..." : "Sí, cancelar reserva"}
+            </Button>
+            <SecondaryButton onClick={() => { setShowCancelMoonModal(false); setCancelMoonRes(null); }} disabled={moonSubmitting}>
+              Volver
+            </SecondaryButton>
+          </Actions>
+        </Modal>
+
         {/* ---- ATTENDANCE MODAL ---- */}
         <Overlay $show={showAttendanceModal} onClick={() => setShowAttendanceModal(false)} />
         <WideModal $show={showAttendanceModal} role="dialog" aria-modal="true">
           <SheetHandle />
           <ModalTitle>📊 Asistencia</ModalTitle>
+
           <PeriodTabs>
             {[
               { key: "today", label: "Hoy" },
               { key: "week", label: "Esta semana" },
               { key: "month", label: "Este mes" },
             ].map(({ key, label }) => (
-              <PeriodTab key={key} $active={attendancePeriod === key} onClick={() => setAttendancePeriod(key)}>
+              <PeriodTab key={key} $active={attendancePeriod === key}
+                onClick={() => { setAttendancePeriod(key); setAttendanceSearch(""); }}>
                 {label}
               </PeriodTab>
             ))}
           </PeriodTabs>
 
-          <StatsGrid>
-            <StatCard>
-              <StatNum>{attendanceData.length}</StatNum>
-              <StatLabel>Personas distintas</StatLabel>
-            </StatCard>
-            <StatCard>
-              <StatNum>{attendanceData.reduce((acc, d) => acc + d.count, 0)}</StatNum>
-              <StatLabel>Visitas totales</StatLabel>
-            </StatCard>
-            <StatCard>
-              <StatNum>
-                {attendanceData.filter((d) => d.user?.accessType === "mensualidad").length}
-              </StatNum>
-              <StatLabel>Con mensualidad</StatLabel>
-            </StatCard>
-          </StatsGrid>
+          {/* Stats pills */}
+          <StatsRow>
+            <StatPill>
+              <StatPillNum>{attendanceData.length}</StatPillNum>
+              <StatPillLabel>Personas<br/>distintas</StatPillLabel>
+            </StatPill>
+            <StatPill>
+              <StatPillNum>{attendanceData.reduce((a, d) => a + d.count, 0)}</StatPillNum>
+              <StatPillLabel>Visitas<br/>totales</StatPillLabel>
+            </StatPill>
+            <StatPill>
+              <StatPillNum>{attendanceData.filter((d) => d.user?.accessType === "mensualidad").length}</StatPillNum>
+              <StatPillLabel>Con<br/>mensualidad</StatPillLabel>
+            </StatPill>
+            <StatPill>
+              <StatPillNum>{attendanceData.filter((d) => d.user?.accessType === "ticketera").length}</StatPillNum>
+              <StatPillLabel>Con<br/>tiquetera</StatPillLabel>
+            </StatPill>
+          </StatsRow>
+
+          {/* Search */}
+          <AttendanceSearchInput
+            placeholder="🔍  Buscar por nombre o email…"
+            value={attendanceSearch}
+            onChange={(e) => setAttendanceSearch(e.target.value)}
+          />
 
           <Divider />
 
-          {attendanceData.length === 0 ? (
-            <EmptyState>
-              <Muted>Sin registros en este período.</Muted>
-            </EmptyState>
-          ) : (
-            <AttendanceList>
-              {attendanceData.map(({ user, count, visits }) => (
-                <AttendanceItem key={user._id}>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 14, color: palette.text }}>
-                      {user.name || "Sin nombre"}
+          {/* Grouped by day */}
+          {(() => {
+            const q = attendanceSearch.trim().toLowerCase();
+
+            // Flatten all visits with user info
+            const allVisits = [];
+            attendanceData.forEach(({ user, visits }) => {
+              visits.forEach((v) => {
+                const ts = v.checkedInAt || v.date;
+                allVisits.push({ user, visit: v, ts });
+              });
+            });
+
+            // Filter by search
+            const filtered = q
+              ? allVisits.filter(({ user }) =>
+                  (user.name || "").toLowerCase().includes(q) ||
+                  (user.email || "").toLowerCase().includes(q)
+                )
+              : allVisits;
+
+            if (filtered.length === 0) {
+              return (
+                <EmptyState>
+                  <Muted>{q ? "Sin resultados para esa búsqueda." : "Sin registros en este período."}</Muted>
+                </EmptyState>
+              );
+            }
+
+            // Group by calendar day key
+            const byDay = {};
+            filtered.forEach((item) => {
+              const d = new Date(item.ts);
+              const key = isNaN(d.getTime()) ? "unknown" :
+                `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+              if (!byDay[key]) byDay[key] = [];
+              byDay[key].push(item);
+            });
+
+            // Sort days descending
+            const sortedDays = Object.keys(byDay).sort((a, b) => b.localeCompare(a));
+
+            return (
+              <div style={{ maxHeight: 380, overflowY: "auto", paddingRight: 2 }}>
+                {sortedDays.map((dayKey) => {
+                  const items = byDay[dayKey];
+                  items.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+                  return (
+                    <DayGroup key={dayKey}>
+                      <DayGroupHeader>
+                        <DayGroupTitle>{formatDayLabel(items[0].ts)}</DayGroupTitle>
+                        <DayGroupCount>{items.length} ingreso{items.length !== 1 ? "s" : ""}</DayGroupCount>
+                      </DayGroupHeader>
+                      {items.map(({ user, ts }, idx) => {
+                        const timeStr = formatCheckinTime(ts);
+                        return (
+                          <AttendanceRow key={`${user._id}-${idx}`}>
+                            <AttendeeInfo>
+                              <AttendeeName>{user.name || "Sin nombre"}</AttendeeName>
+                              <AttendeeEmail>{user.email}</AttendeeEmail>
+                            </AttendeeInfo>
+                            <AttendeeRight>
+                              {timeStr && <CheckinTimeBadge>🕐 {timeStr}</CheckinTimeBadge>}
+                              <AccessTypePill $type={user.accessType}>
+                                {user.accessType === "mensualidad" ? "Mens." : "Tiq."}
+                              </AccessTypePill>
+                            </AttendeeRight>
+                          </AttendanceRow>
+                        );
+                      })}
+                    </DayGroup>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* ---- MOON SECTION inside attendance ---- */}
+          <MoonSectionWrap>
+            <MoonSectionHeader>
+              🌑 Reservas Moonboard — próximos 7 días
+              {moonAttendance.length > 0 && (
+                <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, opacity: 0.85 }}>
+                  {moonAttendance.length} reserva{moonAttendance.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </MoonSectionHeader>
+            {moonAttendance.length === 0 ? (
+              <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.60)" }}>
+                <Muted>Sin reservas activas en los próximos 7 días.</Muted>
+              </div>
+            ) : (
+              <MoonResList>
+                {moonAttendance.map((r) => (
+                  <MoonResItem key={r._id}>
+                    <MoonResLeft>
+                      <MoonResName>{r.userName || r.userEmail}</MoonResName>
+                      <MoonResMeta>
+                        {r.date ? formatTabDate(r.date) : "—"}
+                        {isTodayStr(r.date) ? " · Hoy" : ""} ·{" "}
+                        {String(r.startHour).padStart(2, "0")}:00 – {String(r.startHour + 1).padStart(2, "0")}:30
+                      </MoonResMeta>
+                    </MoonResLeft>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {isTodayStr(r.date) && <MoonBadge>Hoy</MoonBadge>}
+                      <CancelMoonBtn
+                        onClick={() => openCancelMoon(r._id, r.userName)}
+                        disabled={moonSubmitting}
+                      >
+                        Cancelar
+                      </CancelMoonBtn>
                     </div>
-                    <Muted>{user.email}</Muted>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <AccessTypePill $type={user.accessType}>{user.accessType || "ticketera"}</AccessTypePill>
-                    <Badge><b>{count}</b> <Muted>visita{count !== 1 ? "s" : ""}</Muted></Badge>
-                  </div>
-                </AttendanceItem>
-              ))}
-            </AttendanceList>
-          )}
+                  </MoonResItem>
+                ))}
+              </MoonResList>
+            )}
+          </MoonSectionWrap>
 
           <Actions style={{ marginTop: 14 }}>
             <SecondaryButton onClick={() => setShowAttendanceModal(false)}>Cerrar</SecondaryButton>
@@ -2180,10 +2845,7 @@ export default function AdminPage() {
                   <EditInput value={editForm.epsName} onChange={(e) => setEditForm((s) => ({ ...s, epsName: e.target.value }))} />
                 </EditFieldRow>
               ) : (
-                <>
-                  <div>EPS: {viewingUser.epsName || "—"}</div>
-
-                </>
+                <div>EPS: {viewingUser.epsName || "—"}</div>
               )}
 
               {editingProfile && (
@@ -2200,7 +2862,6 @@ export default function AdminPage() {
               {!editingProfile && (
                 <>
                   {editSuccess ? <SuccessBox role="status">{editSuccess}</SuccessBox> : null}
-
                   <Divider />
                   <b>Waiver</b>
                   <div>Estado: <strong>{viewingUser.waiverStatus === "signed" ? "Firmado" : "Pendiente"}</strong></div>
@@ -2222,7 +2883,6 @@ export default function AdminPage() {
                       </LinkButton>
                     </>
                   ) : null}
-
                   <Actions style={{ justifyContent: "flex-end", marginTop: 12 }}>
                     <Button onClick={() => setShowProfileModal(false)} disabled={busy}>Cerrar</Button>
                   </Actions>

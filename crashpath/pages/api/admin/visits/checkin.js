@@ -70,12 +70,10 @@ export default async function handler(req, res) {
   const meta = getReqMeta(req);
   const now = new Date();
 
-  // ✅ Actor aplanado — compatible con VisitEventSchema
   const actorRole = "admin";
   const actorEmail = token.email || null;
   const actorName = token.name || null;
 
-  // ✅ Evento base de check-in — campos alineados con el schema
   const buildCheckinEvent = (extraNotes = "") => ({
     ts: now,
     action: "CHECKIN",
@@ -162,9 +160,10 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: "No visit found for this day", code: "VISIT_NOT_FOUND" });
     }
 
-    // ✅ visitDoc con eventos alineados al schema
+    // FIX: date usa `now` (hora real del check-in) en lugar de range.start
+    // (range.start = T05:00:00Z = medianoche Bogotá, que mostraba "5:00 AM" en el admin)
     const visitDoc = {
-      date: range.start,
+      date: now,
       status: "checked_in",
       createdBy: "admin",
       checkedInAt: now,
