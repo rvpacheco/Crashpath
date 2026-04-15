@@ -491,7 +491,7 @@ export default function Reservas() {
     esMinor: false,
     missingFields: [],
   });
-
+  const [showPublicInfoModal, setShowPublicInfoModal] = useState(false);
   const [message, setMessage] = useState("");
   const [isLoadingUser, setIsLoadingUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -650,6 +650,10 @@ export default function Reservas() {
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#1f1f1f";
   }
+  useEffect(() => {
+    if (session?.isAdmin) return;
+    setShowPublicInfoModal(true);
+  }, [session]);
 
   useEffect(() => {
     if (showWaiverModal) {
@@ -920,7 +924,7 @@ export default function Reservas() {
               Inicia sesión con Google para: <strong>firmar el waiver</strong>, completar tus <strong>datos de emergencia</strong> y registrar tus visitas.
             </p>
             <p>
-              Horario: <strong>3:00 PM – 10:00 PM</strong>. Mañanas: coordinación por WhatsApp.
+              Horario: <strong>3:00 PM – 9:00 PM</strong>. Mañanas: coordinación por WhatsApp.
             </p>
             <SmallNote>Login con Google = fácil para ti y fácil para nosotros 😄</SmallNote>
           </Body>
@@ -961,7 +965,7 @@ export default function Reservas() {
             )}
             <Chip>
               <span>Horario:</span>
-              <strong>3pm–10pm</strong>
+              <strong>3pm–9pm</strong>
             </Chip>
             <Chip>
               <span>Mañanas:</span>
@@ -1239,6 +1243,38 @@ export default function Reservas() {
               <NeutralModalBtn onClick={() => setShowProfileModal(false)} disabled={isSubmitting}>
                 LUEGO
               </NeutralModalBtn>
+            </FrogRow>
+          </FrogCard>
+        </ModalOverlay>
+      )}
+      {showPublicInfoModal && (
+        <ModalOverlay>
+          <FrogCard>
+            <FrogClose onClick={() => setShowPublicInfoModal(false)}>×</FrogClose>
+            <FrogImg src="/gecko.png" alt="Gecko" />
+            <FrogSub>Información importante</FrogSub>
+            <FrogBrush>CrashPath</FrogBrush>
+
+            <FrogBody>
+              <p style={{ margin: 0 }}>
+                Buen día de parte del equipo de CrashPath. Ya no se harán reservas del
+                gimnasio desde aquí, ya que ahora estamos siempre abiertos de{" "}
+                <strong>3:00 PM a 9:00 PM</strong>, así que puedes pasar por el gimnasio
+                en ese horario.
+                <br />
+                <br />
+                Ahora la finalidad de esta app es:
+                <br />
+                <strong>• Reservar si quieres usar la MoonBoard dentro del gym</strong>
+                <br />
+                <strong>• Agregar tu check-in al gimnasio</strong>
+              </p>
+            </FrogBody>
+
+            <FrogRow>
+              <PublicBtn onClick={() => setShowPublicInfoModal(false)}>
+                ENTENDIDO
+              </PublicBtn>
             </FrogRow>
           </FrogCard>
         </ModalOverlay>
