@@ -9,44 +9,66 @@ import Link from "next/link";
 import { getWaiverSnapshot } from "@/lib/waiver";
 import MoonSection from "@/components/MoonSection";
 
+// ============================================
+// PALETA SIMPLIFICADA - Solo naranja + azul rey
+// ============================================
+const colors = {
+  // Color principal - Naranja (tu identidad)
+  orange: "#9A4A23",
+  orangeDark: "#7A3A1C",
+  orangeLight: "#FDF1E7",
+  
+  // Azul rey único (reemplaza todos los azules)
+  royalBlue: "#1E3A5F",
+  royalBlueLight: "#E8EEF5",
+  royalBlueDark: "#142A45",
+  
+  // Neutros
+  white: "#FFFFFF",
+  grayLight: "#F5F5F5",
+  gray: "#E0E0E0",
+  grayDark: "#757575",
+  text: "#1A1A1A",
+  textLight: "#6B6B6B",
+  success: "#2E7D32",
+  danger: "#C62828",
+};
 
+// ============================================
+// COMPONENTES ESTILIZADOS
+// ============================================
 const Container = styled.main`
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 24px 16px;
+  
 `;
 
 const Card = styled.section`
   width: 100%;
-  max-width: 380px;
+  max-width: 420px;
   text-align: center;
   display: grid;
-  gap: 14px;
+  gap: 16px;
+  background: ${colors.white};
+  border-radius: 16px;
+  padding: 24px 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 `;
 
 const WelcomeRow = styled.h1`
   margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #1e1e1e;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: ${colors.text};
 `;
 
 const BrushName = styled.span`
   font-family: var(--font-brush);
-  color: #9a4a23;
+  color: ${colors.orange};
   text-transform: none;
-`;
-
-const Credits = styled.p`
-  margin: 0;
-  font-size: 13.5px;
-  color: #1f1f1f;
-  strong {
-    color: #9a4a23;
-  }
 `;
 
 const BrushTitle = styled.h2`
@@ -54,13 +76,13 @@ const BrushTitle = styled.h2`
   font-size: 28px;
   line-height: 1.1;
   margin: 0;
-  color: #9a4a23;
+  color: ${colors.orange};
   text-transform: uppercase;
   letter-spacing: 0.02em;
 `;
 
 const Body = styled.div`
-  color: #2c2c2c;
+  color: ${colors.text};
   font-size: 14px;
   line-height: 1.55;
   margin-top: 4px;
@@ -75,70 +97,84 @@ const Body = styled.div`
 const SmallNote = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #3a3a3a;
+  color: ${colors.textLight};
 `;
 
 const SectionTitle = styled.p`
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   font-size: 13px;
-  color: #2b2b2b;
-  font-weight: 700;
+  color: ${colors.text};
+  font-weight: 600;
 `;
 
+// Botón principal - Naranja
 const PrimaryBtn = styled.button`
   width: 100%;
-  border: 0;
-  border-radius: 10px;
-  height: 44px;
-  background: #9a4a23;
-  color: #fff;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  border: none;
+  border-radius: 8px;
+  height: 48px;
+  background: ${colors.orange};
+  color: ${colors.white};
+  font-weight: 700;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
-  transition: transform 0.02s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  transition: all 0.2s ease;
 
+  &:hover {
+    background: ${colors.orangeDark};
+  }
   &:active {
     transform: translateY(1px);
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
   }
   &:disabled {
-    background: #d3d3d3;
+    background: ${colors.gray};
     cursor: not-allowed;
   }
 `;
 
+// Botón secundario - Azul rey
 const SecondaryBtn = styled(PrimaryBtn)`
-  background: #2f6f7a;
-  letter-spacing: 0.02em;
+  background: ${colors.royalBlue};
+  
+  &:hover {
+    background: ${colors.royalBlueDark};
+  }
 `;
 
-const NeutralBtn = styled(PrimaryBtn)`
-  background: #7aaab0;
-  color: #0f2b30;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+// Botón terciario - Outline
+const TertiaryBtn = styled(PrimaryBtn)`
+  background: transparent;
+  color: ${colors.royalBlue};
+  border: 1px solid ${colors.royalBlue};
+  
+  &:hover {
+    background: ${colors.royalBlueLight};
+  }
 `;
 
 const Logout = styled.button`
   width: 100%;
   max-width: 220px;
-  margin: 6px auto 0;
-  border: 0;
-  border-radius: 10px;
+  margin: 8px auto 0;
+  border: none;
+  border-radius: 8px;
   height: 40px;
-  background: #9bbfd0;
-  color: #0f2b30;
-  font-weight: 700;
+  background: transparent;
+  color: ${colors.textLight};
+  font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: ${colors.danger};
+  }
 `;
 
 const FooterLink = styled(Link)`
   display: inline-block;
   margin-top: 8px;
-  font-size: 12.5px;
-  color: #2b8dfc;
+  font-size: 12px;
+  color: ${colors.royalBlue};
   text-decoration: underline;
 `;
 
@@ -153,39 +189,67 @@ const Chip = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 999px;
-  padding: 6px 10px;
+  border-radius: 8px;
+  padding: 6px 12px;
   font-size: 12px;
-  font-weight: 700;
-  border: 1px solid #e7e7e7;
-  background: #fff;
-  color: #1f1f1f;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  font-weight: 500;
+  border: 1px solid ${colors.gray};
+  background: ${colors.white};
+  color: ${colors.text};
 `;
 
 const Badge = styled.span`
   font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: ${(p) => p.$bg || "#9a4a23"};
-  color: #fff;
-  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: ${(p) => p.$bg || colors.orange};
+  color: ${colors.white};
+  font-weight: 600;
+`;
+
+const PlanBox = styled.div`
+  border-radius: 12px;
+  padding: 14px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  border: 1px solid ${(p) => (p.$warn ? colors.orange : colors.royalBlue)};
+  background: ${(p) => (p.$warn ? colors.orangeLight : colors.royalBlueLight)};
+`;
+
+const PlanTitle = styled.div`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${(p) => (p.$warn ? colors.orange : colors.royalBlue)};
+`;
+
+const PlanDetail = styled.div`
+  font-size: 12.5px;
+  color: ${colors.text};
+`;
+
+const PlanLink = styled.a`
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${colors.orange};
+  text-decoration: underline;
+  cursor: pointer;
 `;
 
 const ResList = styled.ul`
   list-style: none;
   padding: 0;
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   display: grid;
   gap: 8px;
 `;
 
 const ResItem = styled.li`
-  background: #fff;
-  border: 1px solid #e7e7e7;
-  border-radius: 10px;
+  background: ${colors.white};
+  border: 1px solid ${colors.gray};
+  border-radius: 8px;
   padding: 10px 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -194,17 +258,18 @@ const ResItem = styled.li`
 
 const ResTitle = styled.span`
   font-size: 13.5px;
-  color: #1f1f1f;
-  font-weight: 700;
+  color: ${colors.text};
+  font-weight: 600;
 `;
 
 const ResMeta = styled.span`
   display: block;
-  font-size: 12.5px;
-  color: #6b6b6b;
+  font-size: 12px;
+  color: ${colors.textLight};
   margin-top: 2px;
 `;
 
+// Modal styles - Manteniendo el gecko!
 const ModalOverlay = styled.div`
   position: fixed;
   inset: 0;
@@ -218,11 +283,11 @@ const ModalOverlay = styled.div`
 
 const FrogCard = styled.div`
   position: relative;
-  background: #fff;
+  background: ${colors.white};
   width: 100%;
-  max-width: 420px;
-  border-radius: 16px;
-  padding: 64px 18px 20px;
+  max-width: 440px;
+  border-radius: 20px;
+  padding: 64px 20px 24px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
   text-align: center;
 `;
@@ -231,8 +296,8 @@ const FrogImg = styled.img`
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  top: -95px;
-  width: 140px;
+  top: -55px;
+  width: 100px;
   height: auto;
 `;
 
@@ -240,33 +305,37 @@ const FrogClose = styled.button`
   position: absolute;
   right: 14px;
   top: 12px;
-  border: 0;
+  border: none;
   background: transparent;
-  font-size: 22px;
-  color: #9a4a23;
+  font-size: 24px;
+  color: ${colors.textLight};
   cursor: pointer;
+  
+  &:hover {
+    color: ${colors.orange};
+  }
 `;
 
 const FrogSub = styled.p`
-  margin: 0 0 6px;
-  font-size: 13.5px;
-  color: #5a5a5a;
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: ${colors.textLight};
 `;
 
 const FrogBrush = styled.h3`
   font-family: var(--font-brush);
-  margin: 2px 0 12px;
-  font-size: 30px;
+  margin: 2px 0 16px;
+  font-size: 28px;
   letter-spacing: 0.02em;
-  color: #9a4a23;
+  color: ${colors.orange};
   text-transform: uppercase;
 `;
 
 const FrogBody = styled.div`
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   font-size: 13.5px;
   line-height: 1.5;
-  color: #3a3a3a;
+  color: ${colors.text};
   text-align: left;
 `;
 
@@ -277,42 +346,34 @@ const FrogRow = styled.div`
   flex-wrap: wrap;
 `;
 
-const PublicBtn = styled.button`
-  border: 0;
-  border-radius: 12px;
-  padding: 12px 18px;
-  font-weight: 800;
+const ModalBtn = styled.button`
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
-  color: #fff;
-  background: #9a4a23;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
-  transition: transform 0.02s ease, box-shadow 0.2s ease, filter 0.2s ease;
-
-  &:active {
-    transform: translateY(1px);
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
-  }
-  &:hover {
-    filter: brightness(0.98);
-  }
-  &:disabled {
-    background: #d3d3d3;
-    cursor: not-allowed;
-  }
-  min-width: 140px;
-`;
-
-const NeutralModalBtn = styled(PublicBtn)`
-  background: #7aaab0;
-  color: #0f2b30;
-  font-weight: 700;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  
+  ${(props) => props.$primary && `
+    background: ${colors.orange};
+    color: ${colors.white};
+    &:hover { background: ${colors.orangeDark}; }
+  `}
+  
+  ${(props) => props.$secondary && `
+    background: transparent;
+    color: ${colors.text};
+    border: 1px solid ${colors.gray};
+    &:hover { background: ${colors.grayLight}; }
+  `}
 `;
 
 const Form = styled.div`
   display: grid;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 12px;
 `;
 
 const Field = styled.div`
@@ -323,32 +384,52 @@ const Field = styled.div`
 
 const Label = styled.label`
   font-size: 12px;
-  font-weight: 800;
-  color: #1f1f1f;
+  font-weight: 600;
+  color: ${colors.text};
 `;
 
 const Input = styled.input`
-  height: 42px;
-  border-radius: 10px;
-  border: 1px solid #e7e7e7;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid ${colors.gray};
   padding: 0 12px;
   font-size: 14px;
   outline: none;
+  
+  &:focus {
+    border-color: ${colors.orange};
+  }
+`;
+
+const Select = styled.select`
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid ${colors.gray};
+  padding: 0 12px;
+  font-size: 14px;
+  outline: none;
+  background: ${colors.white};
+  
+  &:focus {
+    border-color: ${colors.orange};
+  }
 `;
 
 const Helper = styled.p`
   margin: 0;
   font-size: 12px;
-  color: #6b6b6b;
+  color: ${colors.textLight};
 `;
 
 const WaiverBox = styled.div`
-  border: 1px solid #e7e7e7;
-  border-radius: 12px;
-  padding: 10px;
-  background: #fff;
-  max-height: 220px;
+  border: 1px solid ${colors.gray};
+  border-radius: 8px;
+  padding: 12px;
+  background: ${colors.grayLight};
+  max-height: 240px;
   overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
 `;
 
 const CheckboxRow = styled.label`
@@ -357,22 +438,25 @@ const CheckboxRow = styled.label`
   align-items: flex-start;
   text-align: left;
   font-size: 12.5px;
-  color: #2c2c2c;
+  color: ${colors.text};
   line-height: 1.35;
+  margin: 12px 0;
+  cursor: pointer;
 `;
 
 const SigWrap = styled.div`
-  margin-top: 10px;
+  margin-top: 12px;
   text-align: left;
 `;
 
 const SigCanvas = styled.canvas`
   width: 100%;
   height: 140px;
-  border-radius: 12px;
-  border: 1px dashed #bfbfbf;
-  background: #fafafa;
+  border-radius: 8px;
+  border: 1px dashed ${colors.gray};
+  background: ${colors.white};
   touch-action: none;
+  margin-top: 8px;
 `;
 
 const SigRow = styled.div`
@@ -380,29 +464,34 @@ const SigRow = styled.div`
   gap: 10px;
   margin-top: 8px;
   justify-content: space-between;
+  align-items: center;
 `;
 
 const TinyBtn = styled.button`
-  border: 0;
-  background: #eaeaea;
-  border-radius: 10px;
-  padding: 10px 12px;
+  border: none;
+  background: ${colors.grayLight};
+  border-radius: 6px;
+  padding: 8px 12px;
   cursor: pointer;
-  font-weight: 800;
-  color: #1f1f1f;
+  font-weight: 600;
+  font-size: 12px;
+  color: ${colors.text};
+  
+  &:hover {
+    background: ${colors.gray};
+  }
 `;
 
-const Select = styled.select`
-  height: 42px;
-  border-radius: 10px;
-  border: 1px solid #e7e7e7;
-  padding: 0 12px;
-  font-size: 14px;
-  outline: none;
-  background: #fff;
+const Divider = styled.hr`
+  border: none;
+  border-top: 1px solid ${colors.gray};
+  margin: 8px 0;
 `;
 
-const WHATSAPP_URL = "https://wa.me/57XXXXXXXXXX";
+// ============================================
+// HELPERS (mantener igual)
+// ============================================
+const WHATSAPP_URL = "https://wa.me/573208608016";
 
 function safeArray(v) {
   return Array.isArray(v) ? v : [];
@@ -439,11 +528,11 @@ function visitLabel(v) {
 
 function visitBadgeColor(v) {
   const status = (v?.status || "").toLowerCase();
-  if (status === "checked_in" || status === "checked-in") return "#2f6f7a";
-  if (status === "registered") return "#9a4a23";
-  if (status === "no_show" || status === "noshow") return "#6b6b6b";
-  if (status === "cancelled") return "#b5632e";
-  return "#9a4a23";
+  if (status === "checked_in" || status === "checked-in") return colors.success;
+  if (status === "registered") return colors.orange;
+  if (status === "no_show" || status === "noshow") return colors.textLight;
+  if (status === "cancelled") return colors.danger;
+  return colors.orange;
 }
 
 function isProfileComplete(u) {
@@ -457,17 +546,21 @@ function isProfileComplete(u) {
 }
 
 function getMensualidadStatus(mensualidad) {
-  if (!mensualidad?.endDate) return { active: false, label: "Sin mensualidad", days: null };
+  if (!mensualidad?.endDate)
+    return { active: false, label: "Sin mensualidad", days: null };
   const now = new Date();
   const end = new Date(mensualidad.endDate);
   const active = end > now;
   const days = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
   const label = active
-    ? `Activa · vence ${end.toLocaleDateString("es-CO")}`
-    : `Vencida ${end.toLocaleDateString("es-CO")}`;
+    ? `Vence el ${end.toLocaleDateString("es-CO")}`
+    : `Venció el ${end.toLocaleDateString("es-CO")}`;
   return { active, label, days };
 }
 
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 export default function Reservas() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -495,17 +588,19 @@ export default function Reservas() {
   const [message, setMessage] = useState("");
   const [isLoadingUser, setIsLoadingUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showWaiverModal, setShowWaiverModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showConfirmRegister, setShowConfirmRegister] = useState(false);
+  const [showConfirmCheckIn, setShowConfirmCheckIn] = useState(false);
 
   const [waiverAccepted, setWaiverAccepted] = useState(false);
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
   const hasInkRef = useRef(false);
   const lastPointRef = useRef({ x: 0, y: 0 });
+  const infoModalShownRef = useRef(false);
 
   const [documentType, setDocumentType] = useState("CC");
   const [documentNumber, setDocumentNumber] = useState("");
@@ -515,7 +610,8 @@ export default function Reservas() {
   const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
 
   const waiverSigned = userData?.waiverStatus === "signed";
-  const profileComplete = userData?.profileStatus === "complete" || isProfileComplete(userData);
+  const profileComplete =
+    userData?.profileStatus === "complete" || isProfileComplete(userData);
 
   const visits = useMemo(() => safeArray(userData?.visits), [userData?.visits]);
 
@@ -532,19 +628,55 @@ export default function Reservas() {
   }, [visits]);
 
   const accessType = (userData?.accessType || "ticketera").toLowerCase();
-  const mensualidadInfo = useMemo(() => getMensualidadStatus(userData?.mensualidad), [userData?.mensualidad]);
-  const [showAccessModal, setShowAccessModal] = useState(false);
-  const [accessTypeChoice, setAccessTypeChoice] = useState("ticketera");
+  const credits = userData?.credits ?? 0;
+  const mensualidadInfo = useMemo(
+    () => getMensualidadStatus(userData?.mensualidad),
+    [userData?.mensualidad]
+  );
 
-  const canRegister = useMemo(() => {
+  const plan = useMemo(() => {
+    if (accessType === "mensualidad") {
+      if (!mensualidadInfo.active) {
+        return {
+          warn: true,
+          title: "Mensualidad vencida",
+          detail: mensualidadInfo.label,
+        };
+      }
+      if (mensualidadInfo.days != null && mensualidadInfo.days <= 5) {
+        return {
+          warn: true,
+          title: "Mensualidad por vencer",
+          detail: `${mensualidadInfo.label} · quedan ${mensualidadInfo.days} día(s)`,
+        };
+      }
+      return {
+        warn: false,
+        title: "Mensualidad activa",
+        detail: mensualidadInfo.label,
+      };
+    }
+    if (credits < 1) {
+      return {
+        warn: true,
+        title: "No tienes créditos",
+        detail: "Escríbenos para recargar tu tiquetera.",
+      };
+    }
+    return {
+      warn: false,
+      title: `Tienes ${credits} crédito(s)`,
+      detail: "Disponibles para entrenar.",
+    };
+  }, [accessType, credits, mensualidadInfo]);
+
+  const canCheckIn = useMemo(() => {
     if (!session) return false;
     if (!waiverSigned) return false;
     if (!profileComplete) return false;
     if (todaysVisit) return false;
-
-    if (accessType === "mensualidad") return !!mensualidadInfo.active;
-    return (userData?.credits ?? 0) >= 1;
-  }, [session, waiverSigned, profileComplete, todaysVisit, accessType, mensualidadInfo.active, userData?.credits]);
+    return true;
+  }, [session, waiverSigned, profileComplete, todaysVisit]);
 
   async function refreshUser({ autoOpenGates = false } = {}) {
     if (!session) return;
@@ -564,6 +696,7 @@ export default function Reservas() {
         waiverStatus: u?.waiverStatus || prev.waiverStatus,
         profileStatus: u?.profileStatus || prev.profileStatus,
       }));
+      setLoaded(true);
 
       setDocumentType(u?.documentType || "CC");
       setDocumentNumber(u?.documentNumber || "");
@@ -573,10 +706,7 @@ export default function Reservas() {
       setEmergencyContactPhone(u?.emergencyContactPhone || "");
 
       if (autoOpenGates) {
-        // Gate 0: elegir modalidad
-        if (!u?.accessType) {
-          setShowAccessModal(true);
-        } else if (u?.waiverStatus !== "signed") {
+        if (u?.waiverStatus !== "signed") {
           setShowWaiverModal(true);
         } else if (!(u?.profileStatus === "complete" || isProfileComplete(u))) {
           setShowProfileModal(true);
@@ -598,36 +728,24 @@ export default function Reservas() {
     }
 
     refreshUser({ autoOpenGates: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, router]);
 
-  const handleSignIn = () => setShowLoginModal(true);
-  const handleAcceptLogin = () => {
-    setShowLoginModal(false);
-    signIn("google");
-  };
-  const handleRejectLogin = () => setShowLoginModal(false);
+  useEffect(() => {
+    if (infoModalShownRef.current) return;
+    if (session?.isAdmin) return;
+    if (showWaiverModal || showProfileModal) return;
+    if (session && (!waiverSigned || !profileComplete)) return;
 
+    infoModalShownRef.current = true;
+    setShowPublicInfoModal(true);
+  }, [session, showWaiverModal, showProfileModal, waiverSigned, profileComplete]);
+
+  // Canvas signature functions
   function getCanvasCtx() {
     const c = canvasRef.current;
     if (!c) return null;
     return c.getContext("2d");
   }
-  const handleSaveAccessType = async () => {
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    setMessage("");
-
-    try {
-      await axios.post("/api/user/set-access", { accessType: accessTypeChoice });
-      setShowAccessModal(false);
-      await refreshUser({ autoOpenGates: true }); // sigue con waiver/perfil
-    } catch (e) {
-      setMessage(e?.response?.data?.message || "Error guardando modalidad.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   function resizeCanvasToDevicePixels() {
     const c = canvasRef.current;
@@ -644,16 +762,11 @@ export default function Reservas() {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
-
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "#1f1f1f";
+    ctx.strokeStyle = colors.text;
   }
-  useEffect(() => {
-    if (session?.isAdmin) return;
-    setShowPublicInfoModal(true);
-  }, [session]);
 
   useEffect(() => {
     if (showWaiverModal) {
@@ -662,7 +775,6 @@ export default function Reservas() {
         clearSignature();
       }, 0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showWaiverModal]);
 
   function getLocalPos(e) {
@@ -670,7 +782,8 @@ export default function Reservas() {
     if (!c) return { x: 0, y: 0 };
     const rect = c.getBoundingClientRect();
 
-    if (e?.clientX != null) return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    if (e?.clientX != null)
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     const t = e?.touches?.[0] || e?.changedTouches?.[0];
     if (t) return { x: t.clientX - rect.left, y: t.clientY - rect.top };
 
@@ -708,8 +821,8 @@ export default function Reservas() {
     const c = canvasRef.current;
     const ctx = getCanvasCtx();
     if (!c || !ctx) return;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, c.width, c.height);
+    const rect = c.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
     hasInkRef.current = false;
   }
 
@@ -787,7 +900,9 @@ export default function Reservas() {
     const ecp = (emergencyContactPhone || "").trim();
 
     if (!dt || !dn || !p || !eps || !ecn || !ecp) {
-      setMessage("Completa: tipo y número de documento, teléfono, EPS y datos de emergencia.");
+      setMessage(
+        "Completa: tipo y número de documento, teléfono, EPS y datos de emergencia."
+      );
       return;
     }
 
@@ -804,7 +919,7 @@ export default function Reservas() {
       });
       setShowProfileModal(false);
       await refreshUser();
-      setMessage("✅ Datos guardados. Ya puedes registrar tu visita.");
+      setMessage("✅ Datos guardados. Ya puedes registrar tu check-in.");
     } catch (e) {
       setMessage(e?.response?.data?.message || "Error guardando tu perfil.");
     } finally {
@@ -812,33 +927,29 @@ export default function Reservas() {
     }
   };
 
-  const handleRegisterVisit = async () => {
+  const handleCheckIn = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     setMessage("");
     try {
       const res = await axios.post("/api/visits/register", {});
       await refreshUser();
-      setMessage(res?.data?.message || "✅ Visita registrada");
-      setShowConfirmRegister(false);
+      setMessage(res?.data?.message || "✅ Check-in registrado");
+      setShowConfirmCheckIn(false);
     } catch (e) {
       const code = e?.response?.data?.code;
-      const msg = e?.response?.data?.message || "Error registrando visita.";
+      const msg = e?.response?.data?.message || "Error registrando check-in.";
 
       if (code === "WAIVER_REQUIRED") {
-        setMessage("⚠️ Debes firmar el waiver antes de registrar tu visita.");
-        setShowConfirmRegister(false);
+        setMessage("⚠️ Debes firmar el waiver antes de hacer check-in.");
+        setShowConfirmCheckIn(false);
         setShowWaiverModal(true);
       } else if (code === "PROFILE_INCOMPLETE") {
-        setMessage("⚠️ Completa tus datos antes de registrar tu visita.");
-        setShowConfirmRegister(false);
+        setMessage("⚠️ Completa tus datos antes de hacer check-in.");
+        setShowConfirmCheckIn(false);
         setShowProfileModal(true);
-      } else if (code === "INSUFFICIENT_CREDITS") {
-        setMessage("⚠️ No tienes créditos disponibles.");
-      } else if (code === "MENSUALIDAD_EXPIRED") {
-        setMessage("⚠️ Tu mensualidad está vencida. Escríbenos para renovarla.");
       } else if (code === "VISIT_ALREADY_EXISTS") {
-        setMessage("ℹ️ Ya tienes una visita registrada hoy.");
+        setMessage("ℹ️ Ya hiciste check-in hoy.");
       } else {
         setMessage(msg);
       }
@@ -849,11 +960,15 @@ export default function Reservas() {
 
   const topStatus = useMemo(() => {
     if (!session) return null;
-    if (isLoadingUser) return { label: "Cargando…", bg: "#6b6b6b" };
-    if (!waiverSigned) return { label: "Waiver pendiente", bg: "#b5632e" };
-    if (!profileComplete) return { label: "Perfil incompleto", bg: "#b5632e" };
-    if (todaysVisit) return { label: `Hoy: ${visitLabel(todaysVisit)}`, bg: visitBadgeColor(todaysVisit) };
-    return { label: "Hoy: sin registrar", bg: "#6b6b6b" };
+    if (isLoadingUser) return { label: "Cargando…", bg: colors.grayDark };
+    if (!waiverSigned) return { label: "Waiver pendiente", bg: colors.danger };
+    if (!profileComplete) return { label: "Perfil incompleto", bg: colors.danger };
+    if (todaysVisit)
+      return {
+        label: `Hoy: ${visitLabel(todaysVisit)}`,
+        bg: visitBadgeColor(todaysVisit),
+      };
+    return { label: "Hoy: sin check-in", bg: colors.grayDark };
   }, [session, isLoadingUser, waiverSigned, profileComplete, todaysVisit]);
 
   const lastVisits = useMemo(() => {
@@ -868,46 +983,29 @@ export default function Reservas() {
   const gateText = useMemo(() => {
     if (!session) return "";
     if (!waiverSigned) return "Primero firma el waiver (checkbox + firma).";
-    if (!profileComplete) return "Luego completa tus datos (documento + EPS + emergencia + teléfono).";
-    if (accessType === "mensualidad") {
-      return mensualidadInfo.active
-        ? "Listo: puedes registrar tu visita."
-        : "Tu mensualidad está vencida. Escríbenos por WhatsApp para renovarla.";
-    }
-    return "Listo: puedes registrar tu visita.";
-  }, [session, waiverSigned, profileComplete, accessType, mensualidadInfo.active]);
+    if (!profileComplete)
+      return "Luego completa tus datos (documento + EPS + emergencia + teléfono).";
+    return "Listo: marca tu check-in y reserva la MoonBoard si la vas a usar.";
+  }, [session, waiverSigned, profileComplete]);
 
-  const accessChip = useMemo(() => {
-    if (!session) return null;
-
-    if (accessType === "mensualidad") {
-      return {
-        label: `Mensualidad · ${mensualidadInfo.label}`,
-        bg: mensualidadInfo.active ? "#2f6f7a" : "#b5632e",
-      };
-    }
-    const c = userData?.credits ?? 0;
-    return {
-      label: `Tiquetera · ${c} crédito(s)`,
-      bg: c >= 1 ? "#2f6f7a" : "#b5632e",
-    };
-  }, [session, accessType, mensualidadInfo, userData?.credits]);
-
-  const registerButtonTitle = useMemo(() => {
-    if (todaysVisit) return "Ya tienes una visita registrada hoy";
+  const checkInButtonTitle = useMemo(() => {
+    if (todaysVisit) return "Ya hiciste check-in hoy";
     if (!waiverSigned) return "Debes firmar el waiver";
     if (!profileComplete) return "Completa tus datos";
-    if (accessType === "mensualidad") {
-      return mensualidadInfo.active ? "" : "Mensualidad vencida";
-    }
-    return (userData?.credits ?? 0) < 1 ? "No tienes créditos" : "";
-  }, [todaysVisit, waiverSigned, profileComplete, accessType, mensualidadInfo.active, userData?.credits]);
+    return "";
+  }, [todaysVisit, waiverSigned, profileComplete]);
 
-  const registerButtonText = useMemo(() => {
-    if (todaysVisit) return "VISITA DE HOY YA REGISTRADA";
-    if (accessType === "mensualidad") return "REGISTRAR VISITA";
-    return "REGISTRAR VISITA (1 CRÉDITO)";
-  }, [todaysVisit, accessType]);
+  const checkInButtonText = useMemo(() => {
+    if (todaysVisit) return "CHECK-IN DE HOY YA REGISTRADO";
+    return "REGISTRAR CHECK-IN";
+  }, [todaysVisit]);
+
+  const handleSignIn = () => setShowLoginModal(true);
+  const handleAcceptLogin = () => {
+    setShowLoginModal(false);
+    signIn("google");
+  };
+  const handleRejectLogin = () => setShowLoginModal(false);
 
   return (
     <Container>
@@ -918,23 +1016,38 @@ export default function Reservas() {
 
           <Body>
             <p>
-              <strong>CrashPath</strong> es un gimnasio de escalada y entrenamiento en Bucaramanga.
+              <strong>CrashPath</strong> es un gimnasio de escalada y
+              entrenamiento en Bucaramanga.
             </p>
             <p>
-              Inicia sesión con Google para: <strong>firmar el waiver</strong>, completar tus <strong>datos de emergencia</strong> y registrar tus visitas.
+              Inicia sesión con Google para: <strong>firmar el waiver</strong>,
+              completar tus <strong>datos de emergencia</strong> y reservar la
+              MoonBoard.
             </p>
             <p>
-              Horario: <strong>3:00 PM – 9:00 PM</strong>. Mañanas: coordinación por WhatsApp.
+              Horario: <strong>3:00 PM – 9:00 PM</strong>. Mañanas: coordinación
+              por WhatsApp.
             </p>
-            <SmallNote>Login con Google = fácil para ti y fácil para nosotros 😄</SmallNote>
+            <SmallNote>
+              Login con Google = fácil para ti y fácil para nosotros 😄
+            </SmallNote>
           </Body>
 
-          <PrimaryBtn onClick={handleSignIn}>INICIA SESIÓN CON GOOGLE</PrimaryBtn>
-          <SecondaryBtn as="a" href={WHATSAPP_URL}>
+          <PrimaryBtn onClick={handleSignIn}>
+            INICIA SESIÓN CON GOOGLE
+          </PrimaryBtn>
+          <SecondaryBtn
+            as="a"
+            href={WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             WHATSAPP (MAÑANAS)
           </SecondaryBtn>
 
-          <FooterLink href="/privacy">Conoce nuestra política de privacidad</FooterLink>
+          <FooterLink href="/privacy">
+            Conoce nuestra política de privacidad
+          </FooterLink>
         </Card>
       ) : (
         <Card>
@@ -942,14 +1055,20 @@ export default function Reservas() {
             Bienvenid@, <BrushName>{session.user?.name}</BrushName>
           </WelcomeRow>
 
-          {accessType === "mensualidad" ? (
-            <Credits>
-              Acceso por <strong>mensualidad</strong>
-            </Credits>
-          ) : (
-            <Credits>
-              Tienes <strong>{userData?.credits ?? 0}</strong> crédito(s) disponible(s)
-            </Credits>
+          {loaded && (
+            <PlanBox $warn={plan.warn}>
+              <PlanTitle $warn={plan.warn}>{plan.title}</PlanTitle>
+              <PlanDetail>{plan.detail}</PlanDetail>
+              {plan.warn && (
+                <PlanLink
+                  href={WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Recargar / renovar por WhatsApp →
+                </PlanLink>
+              )}
+            </PlanBox>
           )}
 
           <ChipRow>
@@ -958,18 +1077,18 @@ export default function Reservas() {
                 <Badge $bg={topStatus.bg}>{topStatus.label}</Badge>
               </Chip>
             )}
-            {accessChip && (
-              <Chip>
-                <Badge $bg={accessChip.bg}>{accessChip.label}</Badge>
-              </Chip>
-            )}
             <Chip>
               <span>Horario:</span>
               <strong>3pm–9pm</strong>
             </Chip>
             <Chip>
               <span>Mañanas:</span>
-              <a href={WHATSAPP_URL} style={{ textDecoration: "underline", fontWeight: 800 }}>
+              <a
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ textDecoration: "underline", fontWeight: 600 }}
+              >
                 WhatsApp
               </a>
             </Chip>
@@ -981,53 +1100,74 @@ export default function Reservas() {
 
           {!waiverSigned ? (
             <>
-              <PrimaryBtn onClick={handleOpenWaiver} disabled={isSubmitting || isLoadingUser}>
+              <PrimaryBtn
+                onClick={handleOpenWaiver}
+                disabled={isSubmitting || isLoadingUser}
+              >
                 ABRIR WAIVER Y FIRMAR
               </PrimaryBtn>
-              <NeutralBtn as="a" href={WHATSAPP_URL}>
+              <TertiaryBtn
+                as="a"
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 ¿Dudas? Escríbenos
-              </NeutralBtn>
+              </TertiaryBtn>
             </>
           ) : !profileComplete ? (
             <>
-              <PrimaryBtn onClick={openProfile} disabled={isSubmitting || isLoadingUser}>
+              <PrimaryBtn
+                onClick={openProfile}
+                disabled={isSubmitting || isLoadingUser}
+              >
                 COMPLETAR DATOS (EPS + EMERGENCIA)
               </PrimaryBtn>
-              <NeutralBtn as="a" href={WHATSAPP_URL}>
+              <TertiaryBtn
+                as="a"
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 ¿No sabes tu EPS? Escríbenos
-              </NeutralBtn>
+              </TertiaryBtn>
             </>
           ) : (
             <>
               <Body>
                 <p>
-                  {accessType === "mensualidad" ? (
-                    <>
-                      Tu acceso es por <strong>mensualidad</strong>. Registra tu visita para llevar el control.
-                    </>
-                  ) : (
-                    <>
-                      Registrar visita descuenta <strong>1 crédito</strong>.
-                    </>
-                  )}
+                  El check-in solo marca tu asistencia de hoy.{" "}
+                  <strong>No descuenta nada.</strong>
                 </p>
               </Body>
 
               <PrimaryBtn
-                onClick={() => setShowConfirmRegister(true)}
-                disabled={!canRegister || isSubmitting || isLoadingUser}
-                title={registerButtonTitle}
+                onClick={() => setShowConfirmCheckIn(true)}
+                disabled={!canCheckIn || isSubmitting || isLoadingUser}
+                title={checkInButtonTitle}
               >
-                {registerButtonText}
+                {checkInButtonText}
               </PrimaryBtn>
 
-              <SecondaryBtn as="a" href={WHATSAPP_URL}>
+              <SecondaryBtn
+                as="a"
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 WHATSAPP (MAÑANAS)
               </SecondaryBtn>
             </>
           )}
 
-          <SectionTitle>Tu historial (últimas visitas)</SectionTitle>
+          <MoonSection
+            session={session}
+            canUseMoon={waiverSigned && profileComplete}
+          />
+
+          <Divider />
+
+          <SectionTitle>Tu historial (últimos check-ins)</SectionTitle>
 
           {lastVisits.length > 0 ? (
             <ResList>
@@ -1048,23 +1188,20 @@ export default function Reservas() {
                 );
               })}
             </ResList>
-
           ) : (
-            <SmallNote>Aún no tienes visitas registradas.</SmallNote>
+            <SmallNote>Aún no tienes check-ins registrados.</SmallNote>
           )}
-          <MoonSection
-            session={session}
-            canUseMoon={waiverSigned && profileComplete && !!userData?.accessType}
-          />
-
 
           <Logout onClick={() => signOut()}>Cerrar sesión</Logout>
-          <FooterLink href="/privacy">Conoce nuestra política de privacidad</FooterLink>
+          <FooterLink href="/privacy">
+            Conoce nuestra política de privacidad
+          </FooterLink>
 
-          {message && <SmallNote style={{ marginTop: 6 }}>{message}</SmallNote>}
+          {message && <SmallNote style={{ marginTop: 8 }}>{message}</SmallNote>}
         </Card>
       )}
 
+      {/* Login Modal */}
       {showLoginModal && (
         <ModalOverlay>
           <FrogCard>
@@ -1074,17 +1211,19 @@ export default function Reservas() {
             <FrogBrush>CrashPath</FrogBrush>
             <FrogBody>
               <p style={{ margin: 0 }}>
-                Inicia sesión con Google para acceder a tu cuenta, firmar el waiver y registrar visitas.
+                Inicia sesión con Google para acceder a tu cuenta, firmar el
+                waiver y reservar la MoonBoard.
               </p>
             </FrogBody>
             <FrogRow>
-              <PublicBtn onClick={handleAcceptLogin}>CONTINUAR</PublicBtn>
-              <NeutralModalBtn onClick={handleRejectLogin}>CANCELAR</NeutralModalBtn>
+              <ModalBtn $primary onClick={handleAcceptLogin}>CONTINUAR</ModalBtn>
+              <ModalBtn $secondary onClick={handleRejectLogin}>CANCELAR</ModalBtn>
             </FrogRow>
           </FrogCard>
         </ModalOverlay>
       )}
 
+      {/* Waiver Modal */}
       {showWaiverModal && (
         <ModalOverlay>
           <FrogCard>
@@ -1103,26 +1242,29 @@ export default function Reservas() {
 
             <FrogBody>
               <WaiverBox>
-                <p style={{ margin: "0 0 10px" }}>
-                  <strong>{waiverSnapshot?.title || "CRASHPATH – CONSENTIMIENTO INFORMADO (v1)"}</strong>
+                <p style={{ margin: "0 0 10px", fontWeight: 600 }}>
+                  {waiverSnapshot?.title ||
+                    "CRASHPATH – CONSENTIMIENTO INFORMADO (v1)"}
                 </p>
-                <p style={{ margin: "0 0 10px", fontSize: 12.5, color: "#6b6b6b" }}>{waiverCityLine}</p>
-                <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{waiverSnapshot?.text || ""}</p>
+                <p style={{ margin: "0 0 10px", fontSize: 11, color: colors.textLight }}>
+                  {waiverCityLine}
+                </p>
+                <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                  {waiverSnapshot?.text || ""}
+                </p>
               </WaiverBox>
 
-              <div style={{ marginTop: 10 }}>
-                <CheckboxRow>
-                  <input
-                    type="checkbox"
-                    checked={waiverAccepted}
-                    onChange={(e) => setWaiverAccepted(e.target.checked)}
-                    style={{ marginTop: 2 }}
-                  />
-                  <span>
-                    He leído y acepto el waiver/consentimiento de CrashPath. Entiendo que esto es una firma electrónica.
-                  </span>
-                </CheckboxRow>
-              </div>
+              <CheckboxRow>
+                <input
+                  type="checkbox"
+                  checked={waiverAccepted}
+                  onChange={(e) => setWaiverAccepted(e.target.checked)}
+                />
+                <span>
+                  He leído y acepto el waiver/consentimiento de CrashPath.
+                  Entiendo que esto es una firma electrónica.
+                </span>
+              </CheckboxRow>
 
               <SigWrap>
                 <Label>Firma (dibuja aquí)</Label>
@@ -1154,10 +1296,10 @@ export default function Reservas() {
             </FrogBody>
 
             <FrogRow>
-              <PublicBtn onClick={handleSignWaiver} disabled={isSubmitting}>
+              <ModalBtn $primary onClick={handleSignWaiver} disabled={isSubmitting}>
                 {isSubmitting ? "FIRMANDO..." : "ACEPTO Y FIRMO"}
-              </PublicBtn>
-              <NeutralModalBtn
+              </ModalBtn>
+              <ModalBtn $secondary
                 onClick={() => {
                   setShowWaiverModal(false);
                   setWaiverAccepted(false);
@@ -1166,12 +1308,13 @@ export default function Reservas() {
                 disabled={isSubmitting}
               >
                 CANCELAR
-              </NeutralModalBtn>
+              </ModalBtn>
             </FrogRow>
           </FrogCard>
         </ModalOverlay>
       )}
 
+      {/* Profile Modal */}
       {showProfileModal && (
         <ModalOverlay>
           <FrogCard>
@@ -1182,14 +1325,18 @@ export default function Reservas() {
 
             <FrogBody>
               <p style={{ margin: "0 0 10px" }}>
-                Para entrenar, necesitamos tu <strong>documento</strong>, <strong>EPS</strong> y un{" "}
+                Para entrenar, necesitamos tu <strong>documento</strong>,{" "}
+                <strong>EPS</strong> y un{" "}
                 <strong>contacto de emergencia</strong>.
               </p>
 
               <Form>
                 <Field>
                   <Label>Tipo de documento</Label>
-                  <Select value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
+                  <Select
+                    value={documentType}
+                    onChange={(e) => setDocumentType(e.target.value)}
+                  >
                     <option value="CC">CC</option>
                     <option value="CE">CE</option>
                     <option value="TI">TI</option>
@@ -1201,17 +1348,29 @@ export default function Reservas() {
 
                 <Field>
                   <Label>Número de documento</Label>
-                  <Input value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} placeholder="Ej: 1098xxxxxx" />
+                  <Input
+                    value={documentNumber}
+                    onChange={(e) => setDocumentNumber(e.target.value)}
+                    placeholder="Ej: 1098xxxxxx"
+                  />
                 </Field>
 
                 <Field>
                   <Label>Teléfono</Label>
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Ej: 3001234567" />
+                  <Input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Ej: 3001234567"
+                  />
                 </Field>
 
                 <Field>
                   <Label>EPS</Label>
-                  <Input value={epsName} onChange={(e) => setEpsName(e.target.value)} placeholder="Ej: Sura, Nueva EPS…" />
+                  <Input
+                    value={epsName}
+                    onChange={(e) => setEpsName(e.target.value)}
+                    placeholder="Ej: Sura, Nueva EPS…"
+                  />
                 </Field>
 
                 <Field>
@@ -1237,16 +1396,21 @@ export default function Reservas() {
             </FrogBody>
 
             <FrogRow>
-              <PublicBtn onClick={handleSaveProfile} disabled={isSubmitting}>
+              <ModalBtn $primary onClick={handleSaveProfile} disabled={isSubmitting}>
                 {isSubmitting ? "GUARDANDO..." : "GUARDAR DATOS"}
-              </PublicBtn>
-              <NeutralModalBtn onClick={() => setShowProfileModal(false)} disabled={isSubmitting}>
+              </ModalBtn>
+              <ModalBtn $secondary
+                onClick={() => setShowProfileModal(false)}
+                disabled={isSubmitting}
+              >
                 LUEGO
-              </NeutralModalBtn>
+              </ModalBtn>
             </FrogRow>
           </FrogCard>
         </ModalOverlay>
       )}
+
+      {/* Public Info Modal */}
       {showPublicInfoModal && (
         <ModalOverlay>
           <FrogCard>
@@ -1257,95 +1421,54 @@ export default function Reservas() {
 
             <FrogBody>
               <p style={{ margin: 0 }}>
-                Buen día de parte del equipo de CrashPath. Ya no se harán reservas del
-                gimnasio desde aquí, ya que ahora estamos siempre abiertos de{" "}
-                <strong>3:00 PM a 9:00 PM</strong>, así que puedes pasar por el gimnasio
-                en ese horario.
+                Buen día de parte del equipo de CrashPath. Ya no se hacen
+                reservas del muro completo: ahora estamos siempre abiertos de{" "}
+                <strong>3:00 PM a 9:00 PM</strong>, así que puedes pasar directo
+                por el gimnasio en ese horario.
                 <br />
                 <br />
-                Ahora la finalidad de esta app es:
+                Ahora esta app sirve para:
                 <br />
-                <strong>• Reservar si quieres usar la MoonBoard dentro del gym</strong>
+                <strong>• Reservar la MoonBoard (por si se llena)</strong>
                 <br />
-                <strong>• Agregar tu check-in al gimnasio</strong>
+                <strong>• Marcar tu check-in de asistencia</strong>
               </p>
             </FrogBody>
 
             <FrogRow>
-              <PublicBtn onClick={() => setShowPublicInfoModal(false)}>
+              <ModalBtn $primary onClick={() => setShowPublicInfoModal(false)}>
                 ENTENDIDO
-              </PublicBtn>
+              </ModalBtn>
             </FrogRow>
           </FrogCard>
         </ModalOverlay>
       )}
 
-      {showConfirmRegister && (
+      {/* Confirm Check-in Modal */}
+      {showConfirmCheckIn && (
         <ModalOverlay>
           <FrogCard>
-            <FrogClose onClick={() => setShowConfirmRegister(false)}>×</FrogClose>
+            <FrogClose onClick={() => setShowConfirmCheckIn(false)}>×</FrogClose>
             <FrogImg src="/gecko.png" alt="Gecko" />
             <FrogSub>Confirmar</FrogSub>
-            <FrogBrush>Visita</FrogBrush>
+            <FrogBrush>Check-in</FrogBrush>
             <FrogBody>
               <p style={{ margin: 0 }}>
-                {accessType === "mensualidad" ? (
-                  <>
-                    Vas a registrar tu visita de hoy. Esto ayuda a llevar el control de asistencia.
-                  </>
-                ) : (
-                  <>
-                    Vas a registrar tu visita de hoy. Se descuenta <strong>1 crédito</strong> y no es reembolsable si no asistes.
-                  </>
-                )}
+                Vas a marcar tu <strong>check-in de hoy</strong>. Esto solo
+                registra tu asistencia para llevar el control — no descuenta
+                créditos ni nada.
               </p>
             </FrogBody>
             <FrogRow>
-              <PublicBtn onClick={handleRegisterVisit} disabled={isSubmitting}>
+              <ModalBtn $primary onClick={handleCheckIn} disabled={isSubmitting}>
                 {isSubmitting ? "REGISTRANDO..." : "CONFIRMAR"}
-              </PublicBtn>
-              <NeutralModalBtn onClick={() => setShowConfirmRegister(false)} disabled={isSubmitting}>
+              </ModalBtn>
+              <ModalBtn $secondary
+                onClick={() => setShowConfirmCheckIn(false)}
+                disabled={isSubmitting}
+              >
                 CANCELAR
-              </NeutralModalBtn>
-            </FrogRow>
-          </FrogCard>
-        </ModalOverlay>
-      )}
-      {showAccessModal && (
-        <ModalOverlay>
-          <FrogCard>
-            <FrogClose onClick={() => setShowAccessModal(false)}>×</FrogClose>
-            <FrogImg src="/gecko.png" alt="Gecko" />
-            <FrogSub>Antes de continuar</FrogSub>
-            <FrogBrush>Modalidad</FrogBrush>
-
-            <FrogBody>
-              <p style={{ margin: "0 0 10px" }}>
-                ¿Cómo vas a entrenar en <strong>CrashPath</strong>?
-              </p>
-
-              <Form>
-                <Field>
-                  <Label>Selecciona una opción</Label>
-                  <Select value={accessTypeChoice} onChange={(e) => setAccessTypeChoice(e.target.value)}>
-                    <option value="ticketera">Tiquetera (por créditos)</option>
-                    <option value="mensualidad">Mensualidad</option>
-                  </Select>
-                </Field>
-
-                <Helper>
-                  Esto define cómo se registra tu visita: con créditos o por mensualidad activa.
-                </Helper>
-              </Form>
-            </FrogBody>
-
-            <FrogRow>
-              <PublicBtn onClick={handleSaveAccessType} disabled={isSubmitting}>
-                {isSubmitting ? "GUARDANDO..." : "CONTINUAR"}
-              </PublicBtn>
-              <NeutralModalBtn onClick={() => signOut()} disabled={isSubmitting}>
-                SALIR
-              </NeutralModalBtn>
+              </ModalBtn>
             </FrogRow>
           </FrogCard>
         </ModalOverlay>

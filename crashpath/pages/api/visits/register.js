@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     // ====== Waiver obligatorio ======
     if (user.waiverStatus !== "signed") {
       return res.status(409).json({
-        message: "Waiver must be signed before registering a visit",
+        message: "Waiver must be signed before checking in",
         code: "WAIVER_REQUIRED",
       });
     }
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
 
     if (missingProfile) {
       return res.status(409).json({
-        message: "Complete your profile before registering a visit",
+        message: "Complete your profile before checking in",
         code: "PROFILE_INCOMPLETE",
       });
     }
@@ -62,81 +62,50 @@ export default async function handler(req, res) {
     const endOfDay = new Date(target);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // ====== Evitar doble visita ======
-    const already = (user.visits || []).some((v) => {
-      const d = new Date(v.date);
-      return d >= startOfDay && d <= endOfDay && v.status !== "cancelled";
-    });
-
-    if (already) {
-      return res.status(409).json({
-        message: "You already have a visit registered for this day",
-        code: "VISIT_ALREADY_EXISTS",
-      });
-    }
-
-    // ====== Documento de visita ======
+    // ====== Documento de check-in ======
+    // El check-in solo marca asistencia: no descuenta créditos ni valida modalidad.
     const visitDoc = {
       date: startOfDay,
-      status: "registered",
+      status: "checked_in",
       createdBy: "user",
       notes: "",
     };
 
-    // ====== Verificar acceso según tipo ======
-    const accessType = user.accessType || "ticketera";
-
-    if (accessType === "mensualidad") {
-      const endDate = user?.mensualidad?.endDate;
-      const isActive = endDate && new Date(endDate) > new Date();
-
-      if (!isActive) {
-        return res.status(409).json({
-          message: "Tu mensualidad está vencida.",
-          code: "MENSUALIDAD_EXPIRED",
-        });
-      }
-
-      const updated = await User.findByIdAndUpdate(
-        user._id,
-        { $push: { visits: visitDoc } },
-        { new: true }
-      );
-
-      const createdVisit = updated.visits?.[updated.visits.length - 1];
-      return res.status(200).json({
-        message: "Visit registered",
-        user: updated,
-        visit: createdVisit,
-      });
-    }
-
-    // ====== Ticketera: descontar crédito ATÓMICO ======
+    // ====== Insert atómico anti-doble check-in ======
+    // El filtro exige que NO exista ya una visita no cancelada en el rango del
+    // día. Si existe, el update no matchea y `updated` queda null → ya hizo
+    // check-in hoy. Esto evita la condición de carrera de leer-luego-escribir.
     const updated = await User.findOneAndUpdate(
-      { _id: user._id, credits: { $gte: 1 } },
       {
-        $inc: { credits: -1 },
-        $push: { visits: visitDoc },
+        _id: user._id,
+        visits: {
+          $not: {
+            $elemMatch: {
+              date: { $gte: startOfDay, $lte: endOfDay },
+              status: { $ne: "cancelled" },
+            },
+          },
+        },
       },
+      { $push: { visits: visitDoc } },
       { new: true }
     );
 
     if (!updated) {
       return res.status(409).json({
-        message: "Not enough credits to register a visit",
-        code: "INSUFFICIENT_CREDITS",
+        message: "You already checked in for this day",
+        code: "VISIT_ALREADY_EXISTS",
       });
     }
 
     const createdVisit = updated.visits?.[updated.visits.length - 1];
     return res.status(200).json({
-      message: "Visit registered",
+      message: "Check-in registered",
       user: updated,
       visit: createdVisit,
     });
-
   } catch (error) {
-    console.error("register visit error:", error);
-    return res.status(500).json({ message: "Failed to register visit" });
+    console.error("check-in error:", error);
+    return res.status(500).json({ message: "Failed to register check-in" });
   }
 }

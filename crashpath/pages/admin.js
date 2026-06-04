@@ -1,1165 +1,844 @@
+// pages/admin.js - Componente completo con paginación, filtros y ordenamiento
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import axios from "axios";
 import styled, { createGlobalStyle } from "styled-components";
-import Calendar from "react-calendar";
-import "react-calendar/dist/Calendar.css";
 import { getWaiverSnapshot, waiverToParagraphs } from "@/lib/waiver";
 
+// ============================================
+// SISTEMA DE DISEÑO MINIMALISTA
+// ============================================
 const palette = {
-  bg: "#E7E1D2",
-  card: "rgba(255,255,255,0.55)",
-  cardSolid: "#F3EFE6",
-  text: "#2B2620",
-  muted: "#6B6257",
-  border: "rgba(43,38,32,0.14)",
-  accent: "#9C4F24",
-  accent2: "#C26A34",
-  success: "#2E9E56",
-  danger: "#D84A4A",
-  focus: "rgba(156,79,36,0.18)",
-  moon: "#1A1035",
-  moonAccent: "#7C5CBF",
-  moonAccent2: "#A98BEF",
+  bg: "#F5F5F5",
+  card: "#FFFFFF",
+  text: "#1A1A1A",
+  textLight: "#757575",
+  border: "#E0E0E0",
+  accent: "#0066CC",
+  danger: "#DC2626",
+  success: "#16A34A",
+  warning: "#F59E0B",
+  hover: "#F5F5F5"
+};
+
+const spacing = {
+  xs: "4px",
+  sm: "8px",
+  md: "12px",
+  lg: "16px",
+  xl: "24px"
+};
+
+const borderRadius = {
+  sm: "4px",
+  md: "6px",
+  lg: "8px"
+};
+
+const fontSize = {
+  sm: "12px",
+  md: "14px",
+  lg: "16px",
+  xl: "20px",
+  xxl: "28px"
 };
 
 const GlobalStyle = createGlobalStyle`
-  :root { color-scheme: light; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
   body {
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    font-size: ${fontSize.md};
+    line-height: 1.5;
+    color: ${palette.text};
+    background: ${palette.bg};
   }
-  input, button, select, textarea { font-family: inherit; }
-  .react-calendar {
-    width: 100%;
-    border: 1px solid ${palette.border};
-    border-radius: 14px;
+  
+  body.modal-open {
     overflow: hidden;
-    background: rgba(255,255,255,0.75);
   }
-  .react-calendar__navigation button { min-height: 44px; }
-  .react-calendar__tile { min-height: 44px; border-radius: 10px; }
-  .react-calendar__tile:enabled:hover,
-  .react-calendar__tile:enabled:focus { background: ${palette.focus}; }
-  @media (prefers-reduced-motion: reduce) {
-    * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  
+  button, input, select, textarea {
+    font-family: inherit;
   }
-  body.modal-open { overflow: hidden; touch-action: none; }
 `;
 
-/* -------------------- LAYOUT -------------------- */
 const PageShell = styled.div`
   min-height: 100vh;
-  padding: 18px 12px 88px;
+  padding: ${spacing.lg};
   background: ${palette.bg};
-  position: relative;
-  overflow-x: hidden;
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background-image: url("/test1.png");
-    background-repeat: repeat;
-    background-position: center;
-    opacity: 0.16;
-    pointer-events: none;
+  
+  @media (max-width: 768px) {
+    padding: ${spacing.md};
   }
-  &::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(231,225,210,0.80), rgba(231,225,210,0.92));
-    pointer-events: none;
-  }
-  @media (min-width: 768px) { padding: 44px 16px 64px; }
 `;
 
-const AdminContainer = styled.div`
-  position: relative;
-  z-index: 1;
-  max-width: 1160px;
+const Container = styled.div`
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 14px;
-  border-radius: 18px;
   background: ${palette.card};
+  border-radius: ${borderRadius.lg};
   border: 1px solid ${palette.border};
-  box-shadow: 0 18px 45px rgba(0,0,0,0.10);
-  backdrop-filter: blur(8px);
-  @media (min-width: 768px) { padding: 18px; }
+  overflow: hidden;
 `;
 
-const TopBar = styled.div`
-  display: grid;
-  gap: 12px;
-  padding: 6px 6px 14px;
-  @media (min-width: 768px) {
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    padding: 8px 6px 18px;
+const Header = styled.div`
+  padding: ${spacing.lg} ${spacing.xl};
+  border-bottom: 1px solid ${palette.border};
+  background: ${palette.card};
+  
+  @media (max-width: 768px) {
+    padding: ${spacing.md};
   }
-`;
-
-const TitleGroup = styled.div`
-  display: grid;
-  gap: 4px;
-  text-align: left;
 `;
 
 const Title = styled.h1`
-  margin: 0;
+  font-size: ${fontSize.xl};
+  font-weight: 600;
+  margin-bottom: ${spacing.xs};
   color: ${palette.text};
-  font-size: 22px;
-  letter-spacing: .02em;
-  line-height: 1.15;
-  @media (min-width: 768px) { font-size: 28px; }
 `;
 
 const Subtitle = styled.p`
-  margin: 0;
-  color: ${palette.muted};
-  font-size: 13px;
-  @media (min-width: 768px) { font-size: 14px; }
+  font-size: ${fontSize.sm};
+  color: ${palette.textLight};
 `;
 
-const TopActions = styled.div`
-  display: grid;
-  gap: 10px;
-  @media (min-width: 768px) {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 10px;
+const TopBar = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: ${spacing.md};
+  padding: ${spacing.lg} ${spacing.xl} ${spacing.md} ${spacing.xl};
+  flex-wrap: wrap;
+  
+  @media (max-width: 768px) {
+    padding: ${spacing.md};
+    flex-direction: column;
+    align-items: stretch;
   }
-`;
-
-const SearchBar = styled.div`
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-  @media (min-width: 768px) { grid-template-columns: 380px auto; }
 `;
 
 const SearchInput = styled.input`
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
+  padding: ${spacing.sm} ${spacing.md};
   border: 1px solid ${palette.border};
-  background: rgba(255,255,255,0.80);
-  font-size: 15px;
+  border-radius: ${borderRadius.sm};
+  font-size: ${fontSize.md};
+  width: 300px;
   outline: none;
+  
   &:focus {
-    border-color: rgba(156,79,36,0.45);
-    box-shadow: 0 0 0 4px ${palette.focus};
+    border-color: ${palette.accent};
+    box-shadow: 0 0 0 2px rgba(0,102,204,0.1);
+  }
+  
+  @media (max-width: 768px) {
+    width: 100%;
   }
 `;
 
-const SecondaryButton = styled.button`
-  background: rgba(255,255,255,0.65);
-  color: ${palette.text};
-  padding: 11px 12px;
-  border: 1px solid ${palette.border};
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 14px;
-  min-height: 44px;
-  &:hover { background: rgba(255,255,255,0.80); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 4px ${palette.focus}; }
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
-`;
-
 const Button = styled.button`
-  background: ${(p) => (p.$variant === "danger" ? palette.danger : palette.success)};
-  color: #fff;
-  padding: 11px 12px;
+  padding: ${props => props.$small ? `${spacing.xs} ${spacing.sm}` : `${spacing.sm} ${spacing.md}`};
+  border-radius: ${borderRadius.sm};
+  font-size: ${props => props.$small ? fontSize.sm : fontSize.md};
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
   border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 14px;
-  letter-spacing: .01em;
-  min-height: 44px;
-  box-shadow: 0 10px 22px rgba(0,0,0,0.10);
-  transition: transform .12s ease, filter .12s ease;
-  opacity: ${(p) => (p.disabled ? 0.65 : 1)};
-  &:hover { filter: brightness(0.95); transform: translateY(-1px); }
-  &:active { transform: translateY(0px); }
-  &:disabled { cursor: not-allowed; transform: none; }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 4px ${palette.focus}; }
-`;
-
-const CheckinButton = styled.button`
-  background: ${palette.accent};
-  color: #fff;
-  padding: 11px 12px;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: .01em;
-  min-height: 44px;
-  box-shadow: 0 10px 22px rgba(156,79,36,0.22);
-  transition: transform .12s ease, filter .12s ease;
-  opacity: ${(p) => (p.disabled ? 0.65 : 1)};
-  &:hover { filter: brightness(0.92); transform: translateY(-1px); }
-  &:active { transform: translateY(0px); }
-  &:disabled { cursor: not-allowed; transform: none; }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 4px ${palette.focus}; }
-`;
-
-/* Moon button - distinct purple style */
-const MoonButton = styled.button`
-  background: linear-gradient(135deg, ${palette.moon}, ${palette.moonAccent});
-  color: #fff;
-  padding: 11px 12px;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: .01em;
-  min-height: 44px;
-  box-shadow: 0 8px 20px rgba(124,92,191,0.30);
-  transition: transform .12s ease, filter .12s ease;
-  opacity: ${(p) => (p.disabled ? 0.65 : 1)};
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  &:hover { filter: brightness(1.08); transform: translateY(-1px); }
-  &:active { transform: translateY(0px); }
-  &:disabled { cursor: not-allowed; transform: none; }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(124,92,191,0.30); }
-`;
-
-const Muted = styled.span`
-  color: ${palette.muted};
-  font-size: 13px;
-`;
-
-const Divider = styled.div`
-  height: 1px;
-  background: rgba(0,0,0,0.06);
-  margin: 14px 0;
-`;
-
-const Badge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid ${palette.border};
-  background: rgba(255,255,255,0.55);
-  font-size: 13px;
-  b { font-weight: 800; }
-`;
-
-const PrivacyTag = styled.span`
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 12px;
-  border: 1px solid ${palette.border};
-  background: ${(p) => (p.$private ? "rgba(156,79,36,0.14)" : "rgba(46,158,86,0.12)")};
-`;
-
-const IconButton = styled.button`
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.10);
-  background: rgba(255,255,255,0.75);
-  color: ${palette.danger};
-  cursor: pointer;
-  font-size: 20px;
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  &:hover { background: rgba(255,255,255,0.95); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 4px ${palette.focus}; }
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
-`;
-
-const Actions = styled.div`
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-`;
-
-/* -------------------- FILTERS + AUDIT -------------------- */
-const Row = styled.div`
-  display: grid;
-  gap: 10px;
-  @media (min-width: 900px) {
-    grid-template-columns: 1fr 360px;
-    align-items: start;
+  
+  ${props => {
+    switch (props.$variant) {
+      case "danger":
+        return `
+          background: ${palette.danger};
+          color: white;
+          &:hover { background: #b91c1c; }
+        `;
+      case "success":
+        return `
+          background: ${palette.success};
+          color: white;
+          &:hover { background: #15803d; }
+        `;
+      case "secondary":
+        return `
+          background: transparent;
+          color: ${palette.text};
+          border: 1px solid ${palette.border};
+          &:hover { background: ${palette.hover}; }
+        `;
+      default:
+        return `
+          background: ${palette.accent};
+          color: white;
+          &:hover { background: #0052a3; }
+        `;
+    }
+  }}
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px ${palette.accent};
   }
 `;
 
 const FiltersBar = styled.div`
   display: flex;
-  gap: 8px;
+  gap: ${spacing.sm};
   flex-wrap: wrap;
-  padding: 4px 6px 0;
-`;
-
-const FilterChip = styled.button`
-  border: 1px solid ${palette.border};
-  background: ${(p) => (p.$active ? "rgba(156,79,36,0.14)" : "rgba(255,255,255,0.60)")};
-  color: ${(p) => (p.$active ? palette.accent : palette.text)};
-  border-radius: 999px;
-  padding: 8px 10px;
-  font-size: 12.5px;
-  font-weight: 800;
-  cursor: pointer;
-  &:hover { background: rgba(255,255,255,0.85); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 4px ${palette.focus}; }
-`;
-
-const AuditPanel = styled.aside`
-  display: none;
-  @media (min-width: 900px) {
-    display: grid;
-    gap: 10px;
-    border: 1px solid ${palette.border};
-    background: rgba(255,255,255,0.60);
-    border-radius: 16px;
-    padding: 12px;
-    box-shadow: 0 10px 24px rgba(0,0,0,0.06);
-    position: sticky;
-    top: 18px;
-    max-height: calc(100vh - 48px);
-    overflow: auto;
+  padding: ${spacing.md} ${spacing.xl};
+  border-bottom: 1px solid ${palette.border};
+  background: ${palette.bg};
+  
+  @media (max-width: 768px) {
+    padding: ${spacing.md};
   }
 `;
 
-const AuditList = styled.div`
-  display: grid;
-  gap: 8px;
+const FilterChip = styled.button`
+  padding: ${spacing.xs} ${spacing.md};
+  border-radius: ${borderRadius.sm};
+  font-size: ${fontSize.sm};
+  background: ${props => props.$active ? palette.accent : "white"};
+  color: ${props => props.$active ? "white" : palette.text};
+  border: 1px solid ${props => props.$active ? palette.accent : palette.border};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: ${props => props.$active ? palette.accent : palette.hover};
+  }
 `;
 
-const AuditItem = styled.div`
-  border: 1px solid rgba(0,0,0,0.06);
-  background: rgba(255,255,255,0.70);
-  border-radius: 14px;
-  padding: 10px;
-`;
-
-const AuditLine = styled.div`
-  font-size: 13px;
-  color: ${palette.text};
-  line-height: 1.35;
-  b { font-weight: 900; }
-`;
-
-const AuditMeta = styled.div`
-  margin-top: 6px;
-  font-size: 12px;
-  color: ${palette.muted};
+// ============================================
+// PAGINATION COMPONENT
+// ============================================
+const PaginationWrapper = styled.div`
   display: flex;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  padding: ${spacing.md} ${spacing.xl};
+  border-top: 1px solid ${palette.border};
+  background: ${palette.bg};
+  flex-wrap: wrap;
+  gap: ${spacing.md};
+  
+  @media (max-width: 768px) {
+    padding: ${spacing.md};
+    flex-direction: column;
+  }
+`;
+
+const PaginationControls = styled.div`
+  display: flex;
+  gap: ${spacing.xs};
+  align-items: center;
   flex-wrap: wrap;
 `;
 
-/* -------------------- TABLE / CARDS -------------------- */
-const TableWrapper = styled.div`
-  width: 100%;
-  overflow-x: auto;
-  border-radius: 14px;
+const PageButton = styled.button`
+  padding: ${spacing.xs} ${spacing.sm};
   border: 1px solid ${palette.border};
-  background: ${palette.cardSolid};
-  display: none;
-  @media (min-width: 900px) { display: block; }
+  border-radius: ${borderRadius.sm};
+  background: ${props => props.$active ? palette.accent : "white"};
+  color: ${props => props.$active ? "white" : palette.text};
+  cursor: pointer;
+  min-width: 36px;
+  
+  &:hover:not(:disabled) {
+    background: ${props => props.$active ? palette.accent : palette.hover};
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+// ============================================
+// DASHBOARD KPI CARDS
+// ============================================
+const KPIGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: ${spacing.md};
+  padding: ${spacing.lg} ${spacing.xl};
+  background: ${palette.bg};
+  border-bottom: 1px solid ${palette.border};
+  
+  @media (max-width: 768px) {
+    padding: ${spacing.md};
+    grid-template-columns: repeat(2, 1fr);
+  }
+`;
+
+const KPICard = styled.div`
+  background: ${palette.card};
+  border: 1px solid ${palette.border};
+  border-radius: ${borderRadius.md};
+  padding: ${spacing.md};
+  text-align: center;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+`;
+
+const KPIValue = styled.div`
+  font-size: ${fontSize.xxl};
+  font-weight: 700;
+  color: ${props => props.$color || palette.accent};
+  line-height: 1.2;
+`;
+
+const KPILabel = styled.div`
+  font-size: ${fontSize.sm};
+  color: ${palette.textLight};
+  margin-top: ${spacing.xs};
+`;
+
+const KPISub = styled.div`
+  font-size: ${fontSize.xs};
+  color: ${palette.textLight};
+  margin-top: ${spacing.xs};
+`;
+
+// ============================================
+// FILTERS ROW (fecha de registro)
+// ============================================
+const FilterRow = styled.div`
+  display: flex;
+  gap: ${spacing.md};
+  padding: ${spacing.md} ${spacing.xl};
+  background: ${palette.card};
+  border-bottom: 1px solid ${palette.border};
+  flex-wrap: wrap;
+  align-items: flex-end;
+  
+  @media (max-width: 768px) {
+    padding: ${spacing.md};
+    flex-direction: column;
+  }
+`;
+
+const FilterGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${spacing.xs};
+  min-width: 150px;
+`;
+
+const FilterLabel = styled.label`
+  font-size: ${fontSize.sm};
+  font-weight: 600;
+  color: ${palette.textLight};
+`;
+
+const DateInput = styled.input`
+  padding: ${spacing.sm} ${spacing.md};
+  border: 1px solid ${palette.border};
+  border-radius: ${borderRadius.sm};
+  font-size: ${fontSize.md};
+  outline: none;
+  
+  &:focus {
+    border-color: ${palette.accent};
+    box-shadow: 0 0 0 2px rgba(0,102,204,0.1);
+  }
+`;
+
+const SortIcon = styled.span`
+  display: inline-block;
+  margin-left: ${spacing.xs};
+  font-size: ${fontSize.sm};
+  opacity: ${props => props.$active ? 1 : 0.3};
+`;
+
+// ============================================
+// EDIT VISIT MODAL
+// ============================================
+const EditVisitModal = ({ visit, user, onClose, onSave, busy }) => {
+  const [status, setStatus] = useState(visit?.status || "checked_in");
+  const [notes, setNotes] = useState(visit?.notes || "");
+  const [date, setDate] = useState(() => {
+    const d = visit?.checkedInAt || visit?.date;
+    return d ? new Date(d).toISOString().slice(0, 16) : "";
+  });
+
+  const handleSave = async () => {
+    await onSave({
+      visitId: visit._id,
+      userId: user._id,
+      status,
+      notes,
+      date: new Date(date).toISOString()
+    });
+    onClose();
+  };
+
+  return (
+    <ModalContent>
+      <ModalHeader>
+        <ModalTitle>Editar visita</ModalTitle>
+      </ModalHeader>
+      <div style={{ marginBottom: spacing.md }}>
+        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Usuario</div>
+        <div>{user.name} ({user.email})</div>
+      </div>
+      <div style={{ marginBottom: spacing.md }}>
+        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Fecha y hora</div>
+        <Input
+          type="datetime-local"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+      </div>
+      <div style={{ marginBottom: spacing.md }}>
+        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Estado</div>
+        <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="checked_in">Check-in ✅</option>
+          <option value="registered">Registrado</option>
+          <option value="no_show">No asistió</option>
+          <option value="cancelled">Cancelado</option>
+        </Select>
+      </div>
+      <div style={{ marginBottom: spacing.md }}>
+        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Notas (opcional)</div>
+        <Input
+          placeholder="Ej: Entró tarde, etc."
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+      </div>
+      <ActionButtons>
+        <Button onClick={handleSave} disabled={busy}>Guardar cambios</Button>
+        <Button $variant="secondary" onClick={onClose}>Cancelar</Button>
+      </ActionButtons>
+    </ModalContent>
+  );
+};
+
+// ============================================
+// TABLE COMPONENTS
+// ============================================
+const TableWrapper = styled.div`
+  overflow-x: auto;
+  padding: 0 ${spacing.xl};
+  
+  @media (max-width: 768px) {
+    display: none;
+  }
 `;
 
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  min-width: 980px;
+  font-size: ${fontSize.sm};
 `;
 
 const Th = styled.th`
-  background: linear-gradient(180deg, ${palette.accent}, ${palette.accent2});
-  color: #fff;
-  padding: 12px 14px;
   text-align: left;
-  font-size: 14px;
-  letter-spacing: .02em;
-  white-space: nowrap;
-`;
-
-const Tr = styled.tr`
-  &:nth-child(even) td { background: rgba(255,255,255,0.45); }
-  &:hover td { background: rgba(255,255,255,0.70); }
+  padding: ${spacing.md};
+  background: ${palette.bg};
+  color: ${palette.textLight};
+  font-weight: 600;
+  border-bottom: 1px solid ${palette.border};
+  cursor: pointer;
+  user-select: none;
+  
+  &:hover {
+    background: ${palette.hover};
+  }
 `;
 
 const Td = styled.td`
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(0,0,0,0.06);
-  text-align: left;
-  color: ${palette.text};
-  vertical-align: top;
+  padding: ${spacing.md};
+  border-bottom: 1px solid ${palette.border};
+  vertical-align: middle;
+`;
+
+const Tr = styled.tr`
+  &:hover {
+    background: ${palette.hover};
+  }
 `;
 
 const CardsGrid = styled.div`
-  display: grid;
-  gap: 12px;
-  @media (min-width: 900px) { display: none; }
+  display: none;
+  gap: ${spacing.md};
+  padding: ${spacing.md};
+  
+  @media (max-width: 768px) {
+    display: grid;
+  }
 `;
 
-const UserCard = styled.div`
-  background: rgba(255,255,255,0.70);
+const Card = styled.div`
+  background: white;
   border: 1px solid ${palette.border};
-  border-radius: 16px;
-  padding: 12px;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+  border-radius: ${borderRadius.md};
+  padding: ${spacing.md};
 `;
 
 const CardHeader = styled.div`
-  display: grid;
-  gap: 6px;
-`;
-
-const NameRow = styled.div`
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-`;
-
-const UserName = styled.div`
-  color: ${palette.text};
-  font-weight: 900;
-  font-size: 15px;
-  line-height: 1.2;
-`;
-
-const UserEmail = styled.div`
-  color: ${palette.muted};
-  font-size: 13px;
-  word-break: break-word;
-`;
-
-const CardBody = styled.div`
-  margin-top: 10px;
-  display: grid;
-  gap: 10px;
-`;
-
-const ReservationList = styled.div`
-  display: grid;
-  gap: 8px;
-`;
-
-const ReservationRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(0,0,0,0.06);
-  background: rgba(255,255,255,0.6);
-`;
-
-const Pill = styled.span`
-  display: inline-flex;
+  align-items: start;
+  margin-bottom: ${spacing.md};
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: ${palette.text};
-  b { font-weight: 800; }
+  gap: ${spacing.sm};
 `;
 
-/* -------------------- MOON SPECIFIC STYLES -------------------- */
-const MoonBadge = styled.span`
+const CardTitle = styled.div`
+  font-weight: 600;
+  color: ${palette.text};
+`;
+
+const CardEmail = styled.div`
+  font-size: ${fontSize.sm};
+  color: ${palette.textLight};
+  margin-top: ${spacing.xs};
+`;
+
+const CardActions = styled.div`
+  display: flex;
+  gap: ${spacing.sm};
+  flex-wrap: wrap;
+  margin-top: ${spacing.md};
+`;
+
+const Badge = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  background: linear-gradient(135deg, rgba(26,16,53,0.85), rgba(124,92,191,0.70));
-  color: #E8DCFF;
-  border: 1px solid rgba(124,92,191,0.35);
+  padding: ${spacing.xs} ${spacing.sm};
+  border-radius: ${borderRadius.sm};
+  font-size: ${fontSize.sm};
+  background: ${props => {
+    if (props.$success) return palette.success + "10";
+    if (props.$danger) return palette.danger + "10";
+    if (props.$warning) return palette.warning + "10";
+    return palette.bg;
+  }};
+  color: ${props => {
+    if (props.$success) return palette.success;
+    if (props.$danger) return palette.danger;
+    if (props.$warning) return palette.warning;
+    return palette.text;
+  }};
+  border: 1px solid ${props => {
+    if (props.$success) return palette.success + "30";
+    if (props.$danger) return palette.danger + "30";
+    if (props.$warning) return palette.warning + "30";
+    return palette.border;
+  }};
 `;
 
-const MoonModalHeader = styled.div`
-  background: linear-gradient(135deg, ${palette.moon} 0%, ${palette.moonAccent} 100%);
-  border-radius: 12px;
-  padding: 14px;
-  margin-bottom: 14px;
-  color: #fff;
+const Dropdown = styled.div`
+  position: relative;
+  display: inline-block;
+`;
+
+const DropdownMenu = styled.div`
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: ${spacing.xs};
+  background: white;
+  border: 1px solid ${palette.border};
+  border-radius: ${borderRadius.sm};
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  min-width: 180px;
+  z-index: 10;
+`;
+
+const DropdownItem = styled.button`
   display: flex;
   align-items: center;
-  gap: 10px;
-`;
-
-const MoonModalTitle = styled.h2`
-  margin: 0;
-  font-size: 18px;
-  color: #fff;
-  font-weight: 900;
-`;
-
-const MoonModalSub = styled.p`
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: rgba(255,255,255,0.75);
-`;
-
-const DayTabsRow = styled.div`
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
-  margin-bottom: 10px;
-`;
-
-const DayTabBtn = styled.button`
-  flex-shrink: 0;
-  border: 1px solid ${(p) => p.$active ? palette.moonAccent : palette.border};
-  border-radius: 10px;
-  padding: 6px 12px;
-  background: ${(p) => p.$active ? `linear-gradient(135deg, ${palette.moon}, ${palette.moonAccent})` : "rgba(255,255,255,0.70)"};
-  color: ${(p) => p.$active ? "#fff" : palette.text};
-  font-weight: 700;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-`;
-
-const SlotGrid = styled.div`
-  display: grid;
-  gap: 6px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding-right: 2px;
-`;
-
-const SlotItem = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid ${(p) =>
-    p.$mine ? "rgba(124,92,191,0.40)" :
-    p.$taken ? "rgba(0,0,0,0.06)" :
-    palette.border};
-  background: ${(p) =>
-    p.$mine ? "rgba(124,92,191,0.12)" :
-    p.$taken ? "rgba(0,0,0,0.03)" :
-    "rgba(255,255,255,0.75)"};
-  opacity: ${(p) => p.$past ? 0.45 : 1};
-`;
-
-const SlotLabel = styled.span`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${palette.text};
-`;
-
-const SlotRight = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
-
-const SlotStatusText = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  color: ${(p) =>
-    p.$mine ? palette.moonAccent :
-    p.$available ? palette.success :
-    palette.muted};
-`;
-
-const BookBtn = styled.button`
+  gap: ${spacing.sm};
+  width: 100%;
+  padding: ${spacing.sm} ${spacing.md};
+  text-align: left;
+  background: none;
   border: none;
-  border-radius: 8px;
-  padding: 6px 12px;
-  background: linear-gradient(135deg, ${palette.moon}, ${palette.moonAccent});
-  color: #fff;
-  font-weight: 800;
-  font-size: 12px;
   cursor: pointer;
-  transition: filter 0.15s ease, transform 0.1s ease;
-  &:hover { filter: brightness(1.1); transform: translateY(-1px); }
-  &:disabled { background: #d3d3d3; cursor: not-allowed; transform: none; }
+  font-size: ${fontSize.sm};
+  color: ${props => props.$danger ? palette.danger : palette.text};
+  
+  &:hover {
+    background: ${palette.hover};
+  }
+  
+  &:not(:last-child) {
+    border-bottom: 1px solid ${palette.border};
+  }
 `;
 
-const CancelMoonBtn = styled.button`
-  border: 1px solid rgba(216,74,74,0.30);
-  border-radius: 8px;
-  padding: 5px 10px;
-  background: rgba(216,74,74,0.08);
-  color: ${palette.danger};
-  font-weight: 800;
-  font-size: 11px;
-  cursor: pointer;
-  &:hover { background: rgba(216,74,74,0.16); }
-  &:disabled { opacity: 0.5; cursor: not-allowed; }
-`;
-
-/* Moon section in attendance modal */
-const MoonSectionWrap = styled.div`
-  margin-top: 14px;
-  border: 1px solid rgba(124,92,191,0.25);
-  border-radius: 14px;
-  overflow: hidden;
-`;
-
-const MoonSectionHeader = styled.div`
-  background: linear-gradient(135deg, ${palette.moon}, ${palette.moonAccent});
-  padding: 10px 14px;
-  color: #fff;
-  font-weight: 800;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
-
-const MoonResList = styled.div`
-  display: grid;
-  gap: 0;
-`;
-
-const MoonResItem = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(124,92,191,0.10);
-  background: rgba(255,255,255,0.60);
-  &:last-child { border-bottom: none; }
-`;
-
-const MoonResLeft = styled.div`
-  display: grid;
-  gap: 2px;
-`;
-
-const MoonResName = styled.div`
-  font-size: 13px;
-  font-weight: 800;
-  color: ${palette.text};
-`;
-
-const MoonResMeta = styled.div`
-  font-size: 12px;
-  color: ${palette.muted};
-`;
-
-/* -------------------- MODALS -------------------- */
 const Overlay = styled.div`
-  display: ${({ $show }) => ($show ? "block" : "none")};
+  display: ${props => props.$show ? "block" : "none"};
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.55);
+  background: rgba(0,0,0,0.5);
   z-index: 9998;
 `;
 
 const Modal = styled.div`
-  display: ${({ $show }) => ($show ? "block" : "none")};
+  display: ${props => props.$show ? "block" : "none"};
   position: fixed;
-  z-index: 9999;
-  left: 50%;
   top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%);
-  width: calc(100% - 18px);
-  max-width: 520px;
-  background: ${palette.cardSolid};
-  border: 1px solid ${palette.border};
-  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-  border-radius: 16px;
-  padding: 14px;
-  max-height: calc(100vh - 24px);
+  background: white;
+  border-radius: ${borderRadius.lg};
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
   overflow: auto;
-  @media (min-width: 768px) { width: 460px; padding: 18px; }
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 `;
 
-const WideModal = styled(Modal)`
-  max-width: 700px;
-  @media (min-width: 768px) { width: 680px; }
+const ModalContent = styled.div`
+  padding: ${spacing.xl};
+  
+  @media (max-width: 768px) {
+    padding: ${spacing.lg};
+  }
 `;
 
-const SheetHandle = styled.div`
-  display: block;
-  width: 44px;
-  height: 5px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.14);
-  margin: 0 auto 10px;
-  @media (min-width: 768px) { display: none; }
+const ModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: ${spacing.lg};
+  padding-bottom: ${spacing.md};
+  border-bottom: 1px solid ${palette.border};
 `;
 
 const ModalTitle = styled.h2`
-  margin: 0 0 10px;
-  font-size: 18px;
+  font-size: ${fontSize.lg};
+  font-weight: 600;
   color: ${palette.text};
-  @media (min-width: 768px) { font-size: 20px; }
 `;
 
 const Input = styled.input`
-  padding: 12px;
   width: 100%;
-  margin: 10px 0;
-  font-size: 16px;
-  border-radius: 12px;
+  padding: ${spacing.sm} ${spacing.md};
   border: 1px solid ${palette.border};
-  background: rgba(255,255,255,0.80);
+  border-radius: ${borderRadius.sm};
+  font-size: ${fontSize.md};
+  margin-bottom: ${spacing.md};
   outline: none;
+  
   &:focus {
-    border-color: rgba(156,79,36,0.45);
-    box-shadow: 0 0 0 4px ${palette.focus};
+    border-color: ${palette.accent};
+    box-shadow: 0 0 0 2px rgba(0,102,204,0.1);
   }
-  &:disabled { opacity: 0.6; background: rgba(0,0,0,0.04); cursor: not-allowed; }
 `;
 
 const Select = styled.select`
-  padding: 12px;
   width: 100%;
-  margin: 10px 0;
-  font-size: 16px;
-  border-radius: 12px;
+  padding: ${spacing.sm} ${spacing.md};
   border: 1px solid ${palette.border};
-  background: rgba(255,255,255,0.80);
+  border-radius: ${borderRadius.sm};
+  font-size: ${fontSize.md};
+  margin-bottom: ${spacing.md};
+  background: white;
   outline: none;
+  
   &:focus {
-    border-color: rgba(156,79,36,0.45);
-    box-shadow: 0 0 0 4px ${palette.focus};
-  }
-`;
-
-const RadioRow = styled.div`
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-top: 10px;
-  flex-wrap: wrap;
-  color: ${palette.text};
-  label {
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-    padding: 10px;
-    border-radius: 12px;
-    border: 1px solid ${palette.border};
-    background: rgba(255,255,255,0.60);
-    cursor: pointer;
-    user-select: none;
+    border-color: ${palette.accent};
+    box-shadow: 0 0 0 2px rgba(0,102,204,0.1);
   }
 `;
 
 const ErrorBox = styled.div`
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(216,74,74,0.30);
-  background: rgba(216,74,74,0.10);
-  color: ${palette.text};
-  font-size: 13px;
+  padding: ${spacing.md};
+  background: ${palette.danger}10;
+  border: 1px solid ${palette.danger}30;
+  border-radius: ${borderRadius.sm};
+  color: ${palette.danger};
+  font-size: ${fontSize.sm};
+  margin-bottom: ${spacing.md};
 `;
 
 const SuccessBox = styled.div`
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(46,158,86,0.30);
-  background: rgba(46,158,86,0.10);
-  color: ${palette.text};
-  font-size: 13px;
-  font-weight: 800;
+  padding: ${spacing.md};
+  background: ${palette.success}10;
+  border: 1px solid ${palette.success}30;
+  border-radius: ${borderRadius.sm};
+  color: ${palette.success};
+  font-size: ${fontSize.sm};
+  margin-bottom: ${spacing.md};
 `;
 
-const EmptyState = styled.div`
-  padding: 14px;
-  border-radius: 14px;
-  border: 1px dashed rgba(43,38,32,0.22);
-  background: rgba(255,255,255,0.55);
-`;
-
-const LinkButton = styled.a`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.75);
-  border: 1px solid ${palette.border};
-  color: ${palette.text};
-  font-size: 13.5px;
-  font-weight: 800;
-  text-decoration: none;
-  line-height: 1;
-  box-shadow: 0 10px 22px rgba(0,0,0,0.08);
-  transition: transform .12s ease, filter .12s ease, background .12s ease;
-  &:hover { background: rgba(255,255,255,0.95); filter: brightness(0.98); transform: translateY(-1px); }
-  &:active { transform: translateY(0px); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 4px ${palette.focus}; }
-`;
-
-const LinkPill = styled.span`
-  display: inline-grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  background: rgba(156,79,36,0.14);
-  border: 1px solid rgba(156,79,36,0.18);
-  color: ${palette.accent};
-  font-size: 16px;
-`;
-
-const CheckinInfoRow = styled.div`
+const ActionButtons = styled.div`
   display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  padding: 10px 0;
+  gap: ${spacing.sm};
+  justify-content: flex-end;
+  margin-top: ${spacing.lg};
+`;
+
+const Divider = styled.hr`
+  border: none;
+  border-top: 1px solid ${palette.border};
+  margin: ${spacing.md} 0;
 `;
 
 const WaiverBox = styled.div`
   border: 1px solid ${palette.border};
-  border-radius: 12px;
-  padding: 10px;
-  background: rgba(255,255,255,0.80);
-  max-height: 220px;
+  border-radius: ${borderRadius.sm};
+  padding: ${spacing.md};
+  background: ${palette.bg};
+  max-height: 300px;
   overflow: auto;
-  color: ${palette.text};
-  font-size: 13.5px;
+  font-size: ${fontSize.sm};
   line-height: 1.5;
-`;
-
-const MinorBanner = styled.div`
-  margin-bottom: 10px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: rgba(156,79,36,0.10);
-  border: 1px solid rgba(156,79,36,0.25);
-  color: ${palette.accent};
-  font-size: 13px;
-  font-weight: 800;
+  margin-bottom: ${spacing.md};
 `;
 
 const CheckboxRow = styled.label`
   display: flex;
-  gap: 10px;
+  gap: ${spacing.sm};
   align-items: flex-start;
-  text-align: left;
-  font-size: 13px;
-  color: ${palette.text};
-  line-height: 1.35;
-  margin-top: 10px;
-`;
-
-const SigWrap = styled.div`
-  margin-top: 10px;
-  text-align: left;
+  font-size: ${fontSize.sm};
+  margin-bottom: ${spacing.md};
+  cursor: pointer;
 `;
 
 const SigCanvas = styled.canvas`
   width: 100%;
-  height: 140px;
-  border-radius: 12px;
-  border: 1px dashed rgba(43,38,32,0.35);
-  background: rgba(255,255,255,0.90);
+  height: 150px;
+  border: 1px solid ${palette.border};
+  border-radius: ${borderRadius.sm};
+  background: white;
   touch-action: none;
 `;
 
 const SigRow = styled.div`
   display: flex;
-  gap: 10px;
-  margin-top: 8px;
   justify-content: space-between;
   align-items: center;
+  margin-top: ${spacing.sm};
 `;
 
-const TinyBtn = styled.button`
-  border: 1px solid ${palette.border};
-  background: rgba(255,255,255,0.75);
-  border-radius: 12px;
-  padding: 10px 12px;
-  cursor: pointer;
-  font-weight: 800;
-  color: ${palette.text};
-  &:hover { background: rgba(255,255,255,0.95); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 4px ${palette.focus}; }
-`;
-
-const MensualidadBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  border: 1px solid ${(p) => p.$active ? "rgba(46,158,86,0.30)" : "rgba(216,74,74,0.30)"};
-  background: ${(p) => p.$active ? "rgba(46,158,86,0.12)" : "rgba(216,74,74,0.10)"};
-  color: ${(p) => (p.$active ? palette.success : palette.danger)};
-`;
-
-const AccessTypePill = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  border: 1px solid ${palette.border};
-  background: ${(p) => p.$type === "mensualidad" ? "rgba(156,79,36,0.12)" : "rgba(43,38,32,0.07)"};
-  color: ${(p) => p.$type === "mensualidad" ? palette.accent : palette.muted};
-`;
-
-const RenovarBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(156,79,36,0.35);
-  background: rgba(156,79,36,0.10);
-  color: ${palette.accent};
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: background 0.15s ease, transform 0.12s ease;
-  &:hover { background: rgba(156,79,36,0.18); transform: translateY(-1px); }
-  &:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 4px ${palette.focus}; }
-`;
-
-const EditFieldRow = styled.div`
-  display: grid;
-  gap: 4px;
-  margin: 6px 0;
-`;
-
-const EditLabel = styled.label`
-  font-size: 11px;
-  font-weight: 800;
-  color: ${palette.muted};
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-`;
-
-const EditInput = styled.input`
-  padding: 10px 12px;
-  width: 100%;
-  font-size: 14px;
-  border-radius: 10px;
-  border: 1px solid ${palette.border};
-  background: rgba(255,255,255,0.80);
-  outline: none;
-  color: ${palette.text};
-  &:focus {
-    border-color: rgba(156,79,36,0.45);
-    box-shadow: 0 0 0 3px ${palette.focus};
-  }
-  &:disabled { opacity: 0.6; background: rgba(0,0,0,0.04); }
-`;
-
-const EditSelect = styled.select`
-  padding: 10px 12px;
-  width: 100%;
-  font-size: 14px;
-  border-radius: 10px;
-  border: 1px solid ${palette.border};
-  background: rgba(255,255,255,0.80);
-  outline: none;
-  color: ${palette.text};
-  &:focus {
-    border-color: rgba(156,79,36,0.45);
-    box-shadow: 0 0 0 3px ${palette.focus};
+const RadioRow = styled.div`
+  display: flex;
+  gap: ${spacing.md};
+  margin-bottom: ${spacing.md};
+  flex-wrap: wrap;
+  
+  label {
+    display: flex;
+    align-items: center;
+    gap: ${spacing.xs};
+    cursor: pointer;
   }
 `;
 
 const StatsRow = styled.div`
   display: flex;
-  gap: 8px;
+  gap: ${spacing.md};
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-bottom: ${spacing.md};
 `;
 
 const StatPill = styled.div`
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 12px;
+  align-items: baseline;
+  gap: ${spacing.xs};
+  padding: ${spacing.sm} ${spacing.md};
+  background: ${palette.bg};
+  border-radius: ${borderRadius.sm};
   border: 1px solid ${palette.border};
-  background: rgba(255,255,255,0.70);
 `;
 
 const StatPillNum = styled.span`
-  font-weight: 900;
+  font-size: ${fontSize.xl};
+  font-weight: 600;
   color: ${palette.accent};
-  font-size: 20px;
-  line-height: 1;
 `;
 
 const StatPillLabel = styled.span`
-  color: ${palette.muted};
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.3;
-`;
-
-const AttendanceSearchInput = styled.input`
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid ${palette.border};
-  background: rgba(255,255,255,0.85);
-  font-size: 14px;
-  outline: none;
-  margin-top: 10px;
-  &:focus {
-    border-color: rgba(156,79,36,0.45);
-    box-shadow: 0 0 0 3px ${palette.focus};
-  }
+  font-size: ${fontSize.sm};
+  color: ${palette.textLight};
 `;
 
 const DayGroup = styled.div`
-  margin-top: 8px;
   border: 1px solid ${palette.border};
-  border-radius: 14px;
+  border-radius: ${borderRadius.sm};
+  margin-bottom: ${spacing.md};
   overflow: hidden;
 `;
 
 const DayGroupHeader = styled.div`
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
-  background: linear-gradient(90deg, rgba(156,79,36,0.10), rgba(156,79,36,0.03));
+  align-items: center;
+  padding: ${spacing.sm} ${spacing.md};
+  background: ${palette.bg};
   border-bottom: 1px solid ${palette.border};
-`;
-
-const DayGroupTitle = styled.span`
-  font-size: 13px;
-  font-weight: 900;
-  color: ${palette.accent};
-  letter-spacing: 0.01em;
-  text-transform: capitalize;
-`;
-
-const DayGroupCount = styled.span`
-  font-size: 11.5px;
-  font-weight: 700;
-  color: ${palette.muted};
-  background: rgba(255,255,255,0.70);
-  border: 1px solid ${palette.border};
-  border-radius: 999px;
-  padding: 2px 8px;
+  font-weight: 600;
 `;
 
 const AttendanceRow = styled.div`
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 9px 14px;
-  border-bottom: 1px solid rgba(0,0,0,0.04);
-  background: rgba(255,255,255,0.65);
-  &:last-child { border-bottom: none; }
-  &:hover { background: rgba(255,255,255,0.88); }
-`;
-
-const AttendeeInfo = styled.div`
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-`;
-
-const AttendeeName = styled.div`
-  font-size: 13.5px;
-  font-weight: 800;
-  color: ${palette.text};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const AttendeeEmail = styled.div`
-  font-size: 11.5px;
-  color: ${palette.muted};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const AttendeeRight = styled.div`
-  display: flex;
   align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-`;
-
-const CheckinTimeBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(43,38,32,0.06);
-  color: ${palette.text};
-  white-space: nowrap;
+  padding: ${spacing.sm} ${spacing.md};
+  border-bottom: 1px solid ${palette.border};
+  
+  &:last-child {
+    border-bottom: none;
+  }
 `;
 
 const PeriodTabs = styled.div`
   display: flex;
-  gap: 6px;
-  margin-top: 10px;
+  gap: ${spacing.sm};
+  margin-bottom: ${spacing.md};
   flex-wrap: wrap;
 `;
 
 const PeriodTab = styled.button`
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid ${(p) => p.$active ? palette.accent : palette.border};
-  background: ${(p) => p.$active ? "rgba(156,79,36,0.14)" : "rgba(255,255,255,0.60)"};
-  color: ${(p) => p.$active ? palette.accent : palette.text};
-  font-size: 13px;
-  font-weight: 800;
+  padding: ${spacing.xs} ${spacing.md};
+  border-radius: ${borderRadius.sm};
+  font-size: ${fontSize.sm};
+  background: ${props => props.$active ? palette.accent : "white"};
+  color: ${props => props.$active ? "white" : palette.text};
+  border: 1px solid ${props => props.$active ? palette.accent : palette.border};
   cursor: pointer;
-  &:hover { background: rgba(255,255,255,0.85); }
+  
+  &:hover {
+    background: ${props => props.$active ? palette.accent : palette.hover};
+  }
 `;
 
-const ConfirmText = styled.p`
-  margin: 0 0 16px;
-  font-size: 14px;
-  color: ${palette.text};
-  line-height: 1.6;
-`;
-
-/* -------------------- HELPERS -------------------- */
+// ============================================
+// HELPERS
+// ============================================
 const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MONTH_NAMES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
-const formatDate = (date) => {
-  try { return new Date(date).toLocaleDateString("es-CO"); }
-  catch { return "Fecha inválida"; }
-};
-
 const formatDateTime = (date) => {
   try { return new Date(date).toLocaleString("es-CO"); }
+  catch { return "—"; }
+};
+
+const formatDate = (date) => {
+  try { return new Date(date).toLocaleDateString("es-CO"); }
   catch { return "—"; }
 };
 
@@ -1172,9 +851,13 @@ function sameDay(a, b) {
 function hasCheckedInToday(user) {
   const today = new Date();
   if (user?.checkedInToday === true) return true;
-  if (user?.lastCheckinAt) return sameDay(user.lastCheckinAt, today);
-  if (user?.lastVisitAt) return sameDay(user.lastVisitAt, today);
-  return false;
+  if (user?.lastCheckinAt && sameDay(user.lastCheckinAt, today)) return true;
+  if (user?.lastVisitAt && sameDay(user.lastVisitAt, today)) return true;
+  const visits = user?.visits || [];
+  return visits.some((v) => {
+    const ts = v?.checkedInAt || v?.date;
+    return ts && sameDay(ts, today) && v?.status !== "cancelled";
+  });
 }
 
 function getMensualidadStatus(mensualidad) {
@@ -1184,7 +867,7 @@ function getMensualidadStatus(mensualidad) {
   const active = end > now;
   const days = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
   const label = active
-    ? `Activa · vence ${end.toLocaleDateString("es-CO")}`
+    ? `Vence ${end.toLocaleDateString("es-CO")}`
     : `Vencida ${end.toLocaleDateString("es-CO")}`;
   return { active, label, days };
 }
@@ -1193,6 +876,28 @@ function userCanCheckin(user) {
   if (user?.accessType === "ticketera") return (user.credits ?? 0) > 0;
   if (user?.accessType === "mensualidad") return getMensualidadStatus(user.mensualidad).active;
   return false;
+}
+
+function formatDayLabel(dateInput) {
+  if (!dateInput) return "Fecha desconocida";
+  try {
+    const d = new Date(dateInput);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    if (sameDay(d, today)) return "Hoy";
+    if (sameDay(d, yesterday)) return "Ayer";
+    return d.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
+  } catch { return String(dateInput); }
+}
+
+function formatCheckinTime(dateInput) {
+  if (!dateInput) return null;
+  try {
+    return new Date(dateInput).toLocaleTimeString("es-CO", {
+      hour: "2-digit", minute: "2-digit", hour12: true,
+    });
+  } catch { return null; }
 }
 
 function startOfPeriod(period) {
@@ -1211,34 +916,6 @@ function formatTabDate(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   return `${DAY_NAMES[date.getDay()]} ${d} ${MONTH_NAMES[m - 1]}`;
-}
-
-function isTodayStr(dateStr) {
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
-  return dateStr === todayStr;
-}
-
-function formatCheckinTime(dateInput) {
-  if (!dateInput) return null;
-  try {
-    return new Date(dateInput).toLocaleTimeString("es-CO", {
-      hour: "2-digit", minute: "2-digit", hour12: true,
-    });
-  } catch { return null; }
-}
-
-function formatDayLabel(dateInput) {
-  if (!dateInput) return "Fecha desconocida";
-  try {
-    const d = new Date(dateInput);
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-    if (sameDay(d, today)) return "Hoy";
-    if (sameDay(d, yesterday)) return "Ayer";
-    return d.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
-  } catch { return String(dateInput); }
 }
 
 function normalizeDocType(v) {
@@ -1261,31 +938,85 @@ const INITIAL_FORM = {
   accessType: "ticketera", mensualidadMeses: 1, esMinor: false,
 };
 
-/* -------------------- SUB COMPONENTS -------------------- */
+// ============================================
+// SUBCOMPONENTES
+// ============================================
 function AccessInfo({ user, onRenovar, onChangeAccess, busy }) {
   if (user.accessType === "mensualidad") {
     const { active, label } = getMensualidadStatus(user.mensualidad);
     return (
-      <div style={{ display: "grid", gap: 6 }}>
-        <AccessTypePill $type="mensualidad">Mensualidad</AccessTypePill>
-        <MensualidadBadge $active={active}>{active ? "🟢" : "🔴"} {label}</MensualidadBadge>
-        <RenovarBtn onClick={() => onRenovar(user._id)} disabled={busy}>
-          🔄 {active ? "Extender" : "Renovar"}
-        </RenovarBtn>
-        <TinyBtn onClick={() => onChangeAccess(user)} disabled={busy} style={{ fontSize: 12 }}>
-          ↔ Cambiar modalidad
-        </TinyBtn>
+      <div style={{ display: "flex", gap: spacing.sm, alignItems: "center", flexWrap: "wrap" }}>
+        <Badge $success={active} $danger={!active}>
+          {active ? "✓" : "✗"} {label}
+        </Badge>
+        <Button $variant="secondary" $small onClick={() => onRenovar(user._id)} disabled={busy}>
+          Renovar
+        </Button>
+        <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
+          Cambiar
+        </Button>
       </div>
     );
   }
   return (
-    <div style={{ display: "grid", gap: 6 }}>
-      <AccessTypePill $type="ticketera">Tiquetera</AccessTypePill>
-      <Badge><b>{user.credits ?? 0}</b><Muted>créditos</Muted></Badge>
-      <TinyBtn onClick={() => onChangeAccess(user)} disabled={busy} style={{ fontSize: 12 }}>
-        ↔ Cambiar modalidad
-      </TinyBtn>
+    <div style={{ display: "flex", gap: spacing.sm, alignItems: "center", flexWrap: "wrap" }}>
+      <Badge>{user.credits ?? 0} créditos</Badge>
+      <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
+        Cambiar
+      </Button>
     </div>
+  );
+}
+
+function ActionMenu({ user, onCheckin, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy }) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
+  
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+  
+  const lastVisit = user?.visits?.[0];
+  
+  return (
+    <Dropdown ref={menuRef}>
+      <Button $variant="secondary" onClick={() => setOpen(!open)} disabled={busy}>
+        ⋯ Acciones
+      </Button>
+      {open && (
+        <DropdownMenu>
+          <DropdownItem onClick={() => { onCheckin(user); setOpen(false); }}>
+            ✓ Check-in
+          </DropdownItem>
+          <DropdownItem onClick={() => { onMoon(user); setOpen(false); }}>
+            🌑 MoonBoard
+          </DropdownItem>
+          <DropdownItem onClick={() => { onViewProfile(user); setOpen(false); }}>
+            👤 Ver datos
+          </DropdownItem>
+          <DropdownItem onClick={() => { onCredits(user._id); setOpen(false); }}>
+            💰 Créditos
+          </DropdownItem>
+          <DropdownItem onClick={() => { onHistory(user); setOpen(false); }}>
+            📜 Historial
+          </DropdownItem>
+          {lastVisit && (
+            <DropdownItem onClick={() => { onEditVisit(user, lastVisit); setOpen(false); }}>
+              ✏️ Editar última visita
+            </DropdownItem>
+          )}
+          <DropdownItem $danger onClick={() => { onDelete(user); setOpen(false); }}>
+            🗑️ Eliminar
+          </DropdownItem>
+        </DropdownMenu>
+      )}
+    </Dropdown>
   );
 }
 
@@ -1296,45 +1027,82 @@ function ModalPortal({ children }) {
   return createPortal(children, document.body);
 }
 
-function AuditFeed({ events }) {
+function AuditFeed({ events, loading }) {
   return (
-    <AuditPanel>
-      <div style={{ fontWeight: 800, fontSize: 13, color: palette.text, paddingBottom: 8, borderBottom: `1px solid ${palette.border}` }}>
+    <div style={{ 
+      padding: spacing.lg, 
+      borderLeft: `1px solid ${palette.border}`,
+      background: palette.bg,
+      minWidth: "280px",
+      display: "none",
+      "@media (min-width: 1024px)": {
+        display: "block"
+      }
+    }}>
+      <div style={{ fontWeight: 600, marginBottom: spacing.md }}>
         Actividad reciente
+        {loading && <span style={{ color: palette.textLight, marginLeft: spacing.sm }}>···</span>}
       </div>
-      <AuditList>
-        {(events || []).map((e) => (
-          <AuditItem key={e._id || `${e.ts}-${e.action}-${e.userId || "x"}`}>
-            <AuditLine>
-              {e.summary ? <span>{e.summary}</span> : (
-                <><b>{e.action}</b> · {e.userName || e.userEmail || "Usuario"} · por <b>{e.actorName || e.actorEmail || "admin"}</b></>
-              )}
-            </AuditLine>
-            <AuditMeta>
-              <span>{formatDateTime(e.ts)}</span>
-              {e.userEmail ? <span>· {e.userEmail}</span> : null}
-            </AuditMeta>
-          </AuditItem>
+      <div style={{ display: "grid", gap: spacing.sm }}>
+        {(events || []).slice(0, 15).map((e) => (
+          <div key={e._id || `${e.ts}-${e.action}`} style={{ 
+            fontSize: fontSize.sm, 
+            padding: spacing.sm,
+            borderBottom: `1px solid ${palette.border}`,
+            background: "white",
+            borderRadius: borderRadius.sm
+          }}>
+            <div style={{ fontWeight: 500 }}>{e.summary || `${e.action} - ${e.userName || e.userEmail}`}</div>
+            <div style={{ color: palette.textLight, fontSize: fontSize.sm, marginTop: spacing.xs }}>
+              {formatDateTime(e.ts)}
+            </div>
+          </div>
         ))}
-      </AuditList>
-    </AuditPanel>
+      </div>
+    </div>
   );
 }
 
-/* -------------------- MAIN COMPONENT -------------------- */
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
+  // Estados de datos
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [auditEvents, setAuditEvents] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [quickFilter, setQuickFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [uiError, setUiError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  // Modal visibility
+  // ============================================
+  // NUEVOS ESTADOS: Paginación, Filtros, Ordenamiento
+  // ============================================
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [sortField, setSortField] = useState("name");
+  const [sortDirection, setSortDirection] = useState("asc");
+  
+  // Filtro por fecha de registro
+  const [registrationFilter, setRegistrationFilter] = useState("all"); // all, today, week, month, custom
+  const [registrationStartDate, setRegistrationStartDate] = useState("");
+  const [registrationEndDate, setRegistrationEndDate] = useState("");
+  
+  // Ver check-ins por fecha específica
+  const [showCheckinsByDateModal, setShowCheckinsByDateModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [checkinsByDate, setCheckinsByDate] = useState([]);
+
+  // KPIs
+  const [kpiPeriod, setKpiPeriod] = useState("week");
+
+  // Modales
   const [showCreditsModal, setShowCreditsModal] = useState(false);
-  const [showReservationModal, setShowReservationModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showNewUserModal, setShowNewUserModal] = useState(false);
   const [showRenovarModal, setShowRenovarModal] = useState(false);
@@ -1343,28 +1111,29 @@ export default function AdminPage() {
   const [showWaiverModal, setShowWaiverModal] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
-  const [showConfirmDeleteModal, setShowConfirmDeleteModal] = useState(false);
-  // Moon modals
   const [showMoonModal, setShowMoonModal] = useState(false);
   const [showCancelMoonModal, setShowCancelMoonModal] = useState(false);
+  const [showEditVisitModal, setShowEditVisitModal] = useState(false);
 
   // New user
   const [newUserStep, setNewUserStep] = useState(1);
   const [newUserForm, setNewUserForm] = useState(INITIAL_FORM);
-
-  // Waiver
   const [waiverAccepted, setWaiverAccepted] = useState(false);
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
   const hasInkRef = useRef(false);
   const lastPointRef = useRef({ x: 0, y: 0 });
 
-  // Selected entities
+  // Seleccionados
   const [selectedUser, setSelectedUser] = useState(null);
   const [viewingUser, setViewingUser] = useState(null);
   const [waiverUser, setWaiverUser] = useState(null);
   const [checkinUser, setCheckinUser] = useState(null);
   const [checkinSuccess, setCheckinSuccess] = useState("");
+  
+  // Edit visit
+  const [editingVisit, setEditingVisit] = useState(null);
+  const [editingVisitUser, setEditingVisitUser] = useState(null);
 
   // Access modal
   const [accessUser, setAccessUser] = useState(null);
@@ -1376,15 +1145,6 @@ export default function AdminPage() {
   const [credits, setCredits] = useState(0);
   const [creditsSuccess, setCreditsSuccess] = useState("");
   const [renovarMonths, setRenovarMonths] = useState(1);
-
-  // Reservation
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState("");
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [isFirstReservation, setIsFirstReservation] = useState(false);
-
-  // Confirm delete reservation
-  const [pendingDeleteRes, setPendingDeleteRes] = useState(null);
 
   // Attendance
   const [attendancePeriod, setAttendancePeriod] = useState("week");
@@ -1400,23 +1160,18 @@ export default function AdminPage() {
   const [historyVisits, setHistoryVisits] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // ---- Moon state ----
-  const [moonUser, setMoonUser] = useState(null); // user for whom we're booking
+  // Moon
+  const [moonUser, setMoonUser] = useState(null);
   const [moonDays, setMoonDays] = useState([]);
   const [moonSelectedDay, setMoonSelectedDay] = useState(0);
   const [moonLoading, setMoonLoading] = useState(false);
   const [moonSubmitting, setMoonSubmitting] = useState(false);
   const [moonMsg, setMoonMsg] = useState("");
   const [moonSuccess, setMoonSuccess] = useState("");
-  const [cancelMoonRes, setCancelMoonRes] = useState(null); // { reservationId, userName }
-  const [moonAttendance, setMoonAttendance] = useState([]); // for attendance modal
-
-  const [query, setQuery] = useState("");
-  const [uiError, setUiError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [cancelMoonRes, setCancelMoonRes] = useState(null);
+  const [moonAttendance, setMoonAttendance] = useState([]);
 
   const didInit = useRef(false);
-
   const waiverCityLine = useMemo(
     () => `Bucaramanga, Santander — ${new Date().toLocaleDateString("es-CO")}`, []
   );
@@ -1433,19 +1188,18 @@ export default function AdminPage() {
     participantName: (waiverUser?.name || "").trim(),
   }), [waiverCityLine, waiverUser?.esMinor, waiverUser?.name]);
 
-  // ---- Body scroll lock ----
+  // Body scroll lock
   useEffect(() => {
-    const open = showCreditsModal || showReservationModal || showProfileModal ||
-      showNewUserModal || showRenovarModal || showCheckinModal || showHistoryModal ||
-      showWaiverModal || showAccessModal || showAttendanceModal || showConfirmDeleteModal ||
-      showMoonModal || showCancelMoonModal;
+    const open = showCreditsModal || showProfileModal || showNewUserModal || showRenovarModal ||
+      showCheckinModal || showHistoryModal || showWaiverModal || showAccessModal ||
+      showAttendanceModal || showMoonModal || showCancelMoonModal || showEditVisitModal || showCheckinsByDateModal;
     document.body.classList.toggle("modal-open", open);
     return () => document.body.classList.remove("modal-open");
-  }, [showCreditsModal, showReservationModal, showProfileModal, showNewUserModal,
-    showRenovarModal, showCheckinModal, showHistoryModal, showWaiverModal,
-    showAccessModal, showAttendanceModal, showConfirmDeleteModal, showMoonModal, showCancelMoonModal]);
+  }, [showCreditsModal, showProfileModal, showNewUserModal, showRenovarModal,
+    showCheckinModal, showHistoryModal, showWaiverModal, showAccessModal,
+    showAttendanceModal, showMoonModal, showCancelMoonModal, showEditVisitModal, showCheckinsByDateModal]);
 
-  // ---- Data fetching ----
+  // Data fetching
   const fetchUsers = useCallback(async () => {
     setUiError("");
     setLoading(true);
@@ -1472,7 +1226,6 @@ export default function AdminPage() {
     }
   }, []);
 
-  // Fetch moon slots for a specific user context (admin view)
   const fetchMoonSlots = useCallback(async () => {
     setMoonLoading(true);
     setMoonMsg("");
@@ -1486,7 +1239,6 @@ export default function AdminPage() {
     }
   }, []);
 
-  // Fetch moon reservations for attendance modal
   const fetchMoonAttendance = useCallback(async () => {
     try {
       const res = await axios.get("/api/admin/moon/reservations");
@@ -1511,85 +1263,477 @@ export default function AdminPage() {
     setAuditEvents((prev) => [evt, ...(prev || [])].slice(0, 80));
   };
 
-  // ---- Derived data ----
-  const counts = useMemo(() => {
-    const total = users.length;
-    const waiverPend = users.filter((u) => u?.waiverStatus !== "signed").length;
-    const mensualidadVencida = users.filter(
-      (u) => u?.accessType === "mensualidad" && !getMensualidadStatus(u?.mensualidad).active
-    ).length;
-    const sinCreditos = users.filter((u) => u?.accessType === "ticketera" && (u?.credits ?? 0) <= 0).length;
-    const menores = users.filter((u) => !!u?.esMinor).length;
-    const checkinHoy = users.filter((u) => hasCheckedInToday(u)).length;
-    return { total, waiverPend, mensualidadVencida, sinCreditos, menores, checkinHoy };
-  }, [users]);
+  // ============================================
+  // FUNCIÓN PARA VER CHECK-INS POR FECHA ESPECÍFICA
+  // ============================================
+  const fetchCheckinsByDate = async (date) => {
+    if (!date) return;
+    setBusy(true);
+    try {
+      const res = await axios.get(`/api/admin/checkins?date=${date}`);
+      setCheckinsByDate(res.data?.checkins || []);
+      setSelectedDate(date);
+      setShowCheckinsByDateModal(true);
+    } catch (error) {
+      setUiError("No se pudieron cargar los check-ins de esa fecha.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
-  const filteredUsers = useMemo(() => {
+  // ============================================
+  // FILTRO POR FECHA DE REGISTRO
+  // ============================================
+  const getRegistrationDateFilter = useCallback(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (registrationFilter) {
+      case "today":
+        return { start: today, end: new Date(today.getTime() + 86400000) };
+      case "week":
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - now.getDay());
+        weekStart.setHours(0, 0, 0, 0);
+        return { start: weekStart, end: now };
+      case "month":
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: monthStart, end: now };
+      case "custom":
+        return { 
+          start: registrationStartDate ? new Date(registrationStartDate) : null,
+          end: registrationEndDate ? new Date(registrationEndDate) : null
+        };
+      default:
+        return null;
+    }
+  }, [registrationFilter, registrationStartDate, registrationEndDate]);
+
+  // ============================================
+  // ORDENAMIENTO
+  // ============================================
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+    setCurrentPage(1);
+  };
+
+  const getSortIcon = (field) => {
+    if (sortField !== field) return <SortIcon $active={false}>↕️</SortIcon>;
+    return <SortIcon $active={true}>{sortDirection === "asc" ? "↑" : "↓"}</SortIcon>;
+  };
+
+  // ============================================
+  // FILTRADO Y ORDENAMIENTO DE USUARIOS
+  // ============================================
+  const filteredAndSortedUsers = useMemo(() => {
+    let result = [...users];
+    
+    // Búsqueda por nombre/email
     const q = query.trim().toLowerCase();
-    let list = users;
-    if (q) list = list.filter((u) => (u?.name || "").toLowerCase().includes(q) || (u?.email || "").toLowerCase().includes(q));
+    if (q) {
+      result = result.filter((u) => 
+        (u?.name || "").toLowerCase().includes(q) || 
+        (u?.email || "").toLowerCase().includes(q)
+      );
+    }
+    
+    // Filtro rápido (waiver, créditos, etc.)
     switch (quickFilter) {
-      case "waiver": list = list.filter((u) => u?.waiverStatus !== "signed"); break;
-      case "mensualidadVencida": list = list.filter((u) => u?.accessType === "mensualidad" && !getMensualidadStatus(u?.mensualidad).active); break;
-      case "sinCreditos": list = list.filter((u) => u?.accessType === "ticketera" && (u?.credits ?? 0) <= 0); break;
-      case "menores": list = list.filter((u) => !!u?.esMinor); break;
-      case "checkinHoy": list = list.filter((u) => hasCheckedInToday(u)); break;
-      default: break;
+      case "waiver":
+        result = result.filter((u) => u?.waiverStatus !== "signed");
+        break;
+      case "mensualidadVencida":
+        result = result.filter((u) => u?.accessType === "mensualidad" && !getMensualidadStatus(u?.mensualidad).active);
+        break;
+      case "sinCreditos":
+        result = result.filter((u) => u?.accessType === "ticketera" && (u?.credits ?? 0) <= 0);
+        break;
+      case "menores":
+        result = result.filter((u) => !!u?.esMinor);
+        break;
+      case "checkinHoy":
+        result = result.filter((u) => hasCheckedInToday(u));
+        break;
+      default:
+        break;
     }
-    return list;
-  }, [users, query, quickFilter]);
-
-  const attendanceData = useMemo(() => {
-    const start = startOfPeriod(attendancePeriod);
-    const checkedIn = [];
-    users.forEach((u) => {
-      const visits = u?.visits || [];
-      const periodVisits = visits.filter((v) => {
-        const d = new Date(v?.date || v?.checkedInAt);
-        return d >= start && (v?.status === "checked_in" || v?.status === "registered");
-      });
-      if (periodVisits.length > 0) {
-        checkedIn.push({ user: u, visits: periodVisits, count: periodVisits.length });
-      }
-    });
-    checkedIn.sort((a, b) => b.count - a.count);
-    return checkedIn;
-  }, [users, attendancePeriod]);
-
-  // Moon slots for current day tab
-  const currentMoonDay = moonDays[moonSelectedDay];
-
-  // Find existing active reservation for moonUser
-  const moonUserActiveRes = useMemo(() => {
-    if (!moonUser || !moonDays.length) return null;
-    for (const day of moonDays) {
-      for (const slot of day.slots) {
-        if (slot.takenBy && slot.takenBy.isMe === false) {
-          // slot taken by someone else, skip
+    
+    // Filtro por fecha de registro
+    const dateFilter = getRegistrationDateFilter();
+    if (dateFilter && dateFilter.start) {
+      result = result.filter((u) => {
+        const createdAt = u?.createdAt ? new Date(u.createdAt) : null;
+        if (!createdAt) return false;
+        if (dateFilter.end) {
+          return createdAt >= dateFilter.start && createdAt <= dateFilter.end;
         }
-        // We need to check from the admin moon endpoint if this user has a reservation
-        // For now we'll rely on slot.isMySlot being false (admin context)
-      }
+        return createdAt >= dateFilter.start;
+      });
     }
-    return null;
-  }, [moonUser, moonDays]);
+    
+    // Ordenamiento
+    result.sort((a, b) => {
+      let aVal, bVal;
+      switch (sortField) {
+        case "name":
+          aVal = (a.name || "").toLowerCase();
+          bVal = (b.name || "").toLowerCase();
+          break;
+        case "email":
+          aVal = (a.email || "").toLowerCase();
+          bVal = (b.email || "").toLowerCase();
+          break;
+        case "credits":
+          aVal = a.accessType === "mensualidad" ? 999999 : (a.credits ?? 0);
+          bVal = b.accessType === "mensualidad" ? 999999 : (b.credits ?? 0);
+          break;
+        case "lastCheckin":
+          aVal = a.lastCheckinAt ? new Date(a.lastCheckinAt).getTime() : 0;
+          bVal = b.lastCheckinAt ? new Date(b.lastCheckinAt).getTime() : 0;
+          break;
+        case "createdAt":
+          aVal = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          bVal = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          break;
+        default:
+          aVal = (a.name || "").toLowerCase();
+          bVal = (b.name || "").toLowerCase();
+      }
+      if (sortDirection === "asc") return aVal > bVal ? 1 : -1;
+      return aVal < bVal ? 1 : -1;
+    });
+    
+    return result;
+  }, [users, query, quickFilter, sortField, sortDirection, getRegistrationDateFilter]);
 
-  // ---- Modal openers ----
+  // ============================================
+  // PAGINACIÓN
+  // ============================================
+  const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage);
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredAndSortedUsers.slice(start, start + itemsPerPage);
+  }, [filteredAndSortedUsers, currentPage, itemsPerPage]);
+
+  const goToPage = (page) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  // Resetear página cuando cambian filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, quickFilter, sortField, sortDirection, registrationFilter, registrationStartDate, registrationEndDate]);
+
+  // ============================================
+  // KPI CALCULATIONS
+  // ============================================
+  const kpiData = useMemo(() => {
+    const now = new Date();
+    let periodStart;
+    
+    if (kpiPeriod === "today") {
+      periodStart = new Date();
+      periodStart.setHours(0, 0, 0, 0);
+    } else if (kpiPeriod === "week") {
+      periodStart = new Date();
+      const day = periodStart.getDay();
+      periodStart.setDate(periodStart.getDate() - day);
+      periodStart.setHours(0, 0, 0, 0);
+    } else {
+      periodStart = new Date();
+      periodStart.setDate(1);
+      periodStart.setHours(0, 0, 0, 0);
+    }
+    
+    const previousPeriodStart = new Date(periodStart);
+    const periodEnd = new Date();
+    
+    let totalCheckins = 0;
+    let totalMensualidadCheckins = 0;
+    let totalTicketeraCheckins = 0;
+    let uniqueUsers = new Set();
+    let mensualidadUsers = new Set();
+    let ticketeraUsers = new Set();
+    
+    const previousPeriodEnd = new Date(periodStart);
+    previousPeriodEnd.setMilliseconds(-1);
+    const previousPeriodStartDate = new Date(previousPeriodEnd);
+    const duration = periodEnd - periodStart;
+    previousPeriodStartDate.setTime(previousPeriodStartDate.getTime() - duration);
+    
+    let prevTotalCheckins = 0;
+    let prevUniqueUsers = new Set();
+    
+    users.forEach(user => {
+      const visits = user?.visits || [];
+      visits.forEach(visit => {
+        const visitDate = new Date(visit.date || visit.checkedInAt);
+        const status = visit.status;
+        if (status === "checked_in" || status === "registered") {
+          if (visitDate >= periodStart && visitDate <= periodEnd) {
+            totalCheckins++;
+            uniqueUsers.add(user._id);
+            if (user.accessType === "mensualidad") {
+              totalMensualidadCheckins++;
+              mensualidadUsers.add(user._id);
+            } else {
+              totalTicketeraCheckins++;
+              ticketeraUsers.add(user._id);
+            }
+          }
+          if (visitDate >= previousPeriodStartDate && visitDate <= previousPeriodEnd) {
+            prevTotalCheckins++;
+            prevUniqueUsers.add(user._id);
+          }
+        }
+      });
+    });
+    
+    const checkinChange = prevTotalCheckins === 0 ? 100 : ((totalCheckins - prevTotalCheckins) / prevTotalCheckins) * 100;
+    const usersChange = prevUniqueUsers.size === 0 ? 100 : ((uniqueUsers.size - prevUniqueUsers.size) / prevUniqueUsers.size) * 100;
+    const estimatedRevenue = totalTicketeraCheckins * 15000;
+    
+    return {
+      totalCheckins,
+      uniqueUsers: uniqueUsers.size,
+      mensualidadCheckins: totalMensualidadCheckins,
+      ticketeraCheckins: totalTicketeraCheckins,
+      mensualidadUsers: mensualidadUsers.size,
+      ticketeraUsers: ticketeraUsers.size,
+      estimatedRevenue,
+      checkinChange,
+      usersChange
+    };
+  }, [users, kpiPeriod]);
+
+  // ============================================
+  // EDIT VISIT FUNCTION
+  // ============================================
+  const handleEditVisit = (user, visit) => {
+    setEditingVisitUser(user);
+    setEditingVisit(visit);
+    setShowEditVisitModal(true);
+  };
+
+  const submitEditVisit = async ({ visitId, userId, status, notes, date }) => {
+    setBusy(true);
+    setUiError("");
+    try {
+      const res = await axios.put(`/api/admin/visits/${visitId}`, {
+        userId,
+        status,
+        notes,
+        date
+      });
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      await fetchUsers();
+      setShowEditVisitModal(false);
+      setEditingVisit(null);
+      setEditingVisitUser(null);
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudo editar la visita.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ============================================
+  // EXPORT FUNCTIONS
+  // ============================================
+  const exportToCSV = () => {
+    const headers = ["Nombre", "Email", "Teléfono", "Documento", "Tipo Acceso", "Créditos/Mensualidad", "Waiver", "Último Check-in", "Fecha Registro"];
+    const rows = filteredAndSortedUsers.map(user => [
+      user.name || "",
+      user.email || "",
+      user.phone || "",
+      `${user.documentType || ""} ${user.documentNumber || ""}`,
+      user.accessType === "mensualidad" ? "Mensualidad" : "Tiquetera",
+      user.accessType === "mensualidad" 
+        ? getMensualidadStatus(user.mensualidad).label 
+        : `${user.credits ?? 0} créditos`,
+      user.waiverStatus === "signed" ? "Firmado" : "Pendiente",
+      user.lastCheckinAt ? formatDateTime(user.lastCheckinAt) : "Nunca",
+      user.createdAt ? formatDate(user.createdAt) : "—"
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute("download", `usuarios_${formatDate(new Date())}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Delete user
+  const handleDeleteUser = async (user) => {
+    if (!window.confirm(`¿Eliminar a ${user.name || user.email}? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    
+    setUiError("");
+    setBusy(true);
+    try {
+      const res = await axios.delete(`/api/admin/users/${user._id}/delete`);
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      
+      if (viewingUser?._id === user._id) {
+        setShowProfileModal(false);
+        setViewingUser(null);
+      }
+      if (checkinUser?._id === user._id) setShowCheckinModal(false);
+      if (historyUser?._id === user._id) setShowHistoryModal(false);
+      if (moonUser?._id === user._id) setShowMoonModal(false);
+      
+      await fetchUsers();
+      await fetchAudit();
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudo eliminar el usuario.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Checkin
+  const handleCheckin = (user) => {
+    setUiError("");
+    setCheckinSuccess("");
+    setCheckinUser(user);
+    setShowCheckinModal(true);
+  };
+
+  const submitCheckin = async () => {
+    setUiError("");
+    setCheckinSuccess("");
+    if (!checkinUser) return;
+    setBusy(true);
+    try {
+      const res = await axios.post("/api/admin/visits/checkin", { userId: checkinUser._id });
+      const code = res.data?.code;
+      if (code === "ALREADY_CHECKED_IN") {
+        setCheckinSuccess("✅ Este usuario ya hizo check-in hoy.");
+      } else {
+        const creditsMsg = checkinUser.accessType === "ticketera"
+          ? ` Créditos restantes: ${res.data?.credits ?? ""}` : "";
+        setCheckinSuccess(`✅ Check-in registrado.${creditsMsg}`);
+      }
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      await fetchUsers();
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudo registrar el check-in.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Credits
   const handleAddCredits = (userId) => {
-    setUiError(""); setCreditsSuccess("");
-    setSelectedUser(userId); setCredits(0);
+    setUiError("");
+    setCreditsSuccess("");
+    setSelectedUser(userId);
+    setCredits(0);
     setShowCreditsModal(true);
   };
 
-  const handleCreateReservation = (userId) => {
+  const submitCredits = async () => {
     setUiError("");
-    setSelectedUser(userId); setSelectedDate(null);
-    setSelectedTime(""); setIsPrivate(false); setIsFirstReservation(false);
-    setShowReservationModal(true);
+    setCreditsSuccess("");
+    const amount = Number(credits);
+    if (!selectedUser) { setUiError("Selecciona un usuario."); return; }
+    if (!Number.isFinite(amount)) { setUiError("Créditos inválidos."); return; }
+    setBusy(true);
+    try {
+      const res = await axios.post("/api/admin/adjust-credits", {
+        userId: selectedUser, credits: parseInt(amount, 10),
+      });
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      setCreditsSuccess("✅ Créditos actualizados correctamente.");
+      setCredits(0);
+      await fetchUsers();
+      setTimeout(() => { setShowCreditsModal(false); setCreditsSuccess(""); }, 1400);
+    } catch (error) {
+      setUiError("No se pudieron modificar los créditos.");
+    } finally {
+      setBusy(false);
+    }
   };
 
+  // Renovar
+  const handleRenovar = (userId) => {
+    setUiError("");
+    setSelectedUser(userId);
+    setRenovarMonths(1);
+    setShowRenovarModal(true);
+  };
+
+  const submitRenovar = async () => {
+    setUiError("");
+    if (!selectedUser) return;
+    setBusy(true);
+    try {
+      const res = await axios.post("/api/admin/mensualidad/renovar", {
+        userId: selectedUser, months: renovarMonths,
+      });
+      setShowRenovarModal(false);
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      await fetchUsers();
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudo renovar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Access type
+  const openAccessModal = (user) => {
+    setUiError("");
+    setAccessUser(user);
+    setAccessTypeDraft(user?.accessType || "ticketera");
+    setAccessMonthsDraft(1);
+    setAccessCreditsDraft(0);
+    setShowAccessModal(true);
+  };
+
+  const submitAccessType = async () => {
+    setUiError("");
+    if (!accessUser?._id) return;
+    setBusy(true);
+    try {
+      const payload = {
+        userId: accessUser._id,
+        accessType: accessTypeDraft,
+        months: accessTypeDraft === "mensualidad" ? accessMonthsDraft : undefined,
+        credits: accessTypeDraft === "ticketera" ? Number(accessCreditsDraft || 0) : undefined,
+      };
+      const res = await axios.post("/api/admin/users/set-access-type", payload);
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      setShowAccessModal(false);
+      setAccessUser(null);
+      if (viewingUser?._id && String(viewingUser._id) === String(payload.userId)) {
+        const updated = res.data?.user;
+        if (updated) setViewingUser(updated);
+      }
+      await fetchUsers();
+    } catch (e) {
+      setUiError(e?.response?.data?.message || "No se pudo cambiar la modalidad.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Profile
   const handleViewProfile = (user) => {
-    setUiError(""); setEditingProfile(false); setEditSuccess("");
+    setUiError("");
+    setEditingProfile(false);
+    setEditSuccess("");
     setEditForm({
       name: user.name || "",
       phone: user.phone || "",
@@ -1603,44 +1747,192 @@ export default function AdminPage() {
     setShowProfileModal(true);
   };
 
+  const submitEditProfile = async () => {
+    setUiError("");
+    setEditSuccess("");
+    if (!viewingUser?._id) return;
+    setBusy(true);
+    try {
+      const res = await axios.post("/api/admin/users/update-profile", {
+        userId: viewingUser._id,
+        ...editForm,
+        documentType: normalizeDocType(editForm.documentType),
+      });
+      const updated = res.data?.user || { ...viewingUser, ...editForm };
+      setViewingUser(updated);
+      setUsers((prev) => prev.map((u) => String(u._id) === String(viewingUser._id) ? updated : u));
+      setEditSuccess("✅ Datos actualizados correctamente.");
+      setEditingProfile(false);
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+    } catch (e) {
+      setUiError(e?.response?.data?.message || "No se pudo actualizar el perfil.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // History
+  const openHistory = async (user) => {
+    setUiError("");
+    setHistoryUser(user);
+    setHistoryVisits([]);
+    setShowHistoryModal(true);
+    setHistoryLoading(true);
+    try {
+      const res = await axios.get(`/api/admin/users/${user._id}/visits?limit=80`);
+      setHistoryVisits(Array.isArray(res.data?.visits) ? res.data.visits : []);
+    } catch (e) {
+      setUiError(e?.response?.data?.message || "No se pudo cargar el historial.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  // Waiver
   const openWaiverForUser = (user) => {
-    setUiError(""); setWaiverAccepted(false); hasInkRef.current = false;
-    setWaiverUser(user); setShowWaiverModal(true);
-    setTimeout(() => { resizeCanvasToDevicePixels(); clearSignature(); }, 0);
+    setUiError("");
+    setWaiverAccepted(false);
+    hasInkRef.current = false;
+    setWaiverUser(user);
+    setShowWaiverModal(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      resizeCanvasToDevicePixels();
+      clearSignature();
+    }));
   };
 
   const closeWaiverModal = () => {
     if (busy) return;
-    setShowWaiverModal(false); setWaiverUser(null);
-    setWaiverAccepted(false); clearSignature();
+    setShowWaiverModal(false);
+    setWaiverUser(null);
+    setWaiverAccepted(false);
   };
 
-  const handleRenovar = (userId) => {
-    setUiError(""); setSelectedUser(userId); setRenovarMonths(1);
-    setShowRenovarModal(true);
-  };
-
-  const handleCheckin = (user) => {
-    setUiError(""); setCheckinSuccess(""); setCheckinUser(user);
-    setShowCheckinModal(true);
-  };
-
-  const openAccessModal = (user) => {
+  const submitExistingUserWaiver = async () => {
     setUiError("");
-    setAccessUser(user);
-    setAccessTypeDraft(user?.accessType || "ticketera");
-    setAccessMonthsDraft(1);
-    setAccessCreditsDraft(0);
-    setShowAccessModal(true);
+    if (!waiverUser?._id) return setUiError("No hay usuario seleccionado.");
+    if (!waiverAccepted) return setUiError("Debes aceptar el waiver.");
+    const canvas = canvasRef.current;
+    if (!canvas) return setUiError("Canvas no disponible.");
+    if (isCanvasBlank(canvas) || !hasInkRef.current) return setUiError("La firma es obligatoria.");
+    const signatureImageUrl = exportSignatureDataUrl();
+    const { text: waiverTextSnapshot, version } = waiverSnapshotExistingUser;
+    setBusy(true);
+    try {
+      const res = await axios.post("/api/admin/waiver/sign", {
+        userId: waiverUser._id, version, method: "signature", waiverTextSnapshot,
+        signatureImageUrl,
+        signatureText: waiverUser.esMinor
+          ? `Representante legal de ${(waiverUser.name || "").trim()}`
+          : (waiverUser.name || "").trim(),
+        esMinor: !!waiverUser.esMinor,
+      });
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      await fetchUsers();
+      if (viewingUser?._id && String(viewingUser._id) === String(waiverUser._id)) {
+        const updated = res.data?.user;
+        if (updated) setViewingUser(updated);
+      }
+      closeWaiverModal();
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudo firmar el waiver.");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const openAttendanceModal = async () => {
-    setUiError(""); setAttendancePeriod("week"); setAttendanceSearch("");
-    setShowAttendanceModal(true);
-    fetchMoonAttendance();
+  // New user
+  const openNewUser = () => {
+    setUiError("");
+    setShowNewUserModal(true);
+    setNewUserStep(1);
+    setSelectedUser(null);
+    setWaiverAccepted(false);
+    hasInkRef.current = false;
+    setNewUserForm(INITIAL_FORM);
   };
 
-  // ---- Moon modal opener ----
+  const closeNewUser = () => {
+    if (busy) return;
+    setShowNewUserModal(false);
+    setNewUserStep(1);
+    setSelectedUser(null);
+    setWaiverAccepted(false);
+  };
+
+  const createNewUser = async () => {
+    setUiError("");
+    const payload = {
+      ...newUserForm,
+      name: (newUserForm.name || "").trim(),
+      email: (newUserForm.email || "").trim().toLowerCase(),
+      documentType: normalizeDocType(newUserForm.documentType),
+      documentNumber: (newUserForm.documentNumber || "").trim(),
+      phone: (newUserForm.phone || "").trim(),
+      epsName: (newUserForm.epsName || "").trim(),
+      emergencyContactName: (newUserForm.emergencyContactName || "").trim(),
+      emergencyContactPhone: (newUserForm.emergencyContactPhone || "").trim(),
+      accessType: newUserForm.accessType ?? "ticketera",
+      mensualidadMeses: newUserForm.accessType === "mensualidad" ? newUserForm.mensualidadMeses : undefined,
+      esMinor: newUserForm.esMinor ?? false,
+    };
+    if (!payload.name) return setUiError("El nombre es obligatorio.");
+    if (!payload.email) return setUiError("El email es obligatorio.");
+    if (!payload.documentType) return setUiError("El tipo de documento es obligatorio.");
+    if (!payload.documentNumber) return setUiError("El número de documento es obligatorio.");
+    if (!payload.phone) return setUiError("El teléfono es obligatorio.");
+    if (!payload.epsName) return setUiError("La EPS es obligatoria.");
+    if (!payload.emergencyContactName || !payload.emergencyContactPhone)
+      return setUiError("Completa el contacto de emergencia.");
+    setBusy(true);
+    try {
+      const response = await axios.post("/api/admin/users/create", payload);
+      const userId = response.data?.user?._id || response.data?.userId;
+      if (!userId) { setUiError("No llegó el userId del backend."); return; }
+      setSelectedUser(userId);
+      setNewUserStep(2);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        resizeCanvasToDevicePixels();
+        clearSignature();
+      }));
+      if (response.data?.auditEvent) appendAuditEvent(response.data.auditEvent);
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudo crear el usuario.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitNewUserWaiver = async () => {
+    setUiError("");
+    if (!selectedUser) return setUiError("No hay userId seleccionado.");
+    if (!waiverAccepted) return setUiError("Debes aceptar el waiver.");
+    const canvas = canvasRef.current;
+    if (!canvas) return setUiError("Canvas no disponible.");
+    if (isCanvasBlank(canvas) || !hasInkRef.current) return setUiError("La firma es obligatoria.");
+    const signatureImageUrl = exportSignatureDataUrl();
+    const { text: waiverTextSnapshot, version } = waiverSnapshotNewUser;
+    setBusy(true);
+    try {
+      const res = await axios.post("/api/admin/waiver/sign", {
+        userId: selectedUser, version, method: "signature", waiverTextSnapshot,
+        signatureImageUrl,
+        signatureText: newUserForm.esMinor
+          ? `Representante legal de ${(newUserForm.name || "").trim()}`
+          : (newUserForm.name || "").trim(),
+        esMinor: !!newUserForm.esMinor,
+      });
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      closeNewUser();
+      await fetchUsers();
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudo firmar el waiver.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Moon
   const openMoonModal = (user) => {
     setMoonUser(user);
     setMoonMsg("");
@@ -1658,7 +1950,6 @@ export default function AdminPage() {
     setMoonSuccess("");
   };
 
-  // ---- Moon actions ----
   const handleAdminMoonReserve = async (dateStr, hour) => {
     if (!moonUser || moonSubmitting) return;
     setMoonSubmitting(true);
@@ -1706,197 +1997,15 @@ export default function AdminPage() {
     }
   };
 
-  // ---- Actions ----
-  const submitCheckin = async () => {
-    setUiError(""); setCheckinSuccess("");
-    if (!checkinUser) return;
-    setBusy(true);
-    try {
-      const res = await axios.post("/api/admin/visits/checkin", { userId: checkinUser._id });
-      const code = res.data?.code;
-      if (code === "ALREADY_CHECKED_IN") {
-        setCheckinSuccess("✅ Este usuario ya hizo check-in hoy.");
-      } else {
-        const creditsMsg = checkinUser.accessType === "ticketera"
-          ? ` Créditos restantes: ${res.data?.credits ?? ""}` : "";
-        setCheckinSuccess(`✅ Check-in registrado.${creditsMsg}`);
-      }
-      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
-      await fetchUsers();
-    } catch (error) {
-      setUiError(error?.response?.data?.message || "No se pudo registrar el check-in.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const checkFirstReservation = async (date, time) => {
-    if (!date || !time) return;
-    const formattedDate = date.toISOString().split("T")[0];
-    try {
-      const response = await axios.post("/api/check-first-reservation", { date: formattedDate, time });
-      setIsFirstReservation(!!response.data?.isFirstReservation);
-    } catch { setIsFirstReservation(false); }
-  };
-
-  const handleDateSelection = (date) => {
-    setSelectedDate(date);
-    if (selectedTime) checkFirstReservation(date, selectedTime);
-  };
-
-  const handleTimeSelection = (event) => {
-    const time = event.target.value;
-    setSelectedTime(time);
-    if (selectedDate) checkFirstReservation(selectedDate, time);
-  };
-
-  const submitCredits = async () => {
-    setUiError(""); setCreditsSuccess("");
-    const amount = Number(credits);
-    if (!selectedUser) { setUiError("Selecciona un usuario."); return; }
-    if (!Number.isFinite(amount)) { setUiError("Créditos inválidos."); return; }
-    setBusy(true);
-    try {
-      const res = await axios.post("/api/admin/adjust-credits", {
-        userId: selectedUser, credits: parseInt(amount, 10),
-      });
-      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
-      setCreditsSuccess("✅ Créditos actualizados correctamente.");
-      setCredits(0);
-      await fetchUsers();
-      setTimeout(() => { setShowCreditsModal(false); setCreditsSuccess(""); }, 1400);
-    } catch (error) {
-      setUiError("No se pudieron modificar los créditos.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitRenovar = async () => {
+  const openAttendanceModal = async () => {
     setUiError("");
-    if (!selectedUser) return;
-    setBusy(true);
-    try {
-      const res = await axios.post("/api/admin/mensualidad/renovar", {
-        userId: selectedUser, months: renovarMonths,
-      });
-      setShowRenovarModal(false);
-      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
-      await fetchUsers();
-    } catch (error) {
-      setUiError(error?.response?.data?.message || "No se pudo renovar.");
-    } finally {
-      setBusy(false);
-    }
+    setAttendancePeriod("week");
+    setAttendanceSearch("");
+    setShowAttendanceModal(true);
+    fetchMoonAttendance();
   };
 
-  const submitAccessType = async () => {
-    setUiError("");
-    if (!accessUser?._id) return;
-    setBusy(true);
-    try {
-      const payload = {
-        userId: accessUser._id,
-        accessType: accessTypeDraft,
-        months: accessTypeDraft === "mensualidad" ? accessMonthsDraft : undefined,
-        credits: accessTypeDraft === "ticketera" ? Number(accessCreditsDraft || 0) : undefined,
-      };
-      const res = await axios.post("/api/admin/users/set-access-type", payload);
-      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
-      setShowAccessModal(false);
-      setAccessUser(null);
-      if (viewingUser?._id && String(viewingUser._id) === String(payload.userId)) {
-        const updated = res.data?.user;
-        if (updated) setViewingUser(updated);
-      }
-      await fetchUsers();
-    } catch (e) {
-      setUiError(e?.response?.data?.message || "No se pudo cambiar la modalidad.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const addReservation = async () => {
-    setUiError("");
-    if (!selectedUser) { setUiError("Selecciona un usuario."); return; }
-    if (!selectedDate || !selectedTime) { setUiError("Selecciona fecha y hora."); return; }
-    const formattedDate = selectedDate.toISOString().split("T")[0];
-    setBusy(true);
-    try {
-      const res = await axios.post("/api/reserve", {
-        userId: selectedUser, date: formattedDate, time: selectedTime, isPrivate,
-      });
-      setShowReservationModal(false);
-      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
-      await fetchUsers();
-    } catch (error) {
-      setUiError("No se pudo crear la reserva.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const confirmRemoveReservation = (userId, reservationId) => {
-    setPendingDeleteRes({ userId, reservationId });
-    setShowConfirmDeleteModal(true);
-  };
-
-  const executeRemoveReservation = async () => {
-    if (!pendingDeleteRes) return;
-    const { userId, reservationId } = pendingDeleteRes;
-    setBusy(true);
-    try {
-      const res = await axios.post("/api/admin/remove-reservation", { userId, reservationId });
-      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
-      setShowConfirmDeleteModal(false);
-      setPendingDeleteRes(null);
-      await fetchUsers();
-    } catch (error) {
-      setUiError("No se pudo eliminar la reserva.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const openHistory = async (user) => {
-    setUiError(""); setHistoryUser(user); setHistoryVisits([]);
-    setShowHistoryModal(true); setHistoryLoading(true);
-    try {
-      const res = await axios.get(`/api/admin/users/${user._id}/visits?limit=80`);
-      setHistoryVisits(Array.isArray(res.data?.visits) ? res.data.visits : []);
-    } catch (e) {
-      setUiError(e?.response?.data?.message || "No se pudo cargar el historial.");
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
-
-  // ---- Profile editing ----
-  const submitEditProfile = async () => {
-    setUiError(""); setEditSuccess("");
-    if (!viewingUser?._id) return;
-    setBusy(true);
-    try {
-      const res = await axios.post("/api/admin/users/update-profile", {
-        userId: viewingUser._id,
-        ...editForm,
-        documentType: normalizeDocType(editForm.documentType),
-      });
-      const updated = res.data?.user || { ...viewingUser, ...editForm };
-      setViewingUser(updated);
-      setUsers((prev) => prev.map((u) => String(u._id) === String(viewingUser._id) ? updated : u));
-      setEditSuccess("✅ Datos actualizados correctamente.");
-      setEditingProfile(false);
-      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
-    } catch (e) {
-      setUiError(e?.response?.data?.message || "No se pudo actualizar el perfil.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // ---- Canvas signature ----
+  // Canvas signature functions
   function getCanvasCtx() {
     const c = canvasRef.current;
     if (!c) return null;
@@ -1911,14 +2020,18 @@ export default function AdminPage() {
     c.width = Math.floor(rect.width * dpr);
     c.height = Math.floor(rect.height * dpr);
     const ctx = c.getContext("2d");
+    if (!ctx) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
-    ctx.lineWidth = 2.5; ctx.lineCap = "round";
-    ctx.lineJoin = "round"; ctx.strokeStyle = "#1f1f1f";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1f1f1f";
   }
 
   function getLocalPos(e) {
     const c = canvasRef.current;
+    if (!c) return { x: 0, y: 0 };
     const rect = c.getBoundingClientRect();
     if (e?.clientX != null) return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     const t = e?.touches?.[0] || e?.changedTouches?.[0];
@@ -1926,288 +2039,302 @@ export default function AdminPage() {
     return { x: 0, y: 0 };
   }
 
-  function startDraw(e) { drawingRef.current = true; lastPointRef.current = getLocalPos(e); e?.preventDefault?.(); }
+  function startDraw(e) {
+    drawingRef.current = true;
+    lastPointRef.current = getLocalPos(e);
+    e?.preventDefault?.();
+  }
+
   function moveDraw(e) {
     if (!drawingRef.current) return;
     const ctx = getCanvasCtx();
     if (!ctx) return;
     const p = getLocalPos(e);
-    ctx.beginPath(); ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
-    ctx.lineTo(p.x, p.y); ctx.stroke();
-    lastPointRef.current = p; hasInkRef.current = true; e?.preventDefault?.();
+    ctx.beginPath();
+    ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    lastPointRef.current = p;
+    hasInkRef.current = true;
+    e?.preventDefault?.();
   }
-  function endDraw(e) { drawingRef.current = false; e?.preventDefault?.(); }
+
+  function endDraw(e) {
+    drawingRef.current = false;
+    e?.preventDefault?.();
+  }
+
   function clearSignature() {
-    const c = canvasRef.current; const ctx = getCanvasCtx();
-    if (!c || !ctx) return;
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height);
-    resizeCanvasToDevicePixels(); hasInkRef.current = false;
+    resizeCanvasToDevicePixels();
+    hasInkRef.current = false;
   }
+
   function exportSignatureDataUrl() {
     const c = canvasRef.current;
     if (!c) return "";
     return c.toDataURL("image/png");
   }
 
-  // ---- New user flow ----
-  const openNewUser = () => {
-    setUiError(""); setShowNewUserModal(true); setNewUserStep(1);
-    setSelectedUser(null); setWaiverAccepted(false);
-    hasInkRef.current = false; setNewUserForm(INITIAL_FORM);
-  };
-
-  const closeNewUser = () => {
-    if (busy) return;
-    setShowNewUserModal(false); setNewUserStep(1);
-    setSelectedUser(null); setWaiverAccepted(false); clearSignature();
-  };
-
-  const createNewUser = async () => {
-    setUiError("");
-    const payload = {
-      ...newUserForm,
-      name: (newUserForm.name || "").trim(),
-      email: (newUserForm.email || "").trim().toLowerCase(),
-      documentType: normalizeDocType(newUserForm.documentType),
-      documentNumber: (newUserForm.documentNumber || "").trim(),
-      phone: (newUserForm.phone || "").trim(),
-      epsName: (newUserForm.epsName || "").trim(),
-      emergencyContactName: (newUserForm.emergencyContactName || "").trim(),
-      emergencyContactPhone: (newUserForm.emergencyContactPhone || "").trim(),
-      accessType: newUserForm.accessType ?? "ticketera",
-      mensualidadMeses: newUserForm.accessType === "mensualidad" ? newUserForm.mensualidadMeses : undefined,
-      esMinor: newUserForm.esMinor ?? false,
-    };
-    if (!payload.name) return setUiError("El nombre es obligatorio.");
-    if (!payload.email) return setUiError("El email es obligatorio.");
-    if (!payload.documentType) return setUiError("El tipo de documento es obligatorio.");
-    if (!payload.documentNumber) return setUiError("El número de documento es obligatorio.");
-    if (!payload.phone) return setUiError("El teléfono es obligatorio.");
-    if (!payload.epsName) return setUiError("La EPS es obligatoria.");
-    if (!payload.emergencyContactName || !payload.emergencyContactPhone)
-      return setUiError("Completa el contacto de emergencia.");
-    setBusy(true);
-    try {
-      const response = await axios.post("/api/admin/users/create", payload);
-      const userId = response.data?.user?._id || response.data?.userId;
-      if (!userId) { setUiError("No llegó el userId del backend."); return; }
-      setSelectedUser(userId); setNewUserStep(2);
-      setTimeout(() => { resizeCanvasToDevicePixels(); clearSignature(); }, 0);
-      if (response.data?.auditEvent) appendAuditEvent(response.data.auditEvent);
-    } catch (error) {
-      setUiError(error?.response?.data?.message || "No se pudo crear el usuario.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitNewUserWaiver = async () => {
-    setUiError("");
-    if (!selectedUser) return setUiError("No hay userId seleccionado.");
-    if (!waiverAccepted) return setUiError("Debes aceptar el waiver.");
-    const canvas = canvasRef.current;
-    if (!canvas) return setUiError("Canvas no disponible.");
-    if (isCanvasBlank(canvas) || !hasInkRef.current) return setUiError("La firma es obligatoria.");
-    const signatureImageUrl = exportSignatureDataUrl();
-    const { text: waiverTextSnapshot, version } = waiverSnapshotNewUser;
-    setBusy(true);
-    try {
-      const res = await axios.post("/api/admin/waiver/sign", {
-        userId: selectedUser, version, method: "signature", waiverTextSnapshot,
-        signatureImageUrl,
-        signatureText: newUserForm.esMinor
-          ? `Representante legal de ${(newUserForm.name || "").trim()}`
-          : (newUserForm.name || "").trim(),
-        esMinor: !!newUserForm.esMinor,
+  // Attendance data
+  const attendanceData = useMemo(() => {
+    const start = startOfPeriod(attendancePeriod);
+    const checkedIn = [];
+    users.forEach((u) => {
+      const visits = u?.visits || [];
+      const periodVisits = visits.filter((v) => {
+        const d = new Date(v?.date || v?.checkedInAt);
+        return d >= start && (v?.status === "checked_in" || v?.status === "registered");
       });
-      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
-      closeNewUser();
-      await fetchUsers();
-    } catch (error) {
-      setUiError(error?.response?.data?.message || "No se pudo firmar el waiver.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitExistingUserWaiver = async () => {
-    setUiError("");
-    if (!waiverUser?._id) return setUiError("No hay usuario seleccionado.");
-    if (!waiverAccepted) return setUiError("Debes aceptar el waiver.");
-    const canvas = canvasRef.current;
-    if (!canvas) return setUiError("Canvas no disponible.");
-    if (isCanvasBlank(canvas) || !hasInkRef.current) return setUiError("La firma es obligatoria.");
-    const signatureImageUrl = exportSignatureDataUrl();
-    const { text: waiverTextSnapshot, version } = waiverSnapshotExistingUser;
-    setBusy(true);
-    try {
-      const res = await axios.post("/api/admin/waiver/sign", {
-        userId: waiverUser._id, version, method: "signature", waiverTextSnapshot,
-        signatureImageUrl,
-        signatureText: waiverUser.esMinor
-          ? `Representante legal de ${(waiverUser.name || "").trim()}`
-          : (waiverUser.name || "").trim(),
-        esMinor: !!waiverUser.esMinor,
-      });
-      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
-      await fetchUsers();
-      if (viewingUser?._id && String(viewingUser._id) === String(waiverUser._id)) {
-        const updated = res.data?.user;
-        if (updated) setViewingUser(updated);
+      if (periodVisits.length > 0) {
+        checkedIn.push({ user: u, visits: periodVisits, count: periodVisits.length });
       }
-      closeWaiverModal();
-    } catch (error) {
-      setUiError(error?.response?.data?.message || "No se pudo firmar el waiver.");
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
+    checkedIn.sort((a, b) => b.count - a.count);
+    return checkedIn;
+  }, [users, attendancePeriod]);
 
-  // ---- Format helpers ----
-  const formatPrettyDayTime = (date) => {
-    try {
-      const d = new Date(date);
-      const day = d.toLocaleDateString("es-CO", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-      const time = d.toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" });
-      return `${day} · ${time}`;
-    } catch { return "—"; }
-  };
+  // Counts
+  const counts = useMemo(() => {
+    const total = users.length;
+    const waiverPend = users.filter((u) => u?.waiverStatus !== "signed").length;
+    const mensualidadVencida = users.filter(
+      (u) => u?.accessType === "mensualidad" && !getMensualidadStatus(u?.mensualidad).active
+    ).length;
+    const sinCreditos = users.filter((u) => u?.accessType === "ticketera" && (u?.credits ?? 0) <= 0).length;
+    const menores = users.filter((u) => !!u?.esMinor).length;
+    const checkinHoy = users.filter((u) => hasCheckedInToday(u)).length;
+    return { total, waiverPend, mensualidadVencida, sinCreditos, menores, checkinHoy };
+  }, [users]);
 
-  const statusLabel = (v) => {
-    switch (v) {
-      case "checked_in": return "Check-in";
-      case "registered": return "Registrado";
-      case "no_show": return "No asistió";
-      case "cancelled": return "Cancelado";
-      default: return v || "—";
-    }
-  };
+  const currentMoonDay = moonDays[moonSelectedDay];
 
-  // ---- Loading state ----
+  // Loading state
   if (status === "loading" || (!session && status !== "authenticated")) {
     return (
       <PageShell>
         <GlobalStyle />
-        <AdminContainer>
-          <Title>Panel de Administración</Title>
-          <Divider />
-          <Muted>Cargando sesión...</Muted>
-        </AdminContainer>
+        <Container>
+          <Header>
+            <Title>Panel de Administración</Title>
+          </Header>
+          <div style={{ padding: spacing.xl, textAlign: "center", color: palette.textLight }}>
+            Cargando sesión...
+          </div>
+        </Container>
       </PageShell>
     );
   }
 
-  // ---- Render ----
+  // Render
   return (
     <PageShell>
       <GlobalStyle />
-      <AdminContainer>
+      <Container>
+        <Header>
+          <Title>Panel de Administración</Title>
+          <Subtitle>Gestión de usuarios, créditos y reservas</Subtitle>
+        </Header>
+
         <TopBar>
-          <TitleGroup>
-            <Title>Panel de Administración</Title>
-            <Subtitle>CrashPath · usuarios, créditos y reservas</Subtitle>
-          </TitleGroup>
-          <TopActions>
-            <SearchBar>
-              <SearchInput
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por nombre o email…"
-                inputMode="search"
-                aria-label="Buscar usuario"
-              />
-              <SecondaryButton onClick={fetchUsers} title="Recargar">Recargar</SecondaryButton>
-            </SearchBar>
-            <Button onClick={openAttendanceModal} disabled={busy} style={{ background: palette.accent }}>
+          <SearchInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por nombre o email..."
+          />
+          <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap" }}>
+            <Button $variant="secondary" onClick={fetchUsers}>
+              ↻ Recargar
+            </Button>
+            <Button onClick={exportToCSV} $variant="secondary">
+              📥 Exportar CSV
+            </Button>
+            <Button onClick={() => fetchCheckinsByDate(new Date().toISOString().slice(0, 10))} $variant="secondary">
+              📅 Ver check-ins de hoy
+            </Button>
+            <Button onClick={openAttendanceModal}>
               📊 Asistencia
             </Button>
-            <Button onClick={openNewUser} disabled={busy}>+ Nuevo miembro</Button>
-            <SecondaryButton onClick={() => signOut()}>Cerrar sesión</SecondaryButton>
-          </TopActions>
+            <Button onClick={openNewUser}>
+              + Nuevo miembro
+            </Button>
+            <Button $variant="secondary" onClick={() => signOut()}>
+              Cerrar sesión
+            </Button>
+          </div>
         </TopBar>
 
+        {/* DASHBOARD KPIS */}
+        <div style={{ padding: `0 ${spacing.xl}`, marginBottom: spacing.md }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md, flexWrap: "wrap", gap: spacing.sm }}>
+            <div style={{ fontWeight: 600 }}>📈 Dashboard de ingresos</div>
+            <div style={{ display: "flex", gap: spacing.sm }}>
+              <PeriodTab $active={kpiPeriod === "today"} onClick={() => setKpiPeriod("today")}>Hoy</PeriodTab>
+              <PeriodTab $active={kpiPeriod === "week"} onClick={() => setKpiPeriod("week")}>Esta semana</PeriodTab>
+              <PeriodTab $active={kpiPeriod === "month"} onClick={() => setKpiPeriod("month")}>Este mes</PeriodTab>
+            </div>
+          </div>
+          <KPIGrid>
+            <KPICard>
+              <KPIValue>{kpiData.ticketeraCheckins}</KPIValue>
+              <KPILabel>Check-ins (tiquetera)</KPILabel>
+              <KPISub>× $15,000 c/u</KPISub>
+            </KPICard>
+            <KPICard>
+              <KPIValue $color={palette.success}>${kpiData.estimatedRevenue.toLocaleString()}</KPIValue>
+              <KPILabel>Ingreso estimado</KPILabel>
+              <KPISub>Solo tiquetera</KPISub>
+            </KPICard>
+            <KPICard>
+              <KPIValue>{kpiData.mensualidadCheckins}</KPIValue>
+              <KPILabel>Check-ins (mensualidad)</KPILabel>
+              <KPISub>{kpiData.mensualidadUsers} usuarios activos</KPISub>
+            </KPICard>
+            <KPICard>
+              <KPIValue>{kpiData.totalCheckins}</KPIValue>
+              <KPILabel>Total check-ins</KPILabel>
+              <KPISub style={{ color: kpiData.checkinChange >= 0 ? palette.success : palette.danger }}>
+                {kpiData.checkinChange >= 0 ? "↑" : "↓"} {Math.abs(kpiData.checkinChange).toFixed(1)}% vs período anterior
+              </KPISub>
+            </KPICard>
+            <KPICard>
+              <KPIValue>{kpiData.uniqueUsers}</KPIValue>
+              <KPILabel>Personas distintas</KPILabel>
+              <KPISub style={{ color: kpiData.usersChange >= 0 ? palette.success : palette.danger }}>
+                {kpiData.usersChange >= 0 ? "↑" : "↓"} {Math.abs(kpiData.usersChange).toFixed(1)}% vs período anterior
+              </KPISub>
+            </KPICard>
+          </KPIGrid>
+        </div>
+
+        {/* FILTRO POR FECHA DE REGISTRO */}
+        <FilterRow>
+          <FilterGroup>
+            <FilterLabel>Filtro por fecha de registro</FilterLabel>
+            <Select 
+              value={registrationFilter} 
+              onChange={(e) => {
+                setRegistrationFilter(e.target.value);
+                if (e.target.value !== "custom") {
+                  setRegistrationStartDate("");
+                  setRegistrationEndDate("");
+                }
+              }}
+              style={{ marginBottom: 0 }}
+            >
+              <option value="all">Todos los períodos</option>
+              <option value="today">Hoy</option>
+              <option value="week">Esta semana</option>
+              <option value="month">Este mes</option>
+              <option value="custom">Personalizado</option>
+            </Select>
+          </FilterGroup>
+          {registrationFilter === "custom" && (
+            <>
+              <FilterGroup>
+                <FilterLabel>Desde</FilterLabel>
+                <DateInput
+                  type="date"
+                  value={registrationStartDate}
+                  onChange={(e) => setRegistrationStartDate(e.target.value)}
+                />
+              </FilterGroup>
+              <FilterGroup>
+                <FilterLabel>Hasta</FilterLabel>
+                <DateInput
+                  type="date"
+                  value={registrationEndDate}
+                  onChange={(e) => setRegistrationEndDate(e.target.value)}
+                />
+              </FilterGroup>
+            </>
+          )}
+          <FilterGroup>
+            <FilterLabel>Mostrar por página</FilterLabel>
+            <Select 
+              value={itemsPerPage} 
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              style={{ marginBottom: 0 }}
+            >
+              <option value={10}>10 usuarios</option>
+              <option value={20}>20 usuarios</option>
+              <option value={50}>50 usuarios</option>
+              <option value={100}>100 usuarios</option>
+            </Select>
+          </FilterGroup>
+        </FilterRow>
+
         <FiltersBar>
-          {[
-            { key: "all", label: `Todos · ${counts.total}` },
-            { key: "waiver", label: `Waiver pendiente · ${counts.waiverPend}` },
-            { key: "mensualidadVencida", label: `Mensualidad vencida · ${counts.mensualidadVencida}` },
-            { key: "sinCreditos", label: `Sin créditos · ${counts.sinCreditos}` },
-            { key: "menores", label: `Menores · ${counts.menores}` },
-            { key: "checkinHoy", label: `Check-in hoy · ${counts.checkinHoy}` },
-          ].map(({ key, label }) => (
-            <FilterChip key={key} $active={quickFilter === key} onClick={() => setQuickFilter(key)}>
-              {label}
-            </FilterChip>
-          ))}
+          <FilterChip $active={quickFilter === "all"} onClick={() => setQuickFilter("all")}>
+            Todos · {counts.total}
+          </FilterChip>
+          <FilterChip $active={quickFilter === "waiver"} onClick={() => setQuickFilter("waiver")}>
+            Waiver pendiente · {counts.waiverPend}
+          </FilterChip>
+          <FilterChip $active={quickFilter === "mensualidadVencida"} onClick={() => setQuickFilter("mensualidadVencida")}>
+            Vencidas · {counts.mensualidadVencida}
+          </FilterChip>
+          <FilterChip $active={quickFilter === "sinCreditos"} onClick={() => setQuickFilter("sinCreditos")}>
+            Sin créditos · {counts.sinCreditos}
+          </FilterChip>
+          <FilterChip $active={quickFilter === "menores"} onClick={() => setQuickFilter("menores")}>
+            Menores · {counts.menores}
+          </FilterChip>
+          <FilterChip $active={quickFilter === "checkinHoy"} onClick={() => setQuickFilter("checkinHoy")}>
+            Check-in hoy · {counts.checkinHoy}
+          </FilterChip>
         </FiltersBar>
 
-        {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
-        <Divider />
+        {uiError && <div style={{ padding: `0 ${spacing.xl}` }}><ErrorBox>{uiError}</ErrorBox></div>}
 
-        <Row>
-          <div>
+        <div style={{ display: "flex", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             {loading ? (
-              <Muted>Cargando usuarios...</Muted>
-            ) : filteredUsers.length === 0 ? (
-              <EmptyState>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <b style={{ color: palette.text }}>No hay usuarios</b>
-                  <Muted>{query.trim() ? "No hay resultados para tu búsqueda." : "Aún no hay usuarios cargados."}</Muted>
-                </div>
-              </EmptyState>
+              <div style={{ padding: spacing.xl, textAlign: "center", color: palette.textLight }}>
+                Cargando usuarios...
+              </div>
+            ) : paginatedUsers.length === 0 ? (
+              <div style={{ padding: spacing.xl, textAlign: "center", color: palette.textLight }}>
+                No hay usuarios que coincidan con los filtros.
+              </div>
             ) : (
               <>
                 {/* Mobile cards */}
                 <CardsGrid>
-                  {filteredUsers.map((user) => (
-                    <UserCard key={user._id}>
+                  {paginatedUsers.map((user) => (
+                    <Card key={user._id}>
                       <CardHeader>
-                        <NameRow>
-                          <div>
-                            <UserName>
-                              {user.name || "Sin nombre"}{" "}
-                              {hasCheckedInToday(user) ? <span title="Check-in hoy">✅</span> : null}
-                            </UserName>
-                            <UserEmail>{user.email || "Sin email"}</UserEmail>
-                          </div>
-                          <AccessInfo user={user} onRenovar={handleRenovar} onChangeAccess={openAccessModal} busy={busy} />
-                        </NameRow>
-                      </CardHeader>
-                      <CardBody>
                         <div>
-                          <Muted style={{ display: "block", marginBottom: 6 }}>Reservas</Muted>
-                          {user.reservations?.length ? (
-                            <ReservationList>
-                              {user.reservations.map((r) => (
-                                <ReservationRow key={r._id}>
-                                  <Pill>
-                                    <b>{formatDate(r.date)}</b><Muted>·</Muted>
-                                    <span>{r.time}</span>
-                                    <PrivacyTag $private={!!r.isPrivate}>{r.isPrivate ? "Privada" : "Pública"}</PrivacyTag>
-                                  </Pill>
-                                  <IconButton title="Eliminar reserva" onClick={() => confirmRemoveReservation(user._id, r._id)} disabled={busy}>×</IconButton>
-                                </ReservationRow>
-                              ))}
-                            </ReservationList>
-                          ) : <Muted>Sin reservas</Muted>}
+                          <CardTitle>
+                            {user.name || "Sin nombre"}
+                            {hasCheckedInToday(user) && <span style={{ marginLeft: spacing.xs }}>✅</span>}
+                          </CardTitle>
+                          <CardEmail>{user.email}</CardEmail>
+                          <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: spacing.xs }}>
+                            Registrado: {user.createdAt ? formatDate(user.createdAt) : "—"}
+                          </div>
                         </div>
-                        <Actions>
-                          {user?.waiverStatus === "signed" ? (
-                            <LinkButton href={`/api/admin/waiver/pdf?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer" style={{ flex: "1" }}>
-                              <LinkPill>⬇️</LinkPill>Waiver PDF
-                            </LinkButton>
-                          ) : (
-                            <SecondaryButton disabled style={{ flex: "1", opacity: 0.7 }}>Waiver pendiente</SecondaryButton>
-                          )}
-                          <SecondaryButton onClick={() => handleViewProfile(user)} disabled={busy}>Ver datos</SecondaryButton>
-                          <Button onClick={() => handleAddCredits(user._id)} disabled={busy}>Créditos</Button>
-                          <Button onClick={() => handleCreateReservation(user._id)} disabled={busy}>Reserva</Button>
-                          <CheckinButton onClick={() => handleCheckin(user)} disabled={busy}>✓ Check-in</CheckinButton>
-                          <MoonButton onClick={() => openMoonModal(user)} disabled={busy}>🌑 Moon</MoonButton>
-                          <SecondaryButton onClick={() => openHistory(user)} disabled={busy}>Historial</SecondaryButton>
-                        </Actions>
-                      </CardBody>
-                    </UserCard>
+                        <Badge $success={user.accessType === "mensualidad"}>
+                          {user.accessType === "mensualidad" ? "Mensualidad" : "Tiquetera"}
+                        </Badge>
+                      </CardHeader>
+                      <AccessInfo 
+                        user={user} 
+                        onRenovar={handleRenovar}
+                        onChangeAccess={openAccessModal}
+                        busy={busy}
+                      />
+                      <CardActions>
+                        <Button $small onClick={() => handleCheckin(user)}>✓ Check-in</Button>
+                        <Button $variant="secondary" $small onClick={() => openMoonModal(user)}>🌑 Moon</Button>
+                        <Button $variant="secondary" $small onClick={() => handleViewProfile(user)}>Ver datos</Button>
+                        <Button $variant="secondary" $small onClick={() => handleAddCredits(user._id)}>Créditos</Button>
+                        <Button $variant="secondary" $small onClick={() => openHistory(user)}>Historial</Button>
+                        {user?.visits?.[0] && (
+                          <Button $variant="secondary" $small onClick={() => handleEditVisit(user, user.visits[0])}>✏️ Editar visita</Button>
+                        )}
+                        <Button $variant="danger" $small onClick={() => handleDeleteUser(user)}>Eliminar</Button>
+                      </CardActions>
+                    </Card>
                   ))}
                 </CardsGrid>
 
@@ -2216,792 +2343,796 @@ export default function AdminPage() {
                   <Table>
                     <thead>
                       <tr>
-                        <Th>Nombre</Th>
-                        <Th>Email</Th>
-                        <Th>Acceso</Th>
+                        <Th onClick={() => handleSort("name")}>
+                          Usuario {getSortIcon("name")}
+                        </Th>
+                        <Th onClick={() => handleSort("email")}>
+                          Email {getSortIcon("email")}
+                        </Th>
+                        <Th>Contacto</Th>
+                        <Th onClick={() => handleSort("credits")}>
+                          Acceso {getSortIcon("credits")}
+                        </Th>
+                        <Th onClick={() => handleSort("lastCheckin")}>
+                          Último check-in {getSortIcon("lastCheckin")}
+                        </Th>
+                        <Th onClick={() => handleSort("createdAt")}>
+                          Registro {getSortIcon("createdAt")}
+                        </Th>
                         <Th>Waiver</Th>
-                        <Th>Reservas</Th>
-                        <Th style={{ textAlign: "right" }}>Acciones</Th>
+                        <Th></Th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredUsers.map((user) => (
+                      {paginatedUsers.map((user) => (
                         <Tr key={user._id}>
                           <Td>
-                            {user.name || <Muted>Sin nombre</Muted>}{" "}
-                            {hasCheckedInToday(user) ? <span title="Check-in hoy">✅</span> : null}
+                            <div style={{ fontWeight: 500 }}>{user.name || "Sin nombre"}</div>
+                            {hasCheckedInToday(user) && <Badge $success style={{ marginTop: spacing.xs }}>✓ Check-in hoy</Badge>}
                           </Td>
-                          <Td><Muted style={{ wordBreak: "break-word" }}>{user.email}</Muted></Td>
-                          <Td><AccessInfo user={user} onRenovar={handleRenovar} onChangeAccess={openAccessModal} busy={busy} /></Td>
+                          <Td>
+                            <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{user.email}</div>
+                          </Td>
+                          <Td>
+                            <div>{user.phone || "—"}</div>
+                            <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{user.documentType || ""} {user.documentNumber || ""}</div>
+                          </Td>
+                          <Td>
+                            <AccessInfo 
+                              user={user} 
+                              onRenovar={handleRenovar}
+                              onChangeAccess={openAccessModal}
+                              busy={busy}
+                            />
+                          </Td>
+                          <Td>
+                            {user.lastCheckinAt ? formatDateTime(user.lastCheckinAt) : "—"}
+                          </Td>
+                          <Td>
+                            {user.createdAt ? formatDate(user.createdAt) : "—"}
+                          </Td>
                           <Td>
                             {user?.waiverStatus === "signed" ? (
-                              <LinkButton href={`/api/admin/waiver/pdf?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer">
-                                <LinkPill>⬇️</LinkPill>Descargar PDF
-                              </LinkButton>
-                            ) : <Muted>No firmado</Muted>}
+                              <Button $variant="secondary" $small as="a" href={`/api/admin/waiver/pdf?email=${encodeURIComponent(user.email)}`} target="_blank">
+                                Ver PDF
+                              </Button>
+                            ) : (
+                              <Badge $danger>No firmado</Badge>
+                            )}
                           </Td>
                           <Td>
-                            {user.reservations?.length ? (
-                              <ReservationList>
-                                {user.reservations.map((r) => (
-                                  <ReservationRow key={r._id}>
-                                    <Pill>
-                                      <b>{formatDate(r.date)}</b><Muted>·</Muted>
-                                      <span>{r.time}</span>
-                                      <PrivacyTag $private={!!r.isPrivate}>{r.isPrivate ? "Privada" : "Pública"}</PrivacyTag>
-                                    </Pill>
-                                    <IconButton title="Eliminar reserva" onClick={() => confirmRemoveReservation(user._id, r._id)} disabled={busy}>×</IconButton>
-                                  </ReservationRow>
-                                ))}
-                              </ReservationList>
-                            ) : <Muted>Sin reservas</Muted>}
-                          </Td>
-                          <Td>
-                            <Actions>
-                              <CheckinButton onClick={() => handleCheckin(user)} disabled={busy}>✓ Check-in</CheckinButton>
-                              <MoonButton onClick={() => openMoonModal(user)} disabled={busy}>🌑 Moon</MoonButton>
-                              <SecondaryButton onClick={() => handleViewProfile(user)} disabled={busy}>Ver datos</SecondaryButton>
-                              <Button onClick={() => handleAddCredits(user._id)} disabled={busy}>Modificar créditos</Button>
-                              <Button onClick={() => handleCreateReservation(user._id)} disabled={busy}>Crear reserva</Button>
-                              <SecondaryButton onClick={() => openHistory(user)} disabled={busy}>Historial</SecondaryButton>
-                            </Actions>
+                            <ActionMenu
+                              user={user}
+                              onCheckin={handleCheckin}
+                              onMoon={openMoonModal}
+                              onViewProfile={handleViewProfile}
+                              onCredits={handleAddCredits}
+                              onHistory={openHistory}
+                              onDelete={handleDeleteUser}
+                              onEditVisit={handleEditVisit}
+                              busy={busy}
+                            />
                           </Td>
                         </Tr>
                       ))}
                     </tbody>
                   </Table>
                 </TableWrapper>
+
+                {/* Paginación */}
+                {totalPages > 1 && (
+                  <PaginationWrapper>
+                    <div>
+                      Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredAndSortedUsers.length)} de {filteredAndSortedUsers.length} usuarios
+                    </div>
+                    <PaginationControls>
+                      <PageButton onClick={() => goToPage(1)} disabled={currentPage === 1}>
+                        «
+                      </PageButton>
+                      <PageButton onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}>
+                        ‹
+                      </PageButton>
+                      {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        return (
+                          <PageButton
+                            key={pageNum}
+                            $active={currentPage === pageNum}
+                            onClick={() => goToPage(pageNum)}
+                          >
+                            {pageNum}
+                          </PageButton>
+                        );
+                      })}
+                      <PageButton onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}>
+                        ›
+                      </PageButton>
+                      <PageButton onClick={() => goToPage(totalPages)} disabled={currentPage === totalPages}>
+                        »
+                      </PageButton>
+                    </PaginationControls>
+                  </PaginationWrapper>
+                )}
               </>
             )}
           </div>
+
           <AuditFeed events={auditEvents} loading={auditLoading} />
-        </Row>
-      </AdminContainer>
+        </div>
+      </Container>
 
+      {/* MODALES */}
       <ModalPortal>
-        {/* ---- CONFIRM DELETE RESERVATION ---- */}
-        <Overlay $show={showConfirmDeleteModal} onClick={() => (!busy ? setShowConfirmDeleteModal(false) : null)} />
-        <Modal $show={showConfirmDeleteModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>¿Eliminar reserva?</ModalTitle>
-          <ConfirmText>Esta acción no se puede deshacer. La reserva será eliminada permanentemente.</ConfirmText>
-          <Actions>
-            <Button $variant="danger" onClick={executeRemoveReservation} disabled={busy}>
-              {busy ? "Eliminando..." : "Sí, eliminar"}
-            </Button>
-            <SecondaryButton onClick={() => { setShowConfirmDeleteModal(false); setPendingDeleteRes(null); }} disabled={busy}>
-              Cancelar
-            </SecondaryButton>
-          </Actions>
-        </Modal>
-
-        {/* ---- MOON RESERVATION MODAL ---- */}
-        <Overlay $show={showMoonModal} onClick={closeMoonModal} />
-        <Modal $show={showMoonModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <MoonModalHeader>
-            <span style={{ fontSize: 28 }}>🌑</span>
-            <div>
-              <MoonModalTitle>Moonboard</MoonModalTitle>
-              <MoonModalSub>
-                {moonUser ? `Reservando para: ${moonUser.name}` : "Selecciona un slot"}
-              </MoonModalSub>
-            </div>
-          </MoonModalHeader>
-
-          {moonLoading ? (
-            <Muted>Cargando slots…</Muted>
-          ) : (
-            <>
-              {/* Day tabs */}
-              <DayTabsRow>
-                {moonDays.map((day, i) => (
-                  <DayTabBtn
-                    key={day.date}
-                    $active={moonSelectedDay === i}
-                    onClick={() => { setMoonSelectedDay(i); setMoonMsg(""); setMoonSuccess(""); }}
-                  >
-                    {day.isToday ? "Hoy" : formatTabDate(day.date)}
-                  </DayTabBtn>
+        {/* Modal para ver check-ins por fecha específica */}
+        <Overlay $show={showCheckinsByDateModal} onClick={() => setShowCheckinsByDateModal(false)} />
+        <Modal $show={showCheckinsByDateModal} style={{ maxWidth: "600px" }}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>📅 Check-ins del {formatDate(selectedDate)}</ModalTitle>
+            </ModalHeader>
+            {checkinsByDate.length === 0 ? (
+              <div style={{ textAlign: "center", padding: spacing.lg, color: palette.textLight }}>
+                No hay check-ins registrados en esta fecha.
+              </div>
+            ) : (
+              <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                {checkinsByDate.map((checkin, idx) => (
+                  <div key={idx} style={{ 
+                    padding: spacing.md, 
+                    borderBottom: `1px solid ${palette.border}`,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: spacing.sm
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{checkin.userName}</div>
+                      <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{checkin.userEmail}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
+                      <Badge $success={checkin.accessType === "mensualidad"}>
+                        {checkin.accessType === "mensualidad" ? "Mens" : "Tiq"}
+                      </Badge>
+                      <span style={{ fontSize: fontSize.sm, color: palette.textLight }}>
+                        {formatCheckinTime(checkin.time)}
+                      </span>
+                    </div>
+                  </div>
                 ))}
-              </DayTabsRow>
+              </div>
+            )}
+            <ActionButtons>
+              <Button $variant="secondary" onClick={() => {
+                setShowCheckinsByDateModal(false);
+                const newDate = prompt("Ingresa una fecha (YYYY-MM-DD) para ver check-ins:", selectedDate);
+                if (newDate) fetchCheckinsByDate(newDate);
+              }}>
+              📅 Otra fecha
+              </Button>
+              <Button $variant="secondary" onClick={() => setShowCheckinsByDateModal(false)}>
+                Cerrar
+              </Button>
+            </ActionButtons>
+          </ModalContent>
+        </Modal>
 
-              {currentMoonDay && (
-                <SlotGrid>
-                  {currentMoonDay.slots.map((slot) => (
-                    <SlotItem
-                      key={slot.hour}
-                      $mine={slot.isMySlot}
-                      $taken={slot.taken}
-                      $past={slot.isPast}
-                    >
-                      <SlotLabel>{slot.label}</SlotLabel>
-                      <SlotRight>
-                        {slot.isMySlot ? (
-                          <>
-                            <SlotStatusText $mine>Reservado ✓</SlotStatusText>
-                          </>
-                        ) : slot.isPast ? (
-                          <SlotStatusText>—</SlotStatusText>
-                        ) : slot.taken ? (
-                          <>
-                            <SlotStatusText>{slot.takenBy?.name || "Ocupado"}</SlotStatusText>
-                            <CancelMoonBtn
-                              onClick={() => openCancelMoon(slot.reservationId, slot.takenBy?.name)}
-                              disabled={moonSubmitting}
-                            >
-                              Cancelar
-                            </CancelMoonBtn>
-                          </>
-                        ) : (
-                          <BookBtn
-                            onClick={() => handleAdminMoonReserve(currentMoonDay.date, slot.hour)}
-                            disabled={moonSubmitting}
-                          >
-                            {moonSubmitting ? "…" : "Reservar"}
-                          </BookBtn>
-                        )}
-                      </SlotRight>
-                    </SlotItem>
-                  ))}
-                </SlotGrid>
-              )}
-            </>
+        {/* Edit Visit Modal */}
+        <Overlay $show={showEditVisitModal} onClick={() => !busy && setShowEditVisitModal(false)} />
+        <Modal $show={showEditVisitModal}>
+          {editingVisit && editingVisitUser && (
+            <EditVisitModal
+              visit={editingVisit}
+              user={editingVisitUser}
+              onClose={() => { setShowEditVisitModal(false); setEditingVisit(null); setEditingVisitUser(null); }}
+              onSave={submitEditVisit}
+              busy={busy}
+            />
           )}
-
-          {moonMsg && <ErrorBox style={{ marginTop: 10 }}>{moonMsg}</ErrorBox>}
-          {moonSuccess && <SuccessBox>{moonSuccess}</SuccessBox>}
-
-          <Actions style={{ marginTop: 14 }}>
-            <SecondaryButton onClick={closeMoonModal} disabled={moonSubmitting}>Cerrar</SecondaryButton>
-          </Actions>
         </Modal>
 
-        {/* ---- CANCEL MOON CONFIRMATION ---- */}
-        <Overlay $show={showCancelMoonModal} onClick={() => (!moonSubmitting ? setShowCancelMoonModal(false) : null)} />
-        <Modal $show={showCancelMoonModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>¿Cancelar reserva?</ModalTitle>
-          <ConfirmText>
-            Vas a cancelar la reserva de moonboard de <b>{cancelMoonRes?.userName || "este usuario"}</b>. Esta acción no se puede deshacer.
-          </ConfirmText>
-          <Actions>
-            <Button $variant="danger" onClick={handleAdminCancelMoon} disabled={moonSubmitting}>
-              {moonSubmitting ? "Cancelando..." : "Sí, cancelar reserva"}
-            </Button>
-            <SecondaryButton onClick={() => { setShowCancelMoonModal(false); setCancelMoonRes(null); }} disabled={moonSubmitting}>
-              Volver
-            </SecondaryButton>
-          </Actions>
+        {/* Credits Modal */}
+        <Overlay $show={showCreditsModal} onClick={() => !busy && setShowCreditsModal(false)} />
+        <Modal $show={showCreditsModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>Modificar Créditos</ModalTitle>
+            </ModalHeader>
+            <Input
+              type="number"
+              value={credits}
+              onChange={(e) => setCredits(e.target.value)}
+              placeholder="Cantidad (+ para agregar, - para quitar)"
+            />
+            {uiError && <ErrorBox>{uiError}</ErrorBox>}
+            {creditsSuccess && <SuccessBox>{creditsSuccess}</SuccessBox>}
+            <ActionButtons>
+              <Button onClick={submitCredits} disabled={busy}>
+                {busy ? "Guardando..." : "Confirmar"}
+              </Button>
+              <Button $variant="secondary" onClick={() => setShowCreditsModal(false)} disabled={busy}>
+                Cancelar
+              </Button>
+            </ActionButtons>
+          </ModalContent>
         </Modal>
 
-        {/* ---- ATTENDANCE MODAL ---- */}
-        <Overlay $show={showAttendanceModal} onClick={() => setShowAttendanceModal(false)} />
-        <WideModal $show={showAttendanceModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>📊 Asistencia</ModalTitle>
+        {/* Checkin Modal */}
+        <Overlay $show={showCheckinModal} onClick={() => !busy && setShowCheckinModal(false)} />
+        <Modal $show={showCheckinModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>Registrar Check-in</ModalTitle>
+            </ModalHeader>
+            {checkinUser && (
+              <>
+                <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>{checkinUser.name}</div>
+                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>{checkinUser.email}</div>
+                <div style={{ display: "flex", gap: spacing.sm, marginBottom: spacing.md, flexWrap: "wrap" }}>
+                  <Badge $success={checkinUser.accessType === "mensualidad"}>
+                    {checkinUser.accessType === "mensualidad" ? "Mensualidad" : "Tiquetera"}
+                  </Badge>
+                  {checkinUser.accessType === "ticketera" ? (
+                    <Badge>{checkinUser.credits ?? 0} créditos</Badge>
+                  ) : (
+                    (() => {
+                      const { active, label } = getMensualidadStatus(checkinUser.mensualidad);
+                      return <Badge $success={active} $danger={!active}>{label}</Badge>;
+                    })()
+                  )}
+                </div>
+                {hasCheckedInToday(checkinUser) && (
+                  <SuccessBox>✅ Ya aparece con check-in hoy.</SuccessBox>
+                )}
+                {checkinUser.accessType === "ticketera" && (checkinUser.credits ?? 0) <= 0 && (
+                  <ErrorBox>⚠️ Sin créditos — no se puede registrar el check-in.</ErrorBox>
+                )}
+                {checkinUser.accessType === "mensualidad" && !getMensualidadStatus(checkinUser.mensualidad).active && (
+                  <ErrorBox>⚠️ Mensualidad vencida — no se puede registrar el check-in.</ErrorBox>
+                )}
+              </>
+            )}
+            {uiError && <ErrorBox>{uiError}</ErrorBox>}
+            {checkinSuccess && <SuccessBox>{checkinSuccess}</SuccessBox>}
+            <ActionButtons>
+              {!checkinSuccess && (
+                <Button onClick={submitCheckin} disabled={busy || !checkinUser || !userCanCheckin(checkinUser)}>
+                  {busy ? "Registrando..." : "✓ Confirmar Check-in"}
+                </Button>
+              )}
+              <Button $variant="secondary" onClick={() => { setShowCheckinModal(false); setCheckinSuccess(""); setUiError(""); }} disabled={busy}>
+                {checkinSuccess ? "Cerrar" : "Cancelar"}
+              </Button>
+            </ActionButtons>
+          </ModalContent>
+        </Modal>
 
-          <PeriodTabs>
-            {[
-              { key: "today", label: "Hoy" },
-              { key: "week", label: "Esta semana" },
-              { key: "month", label: "Este mes" },
-            ].map(({ key, label }) => (
-              <PeriodTab key={key} $active={attendancePeriod === key}
-                onClick={() => { setAttendancePeriod(key); setAttendanceSearch(""); }}>
-                {label}
-              </PeriodTab>
-            ))}
-          </PeriodTabs>
+        {/* Renovar Modal */}
+        <Overlay $show={showRenovarModal} onClick={() => !busy && setShowRenovarModal(false)} />
+        <Modal $show={showRenovarModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>Renovar Mensualidad</ModalTitle>
+            </ModalHeader>
+            <p style={{ marginBottom: spacing.md, fontSize: fontSize.sm, color: palette.textLight }}>
+              Si tiene mensualidad activa, se extiende desde la fecha de vencimiento actual.
+            </p>
+            <Select value={renovarMonths} onChange={(e) => setRenovarMonths(Number(e.target.value))}>
+              {[1, 2, 3, 6, 12].map((m) => (
+                <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>
+              ))}
+            </Select>
+            {uiError && <ErrorBox>{uiError}</ErrorBox>}
+            <ActionButtons>
+              <Button onClick={submitRenovar} disabled={busy}>{busy ? "Renovando..." : "Confirmar"}</Button>
+              <Button $variant="secondary" onClick={() => setShowRenovarModal(false)} disabled={busy}>Cancelar</Button>
+            </ActionButtons>
+          </ModalContent>
+        </Modal>
 
-          {/* Stats pills */}
-          <StatsRow>
-            <StatPill>
-              <StatPillNum>{attendanceData.length}</StatPillNum>
-              <StatPillLabel>Personas<br/>distintas</StatPillLabel>
-            </StatPill>
-            <StatPill>
-              <StatPillNum>{attendanceData.reduce((a, d) => a + d.count, 0)}</StatPillNum>
-              <StatPillLabel>Visitas<br/>totales</StatPillLabel>
-            </StatPill>
-            <StatPill>
-              <StatPillNum>{attendanceData.filter((d) => d.user?.accessType === "mensualidad").length}</StatPillNum>
-              <StatPillLabel>Con<br/>mensualidad</StatPillLabel>
-            </StatPill>
-            <StatPill>
-              <StatPillNum>{attendanceData.filter((d) => d.user?.accessType === "ticketera").length}</StatPillNum>
-              <StatPillLabel>Con<br/>tiquetera</StatPillLabel>
-            </StatPill>
-          </StatsRow>
+        {/* Access Type Modal */}
+        <Overlay $show={showAccessModal} onClick={() => !busy && setShowAccessModal(false)} />
+        <Modal $show={showAccessModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>Cambiar modalidad</ModalTitle>
+            </ModalHeader>
+            {accessUser && (
+              <>
+                <div style={{ fontWeight: 600 }}>{accessUser.name}</div>
+                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>{accessUser.email}</div>
+                <Select value={accessTypeDraft} onChange={(e) => setAccessTypeDraft(e.target.value)}>
+                  <option value="ticketera">Tiquetera (créditos)</option>
+                  <option value="mensualidad">Mensualidad</option>
+                </Select>
+                {accessTypeDraft === "mensualidad" ? (
+                  <>
+                    <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.xs }}>¿Cuántos meses?</div>
+                    <Select value={accessMonthsDraft} onChange={(e) => setAccessMonthsDraft(Number(e.target.value))}>
+                      {[1, 2, 3, 6, 12].map((m) => (
+                        <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>
+                      ))}
+                    </Select>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.xs }}>Créditos iniciales (opcional)</div>
+                    <Input
+                      type="number"
+                      value={accessCreditsDraft}
+                      onChange={(e) => setAccessCreditsDraft(e.target.value)}
+                      placeholder="0"
+                    />
+                  </>
+                )}
+                {uiError && <ErrorBox>{uiError}</ErrorBox>}
+                <ActionButtons>
+                  <Button onClick={submitAccessType} disabled={busy}>{busy ? "Guardando..." : "Confirmar"}</Button>
+                  <Button $variant="secondary" onClick={() => setShowAccessModal(false)} disabled={busy}>Cancelar</Button>
+                </ActionButtons>
+              </>
+            )}
+          </ModalContent>
+        </Modal>
 
-          {/* Search */}
-          <AttendanceSearchInput
-            placeholder="🔍  Buscar por nombre o email…"
-            value={attendanceSearch}
-            onChange={(e) => setAttendanceSearch(e.target.value)}
-          />
+        {/* Profile Modal */}
+        <Overlay $show={showProfileModal} onClick={() => !busy && setShowProfileModal(false)} />
+        <Modal $show={showProfileModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>Datos del usuario</ModalTitle>
+              {!editingProfile ? (
+                <Button $variant="secondary" $small onClick={() => { setEditingProfile(true); setUiError(""); setEditSuccess(""); }}>
+                  ✏️ Editar
+                </Button>
+              ) : (
+                <Button $variant="secondary" $small onClick={() => { setEditingProfile(false); setUiError(""); }}>
+                  Cancelar
+                </Button>
+              )}
+            </ModalHeader>
+            {viewingUser && (
+              <div>
+                {editingProfile ? (
+                  <>
+                    <div style={{ marginBottom: spacing.md }}>
+                      <div style={{ fontSize: fontSize.sm, fontWeight: 600, marginBottom: spacing.xs }}>Nombre</div>
+                      <Input value={editForm.name} onChange={(e) => setEditForm(s => ({ ...s, name: e.target.value }))} />
+                    </div>
+                    <div style={{ marginBottom: spacing.md }}>
+                      <div style={{ fontSize: fontSize.sm, fontWeight: 600, marginBottom: spacing.xs }}>Teléfono</div>
+                      <Input value={editForm.phone} onChange={(e) => setEditForm(s => ({ ...s, phone: e.target.value }))} />
+                    </div>
+                    <div style={{ marginBottom: spacing.md }}>
+                      <div style={{ fontSize: fontSize.sm, fontWeight: 600, marginBottom: spacing.xs }}>Documento</div>
+                      <div style={{ display: "flex", gap: spacing.sm }}>
+                        <Select value={editForm.documentType} onChange={(e) => setEditForm(s => ({ ...s, documentType: e.target.value }))} style={{ width: "80px" }}>
+                          {["CC", "CE", "TI", "PP", "NIT", "OTRO"].map(t => <option key={t} value={t}>{t}</option>)}
+                        </Select>
+                        <Input value={editForm.documentNumber} onChange={(e) => setEditForm(s => ({ ...s, documentNumber: e.target.value }))} style={{ flex: 1 }} />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: spacing.md }}>
+                      <div style={{ fontSize: fontSize.sm, fontWeight: 600, marginBottom: spacing.xs }}>EPS</div>
+                      <Input value={editForm.epsName} onChange={(e) => setEditForm(s => ({ ...s, epsName: e.target.value }))} />
+                    </div>
+                    <div style={{ marginBottom: spacing.md }}>
+                      <div style={{ fontSize: fontSize.sm, fontWeight: 600, marginBottom: spacing.xs }}>Contacto Emergencia</div>
+                      <Input value={editForm.emergencyContactName} onChange={(e) => setEditForm(s => ({ ...s, emergencyContactName: e.target.value }))} placeholder="Nombre" />
+                      <Input value={editForm.emergencyContactPhone} onChange={(e) => setEditForm(s => ({ ...s, emergencyContactPhone: e.target.value }))} placeholder="Teléfono" style={{ marginTop: spacing.sm }} />
+                    </div>
+                    {uiError && <ErrorBox>{uiError}</ErrorBox>}
+                    {editSuccess && <SuccessBox>{editSuccess}</SuccessBox>}
+                    <ActionButtons>
+                      <Button onClick={submitEditProfile} disabled={busy}>{busy ? "Guardando..." : "💾 Guardar"}</Button>
+                      <Button $variant="secondary" onClick={() => { setEditingProfile(false); setUiError(""); }}>Cancelar</Button>
+                    </ActionButtons>
+                  </>
+                ) : (
+                  <>
+                    <div><strong>Nombre:</strong> {viewingUser.name || "—"}</div>
+                    <div><strong>Email:</strong> {viewingUser.email || "—"}</div>
+                    <div><strong>Teléfono:</strong> {viewingUser.phone || "—"}</div>
+                    <div><strong>Documento:</strong> {viewingUser.documentType || "—"} {viewingUser.documentNumber || ""}</div>
+                    <div><strong>EPS:</strong> {viewingUser.epsName || "—"}</div>
+                    <Divider />
+                    <div><strong>Contacto Emergencia:</strong></div>
+                    <div>Nombre: {viewingUser.emergencyContactName || "—"}</div>
+                    <div>Teléfono: {viewingUser.emergencyContactPhone || "—"}</div>
+                    <div><strong>Fecha registro:</strong> {viewingUser.createdAt ? formatDate(viewingUser.createdAt) : "—"}</div>
+                    {viewingUser.esMinor && <Badge $warning style={{ marginTop: spacing.sm }}>⚠️ Menor de edad</Badge>}
+                    <Divider />
+                    <div><strong>Accesso:</strong> <Badge $success={viewingUser.accessType === "mensualidad"}>{viewingUser.accessType === "mensualidad" ? "Mensualidad" : "Tiquetera"}</Badge></div>
+                    {viewingUser.accessType === "ticketera" ? (
+                      <div><strong>Créditos:</strong> {viewingUser.credits ?? 0}</div>
+                    ) : (
+                      (() => {
+                        const { active, label } = getMensualidadStatus(viewingUser.mensualidad);
+                        return <div><strong>Estado:</strong> <Badge $success={active} $danger={!active}>{label}</Badge></div>;
+                      })()
+                    )}
+                    <Divider />
+                    <div><strong>Waiver:</strong> {viewingUser.waiverStatus === "signed" ? "Firmado" : "Pendiente"}</div>
+                    {viewingUser.waiverStatus === "signed" && viewingUser.waiverSignatureUrl && (
+                      <>
+                        <Divider />
+                        <div><strong>Firma:</strong></div>
+                        <img src={viewingUser.waiverSignatureUrl} alt="Firma" style={{ maxWidth: "100%", border: `1px solid ${palette.border}`, borderRadius: borderRadius.sm, marginTop: spacing.sm }} />
+                      </>
+                    )}
+                    {viewingUser.waiverStatus !== "signed" && (
+                      <>
+                        <ErrorBox style={{ marginTop: spacing.md }}>⚠️ Waiver pendiente — este usuario no puede entrenar sin firmar.</ErrorBox>
+                        <Button onClick={() => openWaiverForUser(viewingUser)} disabled={busy} style={{ marginTop: spacing.md }}>✍️ Firmar Waiver</Button>
+                      </>
+                    )}
+                    <ActionButtons style={{ marginTop: spacing.lg }}>
+                      <Button $variant="danger" onClick={() => handleDeleteUser(viewingUser)} disabled={busy}>🗑️ Eliminar miembro</Button>
+                      <Button $variant="secondary" onClick={() => setShowProfileModal(false)}>Cerrar</Button>
+                    </ActionButtons>
+                  </>
+                )}
+              </div>
+            )}
+          </ModalContent>
+        </Modal>
 
-          <Divider />
-
-          {/* Grouped by day */}
-          {(() => {
-            const q = attendanceSearch.trim().toLowerCase();
-
-            // Flatten all visits with user info
-            const allVisits = [];
-            attendanceData.forEach(({ user, visits }) => {
-              visits.forEach((v) => {
-                const ts = v.checkedInAt || v.date;
-                allVisits.push({ user, visit: v, ts });
-              });
-            });
-
-            // Filter by search
-            const filtered = q
-              ? allVisits.filter(({ user }) =>
-                  (user.name || "").toLowerCase().includes(q) ||
-                  (user.email || "").toLowerCase().includes(q)
-                )
-              : allVisits;
-
-            if (filtered.length === 0) {
-              return (
-                <EmptyState>
-                  <Muted>{q ? "Sin resultados para esa búsqueda." : "Sin registros en este período."}</Muted>
-                </EmptyState>
-              );
-            }
-
-            // Group by calendar day key
-            const byDay = {};
-            filtered.forEach((item) => {
-              const d = new Date(item.ts);
-              const key = isNaN(d.getTime()) ? "unknown" :
-                `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-              if (!byDay[key]) byDay[key] = [];
-              byDay[key].push(item);
-            });
-
-            // Sort days descending
-            const sortedDays = Object.keys(byDay).sort((a, b) => b.localeCompare(a));
-
-            return (
-              <div style={{ maxHeight: 380, overflowY: "auto", paddingRight: 2 }}>
-                {sortedDays.map((dayKey) => {
-                  const items = byDay[dayKey];
-                  items.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+        {/* History Modal */}
+        <Overlay $show={showHistoryModal} onClick={() => !busy && setShowHistoryModal(false)} />
+        <Modal $show={showHistoryModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>Historial de ingresos</ModalTitle>
+            </ModalHeader>
+            {historyUser && (
+              <>
+                <div style={{ fontWeight: 600 }}>{historyUser.name || "Sin nombre"}</div>
+                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>{historyUser.email}</div>
+              </>
+            )}
+            {historyLoading ? (
+              <div style={{ textAlign: "center", color: palette.textLight, padding: spacing.lg }}>Cargando...</div>
+            ) : historyVisits.length === 0 ? (
+              <div style={{ textAlign: "center", color: palette.textLight, padding: spacing.lg }}>Sin historial de visitas</div>
+            ) : (
+              <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                {historyVisits.map((v) => {
+                  const ts = v.checkedInAt || v.date;
                   return (
-                    <DayGroup key={dayKey}>
-                      <DayGroupHeader>
-                        <DayGroupTitle>{formatDayLabel(items[0].ts)}</DayGroupTitle>
-                        <DayGroupCount>{items.length} ingreso{items.length !== 1 ? "s" : ""}</DayGroupCount>
-                      </DayGroupHeader>
-                      {items.map(({ user, ts }, idx) => {
-                        const timeStr = formatCheckinTime(ts);
-                        return (
-                          <AttendanceRow key={`${user._id}-${idx}`}>
-                            <AttendeeInfo>
-                              <AttendeeName>{user.name || "Sin nombre"}</AttendeeName>
-                              <AttendeeEmail>{user.email}</AttendeeEmail>
-                            </AttendeeInfo>
-                            <AttendeeRight>
-                              {timeStr && <CheckinTimeBadge>🕐 {timeStr}</CheckinTimeBadge>}
-                              <AccessTypePill $type={user.accessType}>
-                                {user.accessType === "mensualidad" ? "Mens." : "Tiq."}
-                              </AccessTypePill>
-                            </AttendeeRight>
-                          </AttendanceRow>
-                        );
-                      })}
-                    </DayGroup>
+                    <div key={v._id || v.id} style={{ 
+                      padding: spacing.md, 
+                      borderBottom: `1px solid ${palette.border}`,
+                      background: v.status === "checked_in" ? palette.success + "05" : "transparent"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: spacing.sm }}>
+                        <span><strong>{v.status === "checked_in" ? "✓ Check-in" : v.status || "Registro"}</strong></span>
+                        <span style={{ fontSize: fontSize.sm, color: palette.textLight }}>{formatDateTime(ts)}</span>
+                      </div>
+                      <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: spacing.xs }}>
+                        {v.createdBy === "admin" ? "Registrado por admin" : "Auto-registro"}
+                      </div>
+                      <div style={{ marginTop: spacing.xs }}>
+                        <Button $variant="secondary" $small onClick={() => handleEditVisit(historyUser, v)}>✏️ Editar</Button>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-            );
-          })()}
-
-          {/* ---- MOON SECTION inside attendance ---- */}
-          <MoonSectionWrap>
-            <MoonSectionHeader>
-              🌑 Reservas Moonboard — próximos 7 días
-              {moonAttendance.length > 0 && (
-                <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, opacity: 0.85 }}>
-                  {moonAttendance.length} reserva{moonAttendance.length !== 1 ? "s" : ""}
-                </span>
-              )}
-            </MoonSectionHeader>
-            {moonAttendance.length === 0 ? (
-              <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.60)" }}>
-                <Muted>Sin reservas activas en los próximos 7 días.</Muted>
-              </div>
-            ) : (
-              <MoonResList>
-                {moonAttendance.map((r) => (
-                  <MoonResItem key={r._id}>
-                    <MoonResLeft>
-                      <MoonResName>{r.userName || r.userEmail}</MoonResName>
-                      <MoonResMeta>
-                        {r.date ? formatTabDate(r.date) : "—"}
-                        {isTodayStr(r.date) ? " · Hoy" : ""} ·{" "}
-                        {String(r.startHour).padStart(2, "0")}:00 – {String(r.startHour + 1).padStart(2, "0")}:30
-                      </MoonResMeta>
-                    </MoonResLeft>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {isTodayStr(r.date) && <MoonBadge>Hoy</MoonBadge>}
-                      <CancelMoonBtn
-                        onClick={() => openCancelMoon(r._id, r.userName)}
-                        disabled={moonSubmitting}
-                      >
-                        Cancelar
-                      </CancelMoonBtn>
-                    </div>
-                  </MoonResItem>
-                ))}
-              </MoonResList>
             )}
-          </MoonSectionWrap>
+            <ActionButtons>
+              <Button $variant="secondary" onClick={() => setShowHistoryModal(false)}>Cerrar</Button>
+            </ActionButtons>
+          </ModalContent>
+        </Modal>
 
-          <Actions style={{ marginTop: 14 }}>
-            <SecondaryButton onClick={() => setShowAttendanceModal(false)}>Cerrar</SecondaryButton>
-          </Actions>
-        </WideModal>
-
-        {/* ---- HISTORY MODAL ---- */}
-        <Overlay $show={showHistoryModal} onClick={() => (!busy ? setShowHistoryModal(false) : null)} />
-        <Modal $show={showHistoryModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>Historial de ingresos</ModalTitle>
-          {historyUser ? (
-            <>
-              <div style={{ fontSize: 15, fontWeight: 900, color: palette.text }}>{historyUser.name || "Sin nombre"}</div>
-              <Muted style={{ display: "block", marginBottom: 10 }}>{historyUser.email}</Muted>
-            </>
-          ) : null}
-          {historyLoading ? <Muted>Cargando historial…</Muted> : historyVisits.length === 0 ? (
-            <EmptyState><b style={{ color: palette.text }}>Sin historial</b><Muted>No hay visitas registradas.</Muted></EmptyState>
-          ) : (
-            <div style={{ display: "grid", gap: 8 }}>
-              {historyVisits.map((v) => {
-                const ts = v.checkedInAt || v.date;
-                return (
-                  <div key={v._id || v.id} style={{ border: "1px solid rgba(0,0,0,0.06)", borderRadius: 12, padding: 10, background: "rgba(255,255,255,0.7)" }}>
-                    <div style={{ fontSize: 13, color: palette.text, display: "flex", justifyContent: "space-between", gap: 10 }}>
-                      <span><b>{statusLabel(v.status)}</b><span style={{ color: palette.muted }}> · </span><span>{formatPrettyDayTime(ts)}</span></span>
-                      <span style={{ color: palette.muted, fontSize: 12 }}>{v.createdBy === "admin" ? "Admin" : "Usuario"}</span>
+        {/* New User Modal */}
+        {showNewUserModal && (
+          <>
+            <Overlay $show onClick={() => !busy && closeNewUser()} />
+            <Modal $show>
+              <ModalContent>
+                <ModalHeader>
+                  <ModalTitle>
+                    {newUserStep === 1 ? "Nuevo Miembro" : newUserForm.esMinor ? "Waiver — Menor de Edad" : "Firma de Waiver"}
+                  </ModalTitle>
+                </ModalHeader>
+                {newUserStep === 1 ? (
+                  <>
+                    <Select value={newUserForm.accessType} onChange={(e) => setNewUserForm(s => ({ ...s, accessType: e.target.value }))}>
+                      <option value="ticketera">Tiquetera (créditos)</option>
+                      <option value="mensualidad">Mensualidad</option>
+                    </Select>
+                    {newUserForm.accessType === "mensualidad" && (
+                      <Select value={newUserForm.mensualidadMeses} onChange={(e) => setNewUserForm(s => ({ ...s, mensualidadMeses: Number(e.target.value) }))}>
+                        {[1, 2, 3, 6, 12].map(m => <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>)}
+                      </Select>
+                    )}
+                    <Input placeholder="Nombre completo" value={newUserForm.name} onChange={(e) => setNewUserForm(s => ({ ...s, name: e.target.value }))} />
+                    <Input placeholder="Email" value={newUserForm.email} onChange={(e) => setNewUserForm(s => ({ ...s, email: e.target.value }))} />
+                    <div style={{ display: "flex", gap: spacing.sm }}>
+                      <Select value={newUserForm.documentType} onChange={(e) => setNewUserForm(s => ({ ...s, documentType: e.target.value }))} style={{ width: "80px" }}>
+                        {["CC", "CE", "TI", "PP", "NIT", "OTRO"].map(t => <option key={t} value={t}>{t}</option>)}
+                      </Select>
+                      <Input placeholder="Número Documento" value={newUserForm.documentNumber} onChange={(e) => setNewUserForm(s => ({ ...s, documentNumber: e.target.value }))} style={{ flex: 1 }} />
                     </div>
-                    {v.notes ? <div style={{ marginTop: 6, fontSize: 12.5, color: palette.muted }}>📝 {v.notes}</div> : null}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          <Actions style={{ justifyContent: "flex-end", marginTop: 12 }}>
-            <SecondaryButton onClick={() => setShowHistoryModal(false)} disabled={busy}>Cerrar</SecondaryButton>
-          </Actions>
-        </Modal>
+                    <Input placeholder="Teléfono" value={newUserForm.phone} onChange={(e) => setNewUserForm(s => ({ ...s, phone: e.target.value }))} />
+                    <Input placeholder="EPS" value={newUserForm.epsName} onChange={(e) => setNewUserForm(s => ({ ...s, epsName: e.target.value }))} />
+                    <Input placeholder="Contacto Emergencia (Nombre)" value={newUserForm.emergencyContactName} onChange={(e) => setNewUserForm(s => ({ ...s, emergencyContactName: e.target.value }))} />
+                    <Input placeholder="Contacto Emergencia (Teléfono)" value={newUserForm.emergencyContactPhone} onChange={(e) => setNewUserForm(s => ({ ...s, emergencyContactPhone: e.target.value }))} />
+                    <RadioRow>
+                      <label><input type="radio" checked={!newUserForm.esMinor} onChange={() => setNewUserForm(s => ({ ...s, esMinor: false }))} /> Mayor de edad</label>
+                      <label><input type="radio" checked={newUserForm.esMinor} onChange={() => setNewUserForm(s => ({ ...s, esMinor: true }))} /> Menor de edad</label>
+                    </RadioRow>
+                    {uiError && <ErrorBox>{uiError}</ErrorBox>}
+                    <ActionButtons>
+                      <Button onClick={createNewUser} disabled={busy}>{busy ? "Creando..." : "Continuar"}</Button>
+                      <Button $variant="secondary" onClick={closeNewUser} disabled={busy}>Cancelar</Button>
+                    </ActionButtons>
+                  </>
+                ) : (
+                  <>
+                    <WaiverBox>
+                      {waiverToParagraphs(waiverSnapshotNewUser.text).map((p, idx) => (
+                        <p key={idx} style={{ marginBottom: spacing.md }}>{p}</p>
+                      ))}
+                    </WaiverBox>
+                    <CheckboxRow>
+                      <input type="checkbox" checked={waiverAccepted} onChange={(e) => setWaiverAccepted(e.target.checked)} />
+                      <span>{newUserForm.esMinor ? "Acepto el consentimiento como representante legal del menor" : "Acepto el consentimiento"}</span>
+                    </CheckboxRow>
+                    <SigCanvas ref={canvasRef} onMouseDown={startDraw} onMouseMove={moveDraw} onMouseUp={endDraw} onMouseLeave={endDraw} onTouchStart={startDraw} onTouchMove={moveDraw} onTouchEnd={endDraw} />
+                    <SigRow>
+                      <span style={{ fontSize: fontSize.sm, color: palette.textLight }}>
+                        Firmando como: <strong>{newUserForm.esMinor ? `Representante legal de ${newUserForm.name || "—"}` : newUserForm.name || "—"}</strong>
+                      </span>
+                      <Button $variant="secondary" $small type="button" onClick={() => { setUiError(""); clearSignature(); }}>Limpiar</Button>
+                    </SigRow>
+                    {uiError && <ErrorBox>{uiError}</ErrorBox>}
+                    <ActionButtons>
+                      <Button onClick={submitNewUserWaiver} disabled={busy}>{busy ? "Guardando..." : "Crear miembro"}</Button>
+                      <Button $variant="secondary" onClick={() => setNewUserStep(1)} disabled={busy}>Atrás</Button>
+                    </ActionButtons>
+                  </>
+                )}
+              </ModalContent>
+            </Modal>
+          </>
+        )}
 
-        {/* ---- CREDITS MODAL ---- */}
-        <Overlay $show={showCreditsModal} onClick={() => (!busy ? setShowCreditsModal(false) : null)} />
-        <Modal $show={showCreditsModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>Modificar Créditos</ModalTitle>
-          <Input
-            type="number"
-            value={credits}
-            onChange={(e) => setCredits(e.target.value)}
-            placeholder="Cantidad (+ para agregar, - para quitar)"
-            inputMode="numeric"
-          />
-          {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
-          {creditsSuccess ? <SuccessBox role="status">{creditsSuccess}</SuccessBox> : null}
-          <Actions style={{ justifyContent: "flex-end", marginTop: 10 }}>
-            <Button onClick={submitCredits} disabled={busy}>{busy ? "Guardando..." : "Confirmar"}</Button>
-            <SecondaryButton onClick={() => { setShowCreditsModal(false); setUiError(""); setCreditsSuccess(""); }} disabled={busy}>Cancelar</SecondaryButton>
-          </Actions>
-        </Modal>
-
-        {/* ---- ACCESS TYPE MODAL ---- */}
-        <Overlay $show={showAccessModal} onClick={() => (!busy ? setShowAccessModal(false) : null)} />
-        <Modal $show={showAccessModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>Cambiar modalidad</ModalTitle>
-          {accessUser ? (
-            <>
-              <div style={{ fontWeight: 900, color: palette.text }}>{accessUser.name}</div>
-              <Muted style={{ display: "block", marginBottom: 10 }}>{accessUser.email}</Muted>
-              <Select value={accessTypeDraft} onChange={(e) => setAccessTypeDraft(e.target.value)}>
-                <option value="ticketera">Tiquetera (créditos)</option>
-                <option value="mensualidad">Mensualidad</option>
-              </Select>
-              {accessTypeDraft === "mensualidad" ? (
-                <>
-                  <Muted style={{ display: "block", marginTop: 8 }}>¿Cuántos meses?</Muted>
-                  <Select value={accessMonthsDraft} onChange={(e) => setAccessMonthsDraft(Number(e.target.value))}>
-                    {[1, 2, 3, 6, 12].map((m) => (
-                      <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>
-                    ))}
-                  </Select>
-                </>
-              ) : (
-                <>
-                  <Muted style={{ display: "block", marginTop: 8 }}>Créditos iniciales (opcional)</Muted>
-                  <Input
-                    type="number"
-                    value={accessCreditsDraft}
-                    onChange={(e) => setAccessCreditsDraft(e.target.value)}
-                    placeholder="0"
-                    inputMode="numeric"
-                  />
-                </>
-              )}
-              {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
-              <Actions style={{ marginTop: 12 }}>
-                <Button onClick={submitAccessType} disabled={busy}>{busy ? "Guardando..." : "Confirmar"}</Button>
-                <SecondaryButton onClick={() => setShowAccessModal(false)} disabled={busy}>Cancelar</SecondaryButton>
-              </Actions>
-            </>
-          ) : <Muted>No hay usuario seleccionado.</Muted>}
-        </Modal>
-
-        {/* ---- RENOVAR MODAL ---- */}
-        <Overlay $show={showRenovarModal} onClick={() => (!busy ? setShowRenovarModal(false) : null)} />
-        <Modal $show={showRenovarModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>Renovar Mensualidad</ModalTitle>
-          <p style={{ margin: "0 0 12px", fontSize: 14, color: palette.muted }}>
-            Si tiene mensualidad activa, se extiende desde la fecha de vencimiento actual.
-          </p>
-          <Select value={renovarMonths} onChange={(e) => setRenovarMonths(Number(e.target.value))}>
-            {[1, 2, 3, 6, 12].map((m) => (
-              <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>
-            ))}
-          </Select>
-          {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
-          <Actions style={{ marginTop: 12 }}>
-            <Button onClick={submitRenovar} disabled={busy}>{busy ? "Renovando..." : "Confirmar"}</Button>
-            <SecondaryButton onClick={() => setShowRenovarModal(false)} disabled={busy}>Cancelar</SecondaryButton>
-          </Actions>
-        </Modal>
-
-        {/* ---- CHECKIN MODAL ---- */}
-        <Overlay $show={showCheckinModal} onClick={() => (!busy ? setShowCheckinModal(false) : null)} />
-        <Modal $show={showCheckinModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>Registrar Check-in</ModalTitle>
-          {checkinUser && (
-            <>
-              <div style={{ fontSize: 16, fontWeight: 900, color: palette.text, marginBottom: 4 }}>{checkinUser.name}</div>
-              <Muted style={{ display: "block", marginBottom: 10 }}>{checkinUser.email}</Muted>
-              <CheckinInfoRow>
-                <AccessTypePill $type={checkinUser.accessType}>{checkinUser.accessType}</AccessTypePill>
-                {checkinUser.accessType === "ticketera" ? (
-                  <Badge><b>{checkinUser.credits ?? 0}</b><Muted>créditos</Muted></Badge>
-                ) : (() => {
-                  const { active, label } = getMensualidadStatus(checkinUser.mensualidad);
-                  return <MensualidadBadge $active={active}>{active ? "🟢" : "🔴"} {label}</MensualidadBadge>;
-                })()}
-              </CheckinInfoRow>
-              {hasCheckedInToday(checkinUser) ? (
-                <SuccessBox role="status">✅ Ya aparece con check-in hoy.</SuccessBox>
-              ) : null}
-              {checkinUser.accessType === "ticketera" && (checkinUser.credits ?? 0) <= 0 && (
-                <ErrorBox role="alert" style={{ marginTop: 8 }}>⚠️ Sin créditos — no se puede registrar el check-in.</ErrorBox>
-              )}
-              {checkinUser.accessType === "mensualidad" && !getMensualidadStatus(checkinUser.mensualidad).active && (
-                <ErrorBox role="alert" style={{ marginTop: 8 }}>⚠️ Mensualidad vencida — no se puede registrar el check-in.</ErrorBox>
-              )}
-            </>
-          )}
-          {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
-          {checkinSuccess ? <SuccessBox role="status">{checkinSuccess}</SuccessBox> : null}
-          <Actions style={{ marginTop: 14 }}>
-            {!checkinSuccess ? (
-              <CheckinButton onClick={submitCheckin} disabled={busy || !checkinUser || !userCanCheckin(checkinUser)}>
-                {busy ? "Registrando..." : "✓ Confirmar Check-in"}
-              </CheckinButton>
-            ) : null}
-            <SecondaryButton onClick={() => { setShowCheckinModal(false); setCheckinSuccess(""); setUiError(""); }} disabled={busy}>
-              {checkinSuccess ? "Cerrar" : "Cancelar"}
-            </SecondaryButton>
-          </Actions>
-        </Modal>
-
-        {/* ---- RESERVATION MODAL ---- */}
-        <Overlay $show={showReservationModal} onClick={() => (!busy ? setShowReservationModal(false) : null)} />
-        <Modal $show={showReservationModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>Crear Nueva Reserva</ModalTitle>
-          <Calendar onClickDay={handleDateSelection} />
-          <Input type="time" value={selectedTime} onChange={handleTimeSelection} />
-          {isFirstReservation && (
-            <RadioRow>
-              <label><input type="radio" checked={!isPrivate} onChange={() => setIsPrivate(false)} />Pública</label>
-              <label><input type="radio" checked={isPrivate} onChange={() => setIsPrivate(true)} />Privada</label>
-            </RadioRow>
-          )}
-          {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
-          <Actions style={{ justifyContent: "flex-end", marginTop: 12 }}>
-            <Button onClick={addReservation} disabled={busy}>{busy ? "Creando..." : "Confirmar"}</Button>
-            <SecondaryButton onClick={() => setShowReservationModal(false)} disabled={busy}>Cancelar</SecondaryButton>
-          </Actions>
-        </Modal>
-
-        {/* ---- PROFILE MODAL ---- */}
-        <Overlay $show={showProfileModal} onClick={() => (!busy ? setShowProfileModal(false) : null)} />
-        <Modal $show={showProfileModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <ModalTitle style={{ margin: 0 }}>Datos del usuario</ModalTitle>
-            {!editingProfile ? (
-              <TinyBtn onClick={() => { setEditingProfile(true); setUiError(""); setEditSuccess(""); }}>
-                ✏️ Editar
-              </TinyBtn>
-            ) : (
-              <TinyBtn onClick={() => { setEditingProfile(false); setUiError(""); }}>
-                Cancelar edición
-              </TinyBtn>
-            )}
-          </div>
-
-          {viewingUser ? (
-            <div style={{ display: "grid", gap: 10, fontSize: 14, color: palette.text }}>
-              <b>Identidad</b>
-
-              {editingProfile ? (
-                <>
-                  <EditFieldRow>
-                    <EditLabel>Nombre</EditLabel>
-                    <EditInput value={editForm.name} onChange={(e) => setEditForm((s) => ({ ...s, name: e.target.value }))} />
-                  </EditFieldRow>
-                  <EditFieldRow>
-                    <EditLabel>Tipo de documento</EditLabel>
-                    <EditSelect value={editForm.documentType} onChange={(e) => setEditForm((s) => ({ ...s, documentType: e.target.value }))}>
-                      {["CC", "CE", "TI", "PP", "NIT", "OTRO"].map((t) => <option key={t} value={t}>{t}</option>)}
-                    </EditSelect>
-                  </EditFieldRow>
-                  <EditFieldRow>
-                    <EditLabel>Número de documento</EditLabel>
-                    <EditInput value={editForm.documentNumber} onChange={(e) => setEditForm((s) => ({ ...s, documentNumber: e.target.value }))} />
-                  </EditFieldRow>
-                  <EditFieldRow>
-                    <EditLabel>Teléfono</EditLabel>
-                    <EditInput value={editForm.phone} onChange={(e) => setEditForm((s) => ({ ...s, phone: e.target.value }))} />
-                  </EditFieldRow>
-                </>
-              ) : (
-                <>
-                  <div>Nombre: {viewingUser.name || "—"}</div>
-                  <div>Email: {viewingUser.email || "—"}</div>
-                  <div>Teléfono: {viewingUser.phone || "—"}</div>
-                  <div>Documento: {viewingUser.documentType || "—"} {viewingUser.documentNumber || ""}</div>
-                </>
-              )}
-
-              {viewingUser.esMinor && <div style={{ color: palette.accent, fontWeight: 800 }}>⚠️ Menor de edad</div>}
-
-              <Divider />
-              <b>Acceso</b>
-              <div>Tipo: <AccessTypePill $type={viewingUser.accessType}>{viewingUser.accessType || "ticketera"}</AccessTypePill></div>
-              {viewingUser.accessType === "ticketera" ? (
-                <div>Créditos: <b>{viewingUser.credits ?? 0}</b></div>
-              ) : (
-                <div>
-                  Estado:{" "}
-                  {(() => {
-                    const { active, label } = getMensualidadStatus(viewingUser.mensualidad);
-                    return <MensualidadBadge $active={active}>{active ? "🟢" : "🔴"} {label}</MensualidadBadge>;
-                  })()}
-                </div>
-              )}
-              <SecondaryButton onClick={() => openAccessModal(viewingUser)} disabled={busy}>
-                ↔ Cambiar modalidad
-              </SecondaryButton>
-
-              <Divider />
-              <b>Contacto de emergencia</b>
-              {editingProfile ? (
-                <>
-                  <EditFieldRow>
-                    <EditLabel>Nombre contacto</EditLabel>
-                    <EditInput value={editForm.emergencyContactName} onChange={(e) => setEditForm((s) => ({ ...s, emergencyContactName: e.target.value }))} />
-                  </EditFieldRow>
-                  <EditFieldRow>
-                    <EditLabel>Teléfono contacto</EditLabel>
-                    <EditInput value={editForm.emergencyContactPhone} onChange={(e) => setEditForm((s) => ({ ...s, emergencyContactPhone: e.target.value }))} />
-                  </EditFieldRow>
-                </>
-              ) : (
-                <>
-                  <div>Nombre: {viewingUser.emergencyContactName || "—"}</div>
-                  <div>Teléfono: {viewingUser.emergencyContactPhone || "—"}</div>
-                </>
-              )}
-
-              <Divider />
-              <b>Salud / Seguro</b>
-              {editingProfile ? (
-                <EditFieldRow>
-                  <EditLabel>EPS</EditLabel>
-                  <EditInput value={editForm.epsName} onChange={(e) => setEditForm((s) => ({ ...s, epsName: e.target.value }))} />
-                </EditFieldRow>
-              ) : (
-                <div>EPS: {viewingUser.epsName || "—"}</div>
-              )}
-
-              {editingProfile && (
-                <>
-                  {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
-                  {editSuccess ? <SuccessBox role="status">{editSuccess}</SuccessBox> : null}
-                  <Actions style={{ marginTop: 10 }}>
-                    <Button onClick={submitEditProfile} disabled={busy}>{busy ? "Guardando..." : "💾 Guardar cambios"}</Button>
-                    <SecondaryButton onClick={() => { setEditingProfile(false); setUiError(""); }} disabled={busy}>Cancelar</SecondaryButton>
-                  </Actions>
-                </>
-              )}
-
-              {!editingProfile && (
-                <>
-                  {editSuccess ? <SuccessBox role="status">{editSuccess}</SuccessBox> : null}
-                  <Divider />
-                  <b>Waiver</b>
-                  <div>Estado: <strong>{viewingUser.waiverStatus === "signed" ? "Firmado" : "Pendiente"}</strong></div>
-                  {viewingUser.waiverStatus === "signed" ? (
-                    <>
-                      <div>Firmado el: {viewingUser.waiverSignedAt ? new Date(viewingUser.waiverSignedAt).toLocaleString("es-CO") : "—"}</div>
-                      <div>Método: {viewingUser.waiverMethod || "—"}</div>
-                      <div>Versión: {viewingUser.waiverVersion || "—"}</div>
-                      {viewingUser.waiverSignatureUrl ? (
-                        <>
-                          <Divider />
-                          <b>Firma digital</b>
-                          <img src={viewingUser.waiverSignatureUrl} alt="Firma" style={{ maxWidth: "100%", borderRadius: 10, border: `1px solid ${palette.border}`, background: "rgba(255,255,255,0.85)", padding: 8 }} />
-                        </>
-                      ) : null}
-                      <Divider />
-                      <LinkButton href={`/api/admin/waiver/pdf?email=${encodeURIComponent(viewingUser.email || "")}`} target="_blank" rel="noreferrer" style={{ justifyContent: "center" }}>
-                        <LinkPill>⬇️</LinkPill>Abrir Waiver PDF
-                      </LinkButton>
-                    </>
-                  ) : null}
-                  <Actions style={{ justifyContent: "flex-end", marginTop: 12 }}>
-                    <Button onClick={() => setShowProfileModal(false)} disabled={busy}>Cerrar</Button>
-                  </Actions>
-                </>
-              )}
-            </div>
-          ) : <Muted>No hay datos para mostrar.</Muted>}
-
-          {viewingUser && viewingUser.waiverStatus !== "signed" && !editingProfile ? (
-            <>
-              <ErrorBox role="alert" style={{ marginTop: 10 }}>
-                ⚠️ Waiver pendiente — este usuario no puede entrenar sin firmar.
-              </ErrorBox>
-              <Button onClick={() => openWaiverForUser(viewingUser)} disabled={busy} style={{ marginTop: 10 }}>
-                ✍️ Agregar Waiver (firmar aquí)
-              </Button>
-            </>
-          ) : null}
-        </Modal>
-
-        {/* ---- NEW USER MODAL ---- */}
-        <Overlay $show={showNewUserModal} onClick={() => (!busy ? closeNewUser() : null)} />
-        <Modal $show={showNewUserModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>
-            {newUserStep === 1 ? "Nuevo Miembro" : newUserForm.esMinor ? "Waiver — Menor de Edad" : "Firma de Waiver"}
-          </ModalTitle>
-          {newUserStep === 1 ? (
-            <>
-              <Select value={newUserForm.accessType} onChange={(e) => setNewUserForm((s) => ({ ...s, accessType: e.target.value }))}>
-                <option value="ticketera">Tiquetera (créditos)</option>
-                <option value="mensualidad">Mensualidad</option>
-              </Select>
-              {newUserForm.accessType === "mensualidad" && (
-                <Select value={newUserForm.mensualidadMeses} onChange={(e) => setNewUserForm((s) => ({ ...s, mensualidadMeses: Number(e.target.value) }))}>
-                  {[1, 2, 3, 6, 12].map((m) => <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>)}
-                </Select>
-              )}
-              <Input placeholder="Nombre" value={newUserForm.name} onChange={(e) => setNewUserForm((s) => ({ ...s, name: e.target.value }))} />
-              <Input placeholder="Email" value={newUserForm.email} onChange={(e) => setNewUserForm((s) => ({ ...s, email: e.target.value }))} />
-              <Select value={newUserForm.documentType} onChange={(e) => setNewUserForm((s) => ({ ...s, documentType: e.target.value }))}>
-                {["CC", "CE", "TI", "PP", "NIT", "OTRO"].map((t) => <option key={t} value={t}>{t}</option>)}
-              </Select>
-              <Input placeholder="Número Documento" value={newUserForm.documentNumber} onChange={(e) => setNewUserForm((s) => ({ ...s, documentNumber: e.target.value }))} />
-              <Input placeholder="Teléfono" value={newUserForm.phone} onChange={(e) => setNewUserForm((s) => ({ ...s, phone: e.target.value }))} />
-              <Input placeholder="EPS" value={newUserForm.epsName} onChange={(e) => setNewUserForm((s) => ({ ...s, epsName: e.target.value }))} />
-              <Input placeholder="Contacto Emergencia" value={newUserForm.emergencyContactName} onChange={(e) => setNewUserForm((s) => ({ ...s, emergencyContactName: e.target.value }))} />
-              <Input placeholder="Teléfono Emergencia" value={newUserForm.emergencyContactPhone} onChange={(e) => setNewUserForm((s) => ({ ...s, emergencyContactPhone: e.target.value }))} />
-              <RadioRow>
-                <label><input type="radio" checked={!newUserForm.esMinor} onChange={() => setNewUserForm((s) => ({ ...s, esMinor: false }))} />Mayor de edad</label>
-                <label><input type="radio" checked={newUserForm.esMinor} onChange={() => setNewUserForm((s) => ({ ...s, esMinor: true }))} />Menor de edad</label>
-              </RadioRow>
-              {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
-              <Actions style={{ marginTop: 12 }}>
-                <Button onClick={createNewUser} disabled={busy}>{busy ? "Creando..." : "Continuar"}</Button>
-                <SecondaryButton onClick={closeNewUser} disabled={busy}>Cancelar</SecondaryButton>
-              </Actions>
-            </>
-          ) : (
-            <>
-              {newUserForm.esMinor && <MinorBanner>⚠️ Participante menor de edad — debe firmar el representante legal.</MinorBanner>}
-              <WaiverBox>
-                {waiverToParagraphs(waiverSnapshotNewUser.text).map((p, idx) => (
-                  <p key={idx} style={{ margin: "0 0 10px" }}>{p}</p>
-                ))}
-              </WaiverBox>
-              <CheckboxRow>
-                <input type="checkbox" checked={waiverAccepted} onChange={(e) => setWaiverAccepted(e.target.checked)} style={{ marginTop: 2 }} />
-                <span>{newUserForm.esMinor ? "Acepto el consentimiento como representante legal del menor" : "Acepto el consentimiento"}</span>
-              </CheckboxRow>
-              <SigWrap>
-                <Muted style={{ display: "block", marginBottom: 6 }}>
-                  {newUserForm.esMinor ? "Firma del representante legal (dibuja aquí)" : "Firma (dibuja aquí)"}
-                </Muted>
+        {/* Waiver Existing User Modal */}
+        {showWaiverModal && (
+          <>
+            <Overlay $show onClick={() => !busy && closeWaiverModal()} />
+            <Modal $show>
+              <ModalContent>
+                <ModalHeader>
+                  <ModalTitle>Firmar Waiver — {waiverUser?.name || "Usuario"}</ModalTitle>
+                </ModalHeader>
+                <WaiverBox>
+                  {waiverToParagraphs(waiverSnapshotExistingUser.text).map((p, idx) => (
+                    <p key={idx} style={{ marginBottom: spacing.md }}>{p}</p>
+                  ))}
+                </WaiverBox>
+                <CheckboxRow>
+                  <input type="checkbox" checked={waiverAccepted} onChange={(e) => setWaiverAccepted(e.target.checked)} />
+                  <span>{waiverUser?.esMinor ? "Acepto el consentimiento como representante legal del menor" : "Acepto el consentimiento"}</span>
+                </CheckboxRow>
                 <SigCanvas ref={canvasRef} onMouseDown={startDraw} onMouseMove={moveDraw} onMouseUp={endDraw} onMouseLeave={endDraw} onTouchStart={startDraw} onTouchMove={moveDraw} onTouchEnd={endDraw} />
                 <SigRow>
-                  <Muted>Firmando como: <b style={{ color: palette.text }}>{newUserForm.esMinor ? `Representante legal de ${newUserForm.name || "—"}` : newUserForm.name || "—"}</b></Muted>
-                  <TinyBtn type="button" onClick={() => { setUiError(""); clearSignature(); }} disabled={busy}>Limpiar</TinyBtn>
+                  <span style={{ fontSize: fontSize.sm, color: palette.textLight }}>
+                    Firmando como: <strong>{waiverUser?.esMinor ? `Representante legal de ${waiverUser?.name || "—"}` : waiverUser?.name || "—"}</strong>
+                  </span>
+                  <Button $variant="secondary" $small type="button" onClick={() => { setUiError(""); clearSignature(); }}>Limpiar</Button>
                 </SigRow>
-              </SigWrap>
-              {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
-              <Actions style={{ marginTop: 12 }}>
-                <Button onClick={submitNewUserWaiver} disabled={busy}>{busy ? "Guardando..." : "Crear miembro"}</Button>
-                <SecondaryButton onClick={() => setNewUserStep(1)} disabled={busy}>Atrás</SecondaryButton>
-              </Actions>
-            </>
-          )}
+                {uiError && <ErrorBox>{uiError}</ErrorBox>}
+                <ActionButtons>
+                  <Button onClick={submitExistingUserWaiver} disabled={busy}>{busy ? "Guardando..." : "Guardar waiver"}</Button>
+                  <Button $variant="secondary" onClick={closeWaiverModal} disabled={busy}>Cancelar</Button>
+                </ActionButtons>
+              </ModalContent>
+            </Modal>
+          </>
+        )}
+
+        {/* Moon Modal */}
+        <Overlay $show={showMoonModal} onClick={() => !moonSubmitting && closeMoonModal()} />
+        <Modal $show={showMoonModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>🌑 MoonBoard - {moonUser?.name}</ModalTitle>
+            </ModalHeader>
+            {moonLoading ? (
+              <div style={{ textAlign: "center", padding: spacing.lg, color: palette.textLight }}>Cargando slots...</div>
+            ) : (
+              <>
+                <div style={{ display: "flex", gap: spacing.sm, overflowX: "auto", marginBottom: spacing.md }}>
+                  {moonDays.map((day, i) => (
+                    <Button
+                      key={day.date}
+                      $variant={moonSelectedDay === i ? undefined : "secondary"}
+                      $small
+                      onClick={() => { setMoonSelectedDay(i); setMoonMsg(""); setMoonSuccess(""); }}
+                    >
+                      {day.isToday ? "Hoy" : formatTabDate(day.date)}
+                    </Button>
+                  ))}
+                </div>
+                {currentMoonDay && (
+                  <div style={{ display: "grid", gap: spacing.sm }}>
+                    {currentMoonDay.slots.map((slot) => (
+                      <div key={slot.hour} style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: spacing.sm,
+                        border: `1px solid ${palette.border}`,
+                        borderRadius: borderRadius.sm,
+                        background: slot.isMySlot ? palette.success + "10" : slot.taken ? palette.bg : "white",
+                        opacity: slot.isPast ? 0.6 : 1
+                      }}>
+                        <span style={{ fontWeight: 500 }}>{slot.label}</span>
+                        <div>
+                          {slot.isMySlot ? (
+                            <Badge $success>Reservado por ti</Badge>
+                          ) : slot.isPast ? (
+                            <Badge $danger>Pasado</Badge>
+                          ) : slot.taken ? (
+                            <div style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
+                              <Badge>{slot.takenBy?.name || "Ocupado"}</Badge>
+                              <Button $variant="danger" $small onClick={() => openCancelMoon(slot.reservationId, slot.takenBy?.name)} disabled={moonSubmitting}>
+                                Cancelar
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button $small onClick={() => handleAdminMoonReserve(currentMoonDay.date, slot.hour)} disabled={moonSubmitting}>
+                              Reservar
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            {moonMsg && <ErrorBox>{moonMsg}</ErrorBox>}
+            {moonSuccess && <SuccessBox>{moonSuccess}</SuccessBox>}
+            <ActionButtons>
+              <Button $variant="secondary" onClick={closeMoonModal} disabled={moonSubmitting}>Cerrar</Button>
+            </ActionButtons>
+          </ModalContent>
         </Modal>
 
-        {/* ---- WAIVER EXISTING USER MODAL ---- */}
-        <Overlay $show={showWaiverModal} onClick={() => (!busy ? closeWaiverModal() : null)} />
-        <Modal $show={showWaiverModal} role="dialog" aria-modal="true">
-          <SheetHandle />
-          <ModalTitle>Firmar Waiver — {waiverUser?.name || "Usuario"}</ModalTitle>
-          {waiverUser?.esMinor ? <MinorBanner>⚠️ Participante menor de edad — debe firmar el representante legal.</MinorBanner> : null}
-          <WaiverBox>
-            {waiverToParagraphs(waiverSnapshotExistingUser.text).map((p, idx) => (
-              <p key={idx} style={{ margin: "0 0 10px" }}>{p}</p>
-            ))}
-          </WaiverBox>
-          <CheckboxRow>
-            <input type="checkbox" checked={waiverAccepted} onChange={(e) => setWaiverAccepted(e.target.checked)} style={{ marginTop: 2 }} />
-            <span>{waiverUser?.esMinor ? "Acepto el consentimiento como representante legal del menor" : "Acepto el consentimiento"}</span>
-          </CheckboxRow>
-          <SigWrap>
-            <Muted style={{ display: "block", marginBottom: 6 }}>
-              {waiverUser?.esMinor ? "Firma del representante legal (dibuja aquí)" : "Firma (dibuja aquí)"}
-            </Muted>
-            <SigCanvas ref={canvasRef} onMouseDown={startDraw} onMouseMove={moveDraw} onMouseUp={endDraw} onMouseLeave={endDraw} onTouchStart={startDraw} onTouchMove={moveDraw} onTouchEnd={endDraw} />
-            <SigRow>
-              <Muted>Firmando como: <b style={{ color: palette.text }}>{waiverUser?.esMinor ? `Representante legal de ${waiverUser?.name || "—"}` : waiverUser?.name || "—"}</b></Muted>
-              <TinyBtn type="button" onClick={() => { setUiError(""); clearSignature(); }} disabled={busy}>Limpiar</TinyBtn>
-            </SigRow>
-          </SigWrap>
-          {uiError ? <ErrorBox role="alert">{uiError}</ErrorBox> : null}
-          <Actions style={{ marginTop: 12 }}>
-            <Button onClick={submitExistingUserWaiver} disabled={busy}>{busy ? "Guardando..." : "Guardar waiver firmado"}</Button>
-            <SecondaryButton onClick={closeWaiverModal} disabled={busy}>Cancelar</SecondaryButton>
-          </Actions>
+        {/* Cancel Moon Confirmation Modal */}
+        <Overlay $show={showCancelMoonModal} onClick={() => !moonSubmitting && setShowCancelMoonModal(false)} />
+        <Modal $show={showCancelMoonModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>Confirmar cancelación</ModalTitle>
+            </ModalHeader>
+            <p>¿Estás seguro de que deseas cancelar la reserva de <strong>{cancelMoonRes?.userName}</strong>?</p>
+            <ActionButtons>
+              <Button $variant="danger" onClick={handleAdminCancelMoon} disabled={moonSubmitting}>
+                {moonSubmitting ? "Cancelando..." : "Sí, cancelar"}
+              </Button>
+              <Button $variant="secondary" onClick={() => { setShowCancelMoonModal(false); setCancelMoonRes(null); }} disabled={moonSubmitting}>
+                Volver
+              </Button>
+            </ActionButtons>
+          </ModalContent>
+        </Modal>
+
+        {/* Attendance Modal */}
+        <Overlay $show={showAttendanceModal} onClick={() => setShowAttendanceModal(false)} />
+        <Modal $show={showAttendanceModal} style={{ maxWidth: "700px" }}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>📊 Asistencia</ModalTitle>
+            </ModalHeader>
+            <PeriodTabs>
+              <PeriodTab $active={attendancePeriod === "today"} onClick={() => setAttendancePeriod("today")}>Hoy</PeriodTab>
+              <PeriodTab $active={attendancePeriod === "week"} onClick={() => setAttendancePeriod("week")}>Esta semana</PeriodTab>
+              <PeriodTab $active={attendancePeriod === "month"} onClick={() => setAttendancePeriod("month")}>Este mes</PeriodTab>
+            </PeriodTabs>
+            <StatsRow>
+              <StatPill><StatPillNum>{attendanceData.length}</StatPillNum><StatPillLabel>Personas distintas</StatPillLabel></StatPill>
+              <StatPill><StatPillNum>{attendanceData.reduce((a, d) => a + d.count, 0)}</StatPillNum><StatPillLabel>Visitas totales</StatPillLabel></StatPill>
+            </StatsRow>
+            <Input
+              placeholder="🔍 Buscar por nombre o email..."
+              value={attendanceSearch}
+              onChange={(e) => setAttendanceSearch(e.target.value)}
+              style={{ marginBottom: spacing.md }}
+            />
+            <Divider />
+            {(() => {
+              const q = attendanceSearch.trim().toLowerCase();
+              const allVisits = [];
+              attendanceData.forEach(({ user, visits }) => {
+                visits.forEach((v) => {
+                  const ts = v.checkedInAt || v.date;
+                  allVisits.push({ user, visit: v, ts });
+                });
+              });
+              const filtered = q ? allVisits.filter(({ user }) =>
+                (user.name || "").toLowerCase().includes(q) ||
+                (user.email || "").toLowerCase().includes(q)
+              ) : allVisits;
+              if (filtered.length === 0) {
+                return <div style={{ textAlign: "center", padding: spacing.lg, color: palette.textLight }}>Sin registros en este período.</div>;
+              }
+              const byDay = {};
+              filtered.forEach((item) => {
+                const d = new Date(item.ts);
+                const key = isNaN(d.getTime()) ? "unknown" : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                if (!byDay[key]) byDay[key] = [];
+                byDay[key].push(item);
+              });
+              const sortedDays = Object.keys(byDay).sort((a, b) => b.localeCompare(a));
+              return (
+                <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                  {sortedDays.map((dayKey) => {
+                    const items = byDay[dayKey];
+                    items.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+                    return (
+                      <DayGroup key={dayKey}>
+                        <DayGroupHeader>
+                          <span>{formatDayLabel(items[0].ts)}</span>
+                          <Badge>{items.length} ingreso{items.length !== 1 ? "s" : ""}</Badge>
+                        </DayGroupHeader>
+                        {items.map(({ user, ts }, idx) => (
+                          <AttendanceRow key={`${user._id}-${idx}`}>
+                            <div>
+                              <div style={{ fontWeight: 500 }}>{user.name || "Sin nombre"}</div>
+                              <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{user.email}</div>
+                            </div>
+                            <div style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
+                              {formatCheckinTime(ts) && <Badge>🕐 {formatCheckinTime(ts)}</Badge>}
+                              <Badge $success={user.accessType === "mensualidad"}>
+                                {user.accessType === "mensualidad" ? "Mens" : "Tiq"}
+                              </Badge>
+                              <Button $variant="secondary" $small onClick={() => handleEditVisit(user, items[0].visit)}>✏️</Button>
+                            </div>
+                          </AttendanceRow>
+                        ))}
+                      </DayGroup>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+            <Divider />
+            <div style={{ border: `1px solid ${palette.border}`, borderRadius: borderRadius.sm, overflow: "hidden", marginBottom: spacing.md }}>
+              <div style={{ padding: spacing.md, background: palette.bg, fontWeight: 600, borderBottom: `1px solid ${palette.border}` }}>
+                🌑 Reservas Moonboard — próximos 7 días
+              </div>
+              {moonAttendance.length === 0 ? (
+                <div style={{ padding: spacing.md, textAlign: "center", color: palette.textLight }}>Sin reservas activas.</div>
+              ) : (
+                moonAttendance.map((r) => (
+                  <div key={r._id} style={{ padding: spacing.md, borderBottom: `1px solid ${palette.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: spacing.sm }}>
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{r.userName || r.userEmail}</div>
+                      <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{formatTabDate(r.date)} · {String(r.startHour).padStart(2, "0")}:00</div>
+                    </div>
+                    <Button $variant="danger" $small onClick={() => openCancelMoon(r._id, r.userName)} disabled={moonSubmitting}>Cancelar</Button>
+                  </div>
+                ))
+              )}
+            </div>
+            <ActionButtons>
+              <Button $variant="secondary" onClick={() => setShowAttendanceModal(false)}>Cerrar</Button>
+            </ActionButtons>
+          </ModalContent>
         </Modal>
       </ModalPortal>
     </PageShell>

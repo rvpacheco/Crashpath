@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import styled, { createGlobalStyle } from "styled-components";
- 
+
 const themes = {
   day: {
     bg: "#E7E1D2",
@@ -11,18 +10,15 @@ const themes = {
     muted: "#6B6257",
     border: "rgba(43,38,32,0.16)",
     panel: "rgba(255,255,255,0.55)",
-    panelSolid: "#F3EFE6",
     accent: "#9C4F24",
     accent2: "#C26A34",
-    overlay: "rgba(0,0,0,0.35)",
     heroText: "rgba(255,255,255,0.92)",
     heroMuted: "rgba(255,255,255,0.72)",
-    chipBg: "rgba(0,0,0,0.35)",
-    grain: 0.1,
     focus: "rgba(156,79,36,0.20)",
   },
 };
 const t = themes.day;
+
 const GlobalStyle = createGlobalStyle`
   :root { color-scheme: light; }
   *{ box-sizing:border-box; }
@@ -78,14 +74,6 @@ const NavLeft = styled.nav`
   }
 `;
 
-const NavRight = styled.nav`
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  align-items: center;
-  pointer-events: auto;
-`;
-
 const NavLink = styled.a`
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", monospace;
@@ -118,52 +106,6 @@ const LogoMark = styled.div`
   font-size: 12px;
 `;
 
-const IconBtn = styled.button`
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.22);
-  color: ${(p) => p.$t.heroText};
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  font-weight: 900;
-
-  &:hover {
-    background: rgba(0, 0, 0, 0.3);
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 4px ${(p) => p.$t.focus};
-  }
-`;
-
-const CTA = styled(Link)`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 9px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(0, 0, 0, 0.22);
-  color: ${(p) => p.$t.heroText};
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
-
-  &:hover {
-    background: rgba(0, 0, 0, 0.3);
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 4px ${(p) => p.$t.focus};
-  }
-`;
-
 const Hero = styled.section`
   position: relative;
   height: 86vh;
@@ -171,6 +113,15 @@ const Hero = styled.section`
   width: 100%;
   overflow: hidden;
   background: #000;
+`;
+
+const HeroBg = styled.div`
+  position: absolute;
+  inset: 0;
+  background-image: url(${(p) => p.$src});
+  background-size: cover;
+  background-position: center 35%;
+  filter: contrast(1.05) saturate(1.05);
 `;
 
 const HeroShade = styled.div`
@@ -225,18 +176,22 @@ const HeroTitle = styled.h1`
   }
 `;
 
-const HeroLead = styled.p`
-  margin: 10px auto 0;
-  color: ${(p) => p.$t.heroMuted};
-  font-size: 13px;
-  line-height: 1.7;
-  max-width: 70ch;
+const HeroLocation = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(10px);
+
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", monospace;
-
-  @media (min-width: 900px) {
-    font-size: 14px;
-  }
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.78);
 `;
 
 const HeroPill = styled.div`
@@ -363,329 +318,6 @@ const SectionKicker = styled.div`
     "Liberation Mono", monospace;
 `;
 
-const Tiles = styled.div`
-  margin-top: 26px;
-
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: calc(100% - 56px);
-  gap: 14px;
-
-  overflow-x: auto;
-  padding: 0 28px 18px;
-  scroll-padding: 28px;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-
-  scrollbar-width: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-
-  @media (min-width: 700px) {
-    grid-auto-columns: 70%;
-    padding: 0 22px 20px;
-    scroll-padding: 22px;
-  }
-
-  @media (min-width: 1040px) {
-    padding: 0;
-    overflow: visible;
-    grid-auto-flow: initial;
-    grid-auto-columns: initial;
-    scroll-snap-type: none;
-
-    display: grid;
-    gap: 18px;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-  }
-`;
-
-const TileWrap = styled.div`
-  width: 100%;
-  scroll-snap-align: center;
-  scroll-snap-stop: always;
-  touch-action: pan-x;
-
-  @media (min-width: 1040px) {
-    scroll-snap-align: initial;
-    scroll-snap-stop: normal;
-    grid-column: span ${(p) => p.$span || 4};
-  }
-`;
-
-const Tile = styled(Link)`
-  display: block;
-  width: 100%;
-
-  position: relative;
-  border-radius: 22px;
-  overflow: hidden;
-  border: 1px solid ${(p) => p.$t.border};
-  background: ${(p) => p.$t.panelSolid};
-
-  aspect-ratio: 16 / 10;
-  min-height: 230px;
-
-  box-shadow: ${(p) =>
-    p.$mode === "dark"
-      ? "0 18px 55px rgba(0,0,0,0.55)"
-      : "0 14px 40px rgba(0,0,0,0.10)"};
-
-  transform: translateZ(0);
-  transition: transform 220ms ease, box-shadow 220ms ease,
-    border-color 220ms ease, filter 220ms ease;
-
-  &:active {
-    transform: scale(0.99);
-  }
-
-  &:hover {
-    transform: translateY(-3px);
-    border-color: ${(p) =>
-    p.$mode === "dark"
-      ? "rgba(255,255,255,0.22)"
-      : "rgba(43,38,32,0.24)"};
-    box-shadow: ${(p) =>
-    p.$mode === "dark"
-      ? "0 26px 80px rgba(0,0,0,0.65)"
-      : "0 22px 70px rgba(0,0,0,0.14)"};
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 4px ${(p) => `${p.$t.accent}33`},
-      ${(p) =>
-    p.$mode === "dark"
-      ? "0 26px 80px rgba(0,0,0,0.65)"
-      : "0 22px 70px rgba(0,0,0,0.14)"};
-  }
-`;
-
-const TileImg = styled.div`
-  position: absolute;
-  inset: 0;
-
-  background-image: url(${(p) => p.$src});
-  background-size: cover;
-  background-position: center;
-
-  filter: contrast(1.05) saturate(0.98);
-  transform: scale(1.03);
-  transition: transform 520ms ease, filter 520ms ease;
-
-  ${Tile}:hover & {
-    transform: scale(1.08);
-    filter: contrast(1.08) saturate(1.02);
-  }
-`;
-
-const TileShade = styled.div`
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0) 40%,
-    rgba(0, 0, 0, 0.35) 70%,
-    rgba(0, 0, 0, 0.7) 100%
-  );
-`;
-
-const TileTopRow = styled.div`
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 14px;
-  z-index: 2;
-
-  display: grid;
-  gap: 8px;
-`;
-
-const TileLabel = styled.div`
-  justify-self: start;
-  padding: 5px 9px;
-  border-radius: 999px;
-
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(10px);
-
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  font-weight: 800;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
-`;
-
-const TileTitle = styled.div`
-  color: rgba(255, 255, 255, 0.96);
-  font-weight: 900;
-  font-size: 18px;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-  text-shadow: 0 10px 22px rgba(0, 0, 0, 0.55);
-
-  @media (min-width: 900px) {
-    font-size: 20px;
-  }
-`;
-
-const TileSub = styled.div`
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 12px;
-  line-height: 1.45;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
-
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-`;
-
-const HeroBg = styled.div`
-  position: absolute;
-  inset: 0;
-  background-image: url(${(p) => p.$src});
-  background-size: cover;
-  background-position: center 35%;
-  filter: ${(p) =>
-    p.$mode === "dark"
-      ? "contrast(1.05) saturate(1.0)"
-      : "contrast(1.05) saturate(1.05)"};
-`;
-
-const TileContent = styled.div`
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  z-index: 2;
-
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(10, 10, 10, 0.34);
-  backdrop-filter: blur(14px);
-
-  padding: 12px;
-  display: grid;
-  gap: 6px;
-
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
-`;
-
-const Dots = styled.div`
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-  margin-top: 10px;
-
-  @media (min-width: 1040px) {
-    display: none;
-  }
-`;
-
-const Dot = styled.button`
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  border: 1px solid ${(p) => p.$t.border};
-  background: ${(p) => (p.$active ? p.$t.accent : "transparent")};
-  cursor: pointer;
-  padding: 0;
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 4px ${(p) => p.$t.focus};
-  }
-`;
-
-const AboutGrid = styled.div`
-  margin-top: 26px;
-  display: grid;
-  gap: 16px;
-
-  @media (min-width: 980px) {
-    grid-template-columns: 1.1fr 0.9fr;
-    align-items: start;
-  }
-`;
-
-const AboutCard = styled.div`
-  border: 1px solid ${(p) => p.$t.border};
-  border-radius: 18px;
-  background: ${(p) => p.$t.panel};
-  padding: 16px;
-  backdrop-filter: blur(10px);
-  box-shadow: ${(p) =>
-    p.$mode === "dark"
-      ? "0 20px 60px rgba(0,0,0,0.55)"
-      : "0 14px 40px rgba(0,0,0,0.10)"};
-`;
-
-const AboutTitle = styled.h3`
-  margin: 0;
-  font-size: 16px;
-`;
-
-const AboutText = styled.p`
-  margin: 10px 0 0;
-  color: ${(p) => p.$t.muted};
-  font-size: 13px;
-  line-height: 1.75;
-  max-width: 78ch;
-`;
-
-const Bullets = styled.ul`
-  margin: 12px 0 0;
-  padding-left: 18px;
-  color: ${(p) => p.$t.muted};
-  font-size: 13px;
-  line-height: 1.7;
-
-  li {
-    margin: 6px 0;
-  }
-`;
-
-const VideoBox = styled.div`
-  border-radius: 18px;
-  overflow: hidden;
-  border: 1px solid ${(p) => p.$t.border};
-  background: ${(p) =>
-    p.$mode === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.55)"};
-  min-height: 320px;
-  display: grid;
-  place-items: center;
-  position: relative;
-`;
-
-const VideoHint = styled.div`
-  color: ${(p) => p.$t.muted};
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
-  text-align: center;
-  padding: 18px;
-`;
-
-const Footer = styled.footer`
-  position: relative;
-  z-index: 1;
-  padding: 40px 14px 50px;
-  text-align: center;
-  color: ${(p) => p.$t.muted};
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
-`;
 const ServiceGrid = styled.div`
   margin-top: 32px;
   display: grid;
@@ -698,8 +330,7 @@ const ServiceGrid = styled.div`
 `;
 
 const ServiceBlock = styled.div`
-  border: 1px solid ${(p) =>
-    p.$highlight ? p.$t.accent : p.$t.border};
+  border: 1px solid ${(p) => (p.$highlight ? p.$t.accent : p.$t.border)};
   border-radius: 20px;
   background: ${(p) => p.$t.panel};
   padding: 24px 20px;
@@ -709,9 +340,7 @@ const ServiceBlock = styled.div`
   box-shadow: ${(p) =>
     p.$highlight
       ? `0 0 0 1px ${p.$t.accent}44, 0 20px 60px rgba(0,0,0,0.12)`
-      : p.$mode === "dark"
-        ? "0 20px 60px rgba(0,0,0,0.45)"
-        : "0 14px 40px rgba(0,0,0,0.07)"};
+      : "0 14px 40px rgba(0,0,0,0.07)"};
   transition: transform 220ms ease, box-shadow 220ms ease;
 
   &:hover {
@@ -765,14 +394,13 @@ const ServiceCTA = styled(Link)`
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", monospace;
-  border: 1px solid ${(p) =>
-    p.$kind === "primary" ? "transparent" : p.$t.border};
+  border: 1px solid
+    ${(p) => (p.$kind === "primary" ? "transparent" : p.$t.border)};
   background: ${(p) =>
     p.$kind === "primary"
       ? `linear-gradient(180deg, ${p.$t.accent}, ${p.$t.accent2})`
       : "transparent"};
-  color: ${(p) =>
-    p.$kind === "primary" ? "#fff" : p.$t.text};
+  color: ${(p) => (p.$kind === "primary" ? "#fff" : p.$t.text)};
   transition: filter 180ms ease, transform 180ms ease;
 
   &:hover {
@@ -780,141 +408,102 @@ const ServiceCTA = styled(Link)`
     transform: translateY(-1px);
   }
 `;
-const HeroLocation = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 14px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(10px);
 
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", monospace;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.78);
+const AboutGrid = styled.div`
+  margin-top: 26px;
+  display: grid;
+  gap: 16px;
+
+  @media (min-width: 980px) {
+    grid-template-columns: 1.1fr 0.9fr;
+    align-items: start;
+  }
 `;
 
+const AboutCard = styled.div`
+  border: 1px solid ${(p) => p.$t.border};
+  border-radius: 18px;
+  background: ${(p) => p.$t.panel};
+  padding: 16px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.1);
+`;
 
+const AboutTitle = styled.h3`
+  margin: 0;
+  font-size: 16px;
+`;
+
+const AboutText = styled.p`
+  margin: 10px 0 0;
+  color: ${(p) => p.$t.muted};
+  font-size: 13px;
+  line-height: 1.75;
+  max-width: 78ch;
+`;
+
+const Bullets = styled.ul`
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: ${(p) => p.$t.muted};
+  font-size: 13px;
+  line-height: 1.7;
+
+  li {
+    margin: 6px 0;
+  }
+`;
+
+const VideoBox = styled.div`
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid ${(p) => p.$t.border};
+  background: rgba(255, 255, 255, 0.55);
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  position: relative;
+`;
+
+const VideoHint = styled.div`
+  color: ${(p) => p.$t.muted};
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+  text-align: center;
+  padding: 18px;
+`;
+
+const Footer = styled.footer`
+  position: relative;
+  z-index: 1;
+  padding: 40px 14px 50px;
+  text-align: center;
+  color: ${(p) => p.$t.muted};
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+`;
+
+const FooterLink = styled.a`
+  color: ${(p) => p.$t.accent};
+  font-weight: 700;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`;
 
 /** Replace these with your real images in /public */
 const heroImage = "/landing/hero-2.jpg";
 
-/** ✅ Replace with your real WhatsApp number */
-const WHATSAPP_URL = "https://wa.me/57XXXXXXXXXX";
-
-const services = [
-  {
-    tag: "GIMNASIO",
-    title: "Entrenamiento Libre",
-    subtitle: "Acceso 2pm–8pm · MoonBoard + placa principal · enfoque en progreso.",
-    href: "/reservas",
-    img: "/landing/service-reserve.jpg",
-    span: 6,
-    tall: true,
-  },
-  {
-    tag: "GUIADAS",
-    title: "Trips & Guiadas",
-    subtitle: "Roca + logística + coaching. Armamos grupos por nivel.",
-    href: "/guides",
-    img: "/landing/service-guides.jpg",
-    span: 6,
-    tall: true,
-  },
-  {
-    tag: "ENTRENOS",
-    title: "Entrenos",
-    subtitle: "Fuerza, resistencia y técnica aplicada.",
-    href: "/training",
-    img: "/landing/service-training.jpg",
-    span: 4,
-  },
-  {
-    tag: "SHOP",
-    title: "Productos",
-    subtitle: "Magnesio, straps, gear. Drops & collabs.",
-    href: "/shop",
-    img: "/landing/service-shop.jpg",
-    span: 4,
-  },
-  {
-    tag: "STAY",
-    title: "Hospedaje",
-    subtitle: "Casa cerca de la roca para trips y temporadas.",
-    href: "/stay",
-    img: "/landing/service-stay.jpg",
-    span: 4,
-  },
-];
+const WHATSAPP_URL = "https://wa.me/573208608016";
+const INSTAGRAM_URL = "https://www.instagram.com/crash_path/";
 
 export default function CrashPathLanding() {
-  const [activeIdx, setActiveIdx] = useState(0);
-  const railRef = useRef(null);
-  const mode = "day";
-
-  const scrollToIdx = (i) => {
-    const el = railRef.current;
-    if (!el) return;
-    const child = el.children?.[i];
-    if (!child) return;
-
-    const targetLeft = child.offsetLeft - (el.clientWidth - child.clientWidth) / 2;
-    el.scrollTo({ left: targetLeft, behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    const el = railRef.current;
-    if (!el) return;
-
-    let raf = 0;
-
-    const computeActive = () => {
-      const children = Array.from(el.children || []);
-      if (!children.length) return;
-
-      const railRect = el.getBoundingClientRect();
-      const railCenter = railRect.left + railRect.width / 2;
-
-      let best = 0;
-      let bestDist = Infinity;
-
-      children.forEach((c, i) => {
-        const r = c.getBoundingClientRect();
-        const cCenter = r.left + r.width / 2;
-        const dist = Math.abs(cCenter - railCenter);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = i;
-        }
-      });
-
-      setActiveIdx(best);
-    };
-
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(computeActive);
-    };
-
-    el.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", computeActive);
-
-    computeActive();
-
-    return () => {
-      cancelAnimationFrame(raf);
-      el.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", computeActive);
-    };
-  }, []);
-
   return (
-    <Page $t={t} $mode={mode}>
-      <GlobalStyle $t={t} $mode={mode} />
+    <Page $t={t}>
+      <GlobalStyle $t={t} />
 
       {/* Fixed transparent header */}
       <Header>
@@ -934,14 +523,12 @@ export default function CrashPathLanding() {
           <CenterLogo>
             <LogoMark $t={t}>CRASHPATH</LogoMark>
           </CenterLogo>
-
-
         </HeaderInner>
       </Header>
 
       {/* HERO */}
       <Hero id="home">
-        <HeroBg $src={heroImage} $mode={mode} />
+        <HeroBg $src={heroImage} />
         <HeroShade $t={t} />
 
         <HeroContent>
@@ -950,16 +537,24 @@ export default function CrashPathLanding() {
               CrashPath
               <br />
               Gimnasio de Escalada
-
             </HeroTitle>
-            <HeroLocation>📍 Bucaramanga, Colombia · Roca natural · Guiadas en español & English</HeroLocation>
 
-
+            <HeroLocation>
+              📍 Bucaramanga, Colombia · Roca natural · Guiadas en español &
+              English
+            </HeroLocation>
 
             <HeroPill>
               <PillPrimary href="/reservas">REGISTRAR VISITA</PillPrimary>
               <PillDivider />
-              <PillLink href={WHATSAPP_URL}>MAÑANAS (WA)</PillLink>
+              <PillLink
+                as="a"
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                MAÑANAS (WA)
+              </PillLink>
             </HeroPill>
 
             <HeroActions>
@@ -973,6 +568,7 @@ export default function CrashPathLanding() {
           </HeroBox>
         </HeroContent>
       </Hero>
+
       {/* SERVICES */}
       <Section id="services">
         <SectionInner>
@@ -983,28 +579,30 @@ export default function CrashPathLanding() {
 
           <ServiceGrid>
             {/* GIMNASIO */}
-            <ServiceBlock $t={t} $mode={mode}>
+            <ServiceBlock $t={t}>
               <ServiceTag $t={t}>GIMNASIO</ServiceTag>
               <ServiceName $t={t}>Entrenamiento Libre</ServiceName>
               <ServiceDesc $t={t}>
-                Escala cuando quieras dentro del horario de tarde.
-                MoonBoard a 25° y 40°, placa principal, enfoque en progreso real.
-                Sin reserva previa — llegas y entrenas.
+                Escala cuando quieras dentro del horario de tarde. MoonBoard a
+                25° y 40°, placa principal, enfoque en progreso real. Sin
+                reserva previa — llegas y entrenas.
               </ServiceDesc>
-              <ServiceMeta $t={t}>Lunes a Sábado · 3:00 PM – 10:00 PM</ServiceMeta>
+              <ServiceMeta $t={t}>
+                Lunes a Sábado · 3:00 PM – 10:00 PM
+              </ServiceMeta>
               <ServiceCTA href="/reservas" $t={t} $kind="primary">
                 REGISTRAR VISITA
               </ServiceCTA>
             </ServiceBlock>
 
             {/* ENTRENAMIENTO */}
-            <ServiceBlock $t={t} $mode={mode}>
+            <ServiceBlock $t={t}>
               <ServiceTag $t={t}>ENTRENAMIENTO</ServiceTag>
               <ServiceName $t={t}>Programación Enfocada</ServiceName>
               <ServiceDesc $t={t}>
                 Fuerza de dedos, resistencia y técnica aplicada a la escalada.
-                Rutinas diseñadas para escalar mejor en roca y placa.
-                Para todos los niveles.
+                Rutinas diseñadas para escalar mejor en roca y placa. Para todos
+                los niveles.
               </ServiceDesc>
               <ServiceMeta $t={t}>Incluido con acceso al gym</ServiceMeta>
               <ServiceCTA href="#about" $t={t} $kind="ghost">
@@ -1013,16 +611,27 @@ export default function CrashPathLanding() {
             </ServiceBlock>
 
             {/* GUIADAS */}
-            <ServiceBlock $t={t} $mode={mode} $highlight>
-              <ServiceTag $t={t} $highlight>GUIADAS · TRIPS</ServiceTag>
+            <ServiceBlock $t={t} $highlight>
+              <ServiceTag $t={t} $highlight>
+                GUIADAS · TRIPS
+              </ServiceTag>
               <ServiceName $t={t}>Escalada en Roca Real</ServiceName>
               <ServiceDesc $t={t}>
                 Salidas a roca natural cerca de Bucaramanga. Grupos por nivel,
-                logística incluida. Ideal para visitantes y extranjeros.
-                Guías en español e inglés.
+                logística incluida. Ideal para visitantes y extranjeros. Guías
+                en español e inglés.
               </ServiceDesc>
-              <ServiceMeta $t={t}>📍 Bucaramanga, Colombia · Sport climbing</ServiceMeta>
-              <ServiceCTA href={WHATSAPP_URL} $t={t} $kind="primary">
+              <ServiceMeta $t={t}>
+                📍 Bucaramanga, Colombia · Sport climbing
+              </ServiceMeta>
+              <ServiceCTA
+                as="a"
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                $t={t}
+                $kind="primary"
+              >
                 ESCRIBIR POR WHATSAPP
               </ServiceCTA>
             </ServiceBlock>
@@ -1035,20 +644,23 @@ export default function CrashPathLanding() {
         <SectionInner>
           <SectionTitle>CrashPath — Cómo entrenas hoy</SectionTitle>
           <SectionKicker $t={t}>
-            Ya no trabajamos por horas. Llegas, entrenas y te enfocas en tu progreso.
+            Ya no trabajamos por horas. Llegas, entrenas y te enfocas en tu
+            progreso.
           </SectionKicker>
 
           <AboutGrid>
-            <AboutCard $t={t} $mode={mode}>
+            <AboutCard $t={t}>
               <AboutTitle>Entrenamiento en CrashPath</AboutTitle>
 
               <AboutText $t={t}>
-                CrashPath ahora es un gimnasio de escalada enfocado en entrenamiento real.
-                Puedes escalar libremente dentro del horario de la tarde (<b>3:00 PM – 10:00 PM</b>),
-                usando tanto la <b>MoonBoard</b> como nuestra <b>placa principal</b>.
+                CrashPath ahora es un gimnasio de escalada enfocado en
+                entrenamiento real. Puedes escalar libremente dentro del horario
+                de la tarde (<b>3:00 PM – 10:00 PM</b>), usando tanto la{" "}
+                <b>MoonBoard</b> como nuestra <b>placa principal</b>.
                 <br />
                 <br />
-                Para mañanas, escríbenos por WhatsApp y coordinamos según disponibilidad.
+                Para mañanas, escríbenos por WhatsApp y coordinamos según
+                disponibilidad.
               </AboutText>
 
               <Bullets $t={t}>
@@ -1063,27 +675,61 @@ export default function CrashPathLanding() {
                 <HeroBtn href="/reservas" $t={t} $kind="primary">
                   REGISTRAR VISITA
                 </HeroBtn>
-                <HeroBtn href={WHATSAPP_URL} $t={t} $kind="ghost">
+                <HeroBtn
+                  as="a"
+                  href={WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  $t={t}
+                  $kind="ghost"
+                >
                   WHATSAPP (MAÑANAS)
                 </HeroBtn>
               </HeroActions>
             </AboutCard>
 
-            {/* Fixed transparent header <VideoBox $t={t} $mode={mode}>
+            {/*
+              Slot de video. Cuando tengas el reel:
+              pon un mp4 en /public/landing/intro.mp4 y reemplaza el
+              VideoHint por:
+              <video src="/landing/intro.mp4" autoPlay muted loop playsInline
+                style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            
+            
+            <VideoBox $t={t}>
               <VideoHint $t={t}>
                 VIDEO PLACEHOLDER
                 <br />
                 Aquí va un reel de la placa / MoonBoard / vibe del gimnasio.
-                <br />
-                (pon un mp4 en /public/landing/intro.mp4 y lo incrustamos)
               </VideoHint>
-            </VideoBox> */}
+            </VideoBox>
+            */}
           </AboutGrid>
         </SectionInner>
       </Section>
 
       <Footer $t={t}>
-        © {new Date().getFullYear()} CrashPath · Bucaramanga · Gimnasio de Escalada y Entrenamiento · IG @crashpath · WhatsApp +57 …
+        © {new Date().getFullYear()} CrashPath · Bucaramanga · Gimnasio de
+        Escalada y Entrenamiento ·{" "}
+        <FooterLink
+          as="a"
+          href={INSTAGRAM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          $t={t}
+        >
+          IG @crash_path
+        </FooterLink>{" "}
+        ·{" "}
+        <FooterLink
+          as="a"
+          href={WHATSAPP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          $t={t}
+        >
+          WhatsApp +57 320 8608016
+        </FooterLink>
       </Footer>
     </Page>
   );
