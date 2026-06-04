@@ -664,7 +664,7 @@ export default function CrashPathLanding() {
               </AboutText>
 
               <Bullets $t={t}>
-                <li>Acceso libre en horario de tarde (3pm–10pm).</li>
+                <li>Acceso libre en horario de tarde (3pm–9pm).</li>
                 <li>MoonBoard a 25° y 40° disponible.</li>
                 <li>Nueva placa principal de escalada.</li>
                 <li>Enfoque en técnica, fuerza y resistencia.</li>
