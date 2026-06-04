@@ -1,6 +1,6 @@
-// pages/api/visits/[id].js
+// pages/api/admin/visits/[id].js
 import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]"; // ← Verifica que esta ruta existe
+import { authOptions } from "../../auth/[...nextauth]";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 
@@ -35,16 +35,15 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: "Visita no encontrada" });
     }
     
-    user.visits[visitIndex].status = status;
+    // Admin puede editar cualquier campo
+    if (status) user.visits[visitIndex].status = status;
     if (notes !== undefined) user.visits[visitIndex].notes = notes;
-    if (date) user.visits[visitIndex].date = date;
-    if (date) user.visits[visitIndex].checkedInAt = date;
+    if (date) {
+      user.visits[visitIndex].date = date;
+      user.visits[visitIndex].checkedInAt = date;
+    }
     
     await user.save();
-    
-    // Crear entrada de auditoría simple sin modelo Audit
-    // Si no tienes modelo Audit, comenta esta parte
-    // const auditEvent = await Audit.create({ ... });
     
     res.status(200).json({ 
       message: "Visita actualizada correctamente",
@@ -52,7 +51,7 @@ export default async function handler(req, res) {
         action: "edit_visit",
         userId: user._id,
         userName: user.name,
-        summary: `Visita editada: ${status}`,
+        summary: `Visita editada por admin: ${status}`,
         ts: new Date()
       }
     });
