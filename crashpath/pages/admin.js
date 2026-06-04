@@ -1,4 +1,4 @@
-// pages/admin.js - Componente completo con paginación, filtros y ordenamiento
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession, signIn, signOut } from "next-auth/react";
@@ -75,7 +75,7 @@ const PageShell = styled.div`
   background: ${palette.bg};
   
   @media (max-width: 768px) {
-    padding: ${spacing.md};
+    padding: ${spacing.sm};
   }
 `;
 
@@ -122,6 +122,7 @@ const TopBar = styled.div`
     padding: ${spacing.md};
     flex-direction: column;
     align-items: stretch;
+    gap: ${spacing.sm};
   }
 `;
 
@@ -151,6 +152,7 @@ const Button = styled.button`
   cursor: pointer;
   transition: all 0.2s ease;
   border: none;
+  white-space: nowrap;
   
   ${props => {
     switch (props.$variant) {
@@ -191,6 +193,14 @@ const Button = styled.button`
     outline: none;
     box-shadow: 0 0 0 2px ${palette.accent};
   }
+  
+  @media (max-width: 768px) {
+    font-size: ${fontSize.sm};
+    padding: ${spacing.sm} ${spacing.md};
+    white-space: normal;
+    flex: 1;
+    text-align: center;
+  }
 `;
 
 const FiltersBar = styled.div`
@@ -202,7 +212,8 @@ const FiltersBar = styled.div`
   background: ${palette.bg};
   
   @media (max-width: 768px) {
-    padding: ${spacing.md};
+    padding: ${spacing.sm};
+    gap: ${spacing.xs};
   }
 `;
 
@@ -219,56 +230,48 @@ const FilterChip = styled.button`
   &:hover {
     background: ${props => props.$active ? palette.accent : palette.hover};
   }
+  
+  @media (max-width: 768px) {
+    font-size: ${fontSize.xs};
+    padding: ${spacing.xs} ${spacing.sm};
+  }
 `;
 
 // ============================================
-// PAGINATION COMPONENT
+// DASHBOARD COLLAPSIBLE
 // ============================================
-const PaginationWrapper = styled.div`
+const DashboardHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: ${spacing.md} ${spacing.xl};
-  border-top: 1px solid ${palette.border};
   background: ${palette.bg};
-  flex-wrap: wrap;
-  gap: ${spacing.md};
+  border-bottom: 1px solid ${palette.border};
+  cursor: pointer;
+  user-select: none;
+  
+  &:hover {
+    background: ${palette.hover};
+  }
   
   @media (max-width: 768px) {
-    padding: ${spacing.md};
-    flex-direction: column;
+    padding: ${spacing.sm} ${spacing.md};
   }
 `;
 
-const PaginationControls = styled.div`
+const DashboardTitle = styled.div`
+  font-weight: 600;
   display: flex;
-  gap: ${spacing.xs};
   align-items: center;
-  flex-wrap: wrap;
+  gap: ${spacing.sm};
 `;
 
-const PageButton = styled.button`
-  padding: ${spacing.xs} ${spacing.sm};
-  border: 1px solid ${palette.border};
-  border-radius: ${borderRadius.sm};
-  background: ${props => props.$active ? palette.accent : "white"};
-  color: ${props => props.$active ? "white" : palette.text};
-  cursor: pointer;
-  min-width: 36px;
-  
-  &:hover:not(:disabled) {
-    background: ${props => props.$active ? palette.accent : palette.hover};
-  }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+const Chevron = styled.span`
+  transition: transform 0.2s ease;
+  transform: ${props => props.$expanded ? 'rotate(180deg)' : 'rotate(0deg)'};
+  display: inline-block;
 `;
 
-// ============================================
-// DASHBOARD KPI CARDS
-// ============================================
 const KPIGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -280,6 +283,7 @@ const KPIGrid = styled.div`
   @media (max-width: 768px) {
     padding: ${spacing.md};
     grid-template-columns: repeat(2, 1fr);
+    gap: ${spacing.sm};
   }
 `;
 
@@ -295,6 +299,10 @@ const KPICard = styled.div`
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
   }
+  
+  @media (max-width: 768px) {
+    padding: ${spacing.sm};
+  }
 `;
 
 const KPIValue = styled.div`
@@ -302,12 +310,20 @@ const KPIValue = styled.div`
   font-weight: 700;
   color: ${props => props.$color || palette.accent};
   line-height: 1.2;
+  
+  @media (max-width: 768px) {
+    font-size: ${fontSize.xl};
+  }
 `;
 
 const KPILabel = styled.div`
   font-size: ${fontSize.sm};
   color: ${palette.textLight};
   margin-top: ${spacing.xs};
+  
+  @media (max-width: 768px) {
+    font-size: ${fontSize.xs};
+  }
 `;
 
 const KPISub = styled.div`
@@ -317,7 +333,7 @@ const KPISub = styled.div`
 `;
 
 // ============================================
-// FILTERS ROW (fecha de registro)
+// FILTERS ROW
 // ============================================
 const FilterRow = styled.div`
   display: flex;
@@ -329,8 +345,9 @@ const FilterRow = styled.div`
   align-items: flex-end;
   
   @media (max-width: 768px) {
-    padding: ${spacing.md};
+    padding: ${spacing.sm};
     flex-direction: column;
+    gap: ${spacing.sm};
   }
 `;
 
@@ -339,6 +356,10 @@ const FilterGroup = styled.div`
   flex-direction: column;
   gap: ${spacing.xs};
   min-width: 150px;
+  
+  @media (max-width: 768px) {
+    min-width: auto;
+  }
 `;
 
 const FilterLabel = styled.label`
@@ -368,68 +389,56 @@ const SortIcon = styled.span`
 `;
 
 // ============================================
-// EDIT VISIT MODAL
+// PAGINATION
 // ============================================
-const EditVisitModal = ({ visit, user, onClose, onSave, busy }) => {
-  const [status, setStatus] = useState(visit?.status || "checked_in");
-  const [notes, setNotes] = useState(visit?.notes || "");
-  const [date, setDate] = useState(() => {
-    const d = visit?.checkedInAt || visit?.date;
-    return d ? new Date(d).toISOString().slice(0, 16) : "";
-  });
+const PaginationWrapper = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: ${spacing.md} ${spacing.xl};
+  border-top: 1px solid ${palette.border};
+  background: ${palette.bg};
+  flex-wrap: wrap;
+  gap: ${spacing.md};
+  
+  @media (max-width: 768px) {
+    padding: ${spacing.sm};
+    flex-direction: column;
+    font-size: ${fontSize.sm};
+  }
+`;
 
-  const handleSave = async () => {
-    await onSave({
-      visitId: visit._id,
-      userId: user._id,
-      status,
-      notes,
-      date: new Date(date).toISOString()
-    });
-    onClose();
-  };
+const PaginationControls = styled.div`
+  display: flex;
+  gap: ${spacing.xs};
+  align-items: center;
+  flex-wrap: wrap;
+`;
 
-  return (
-    <ModalContent>
-      <ModalHeader>
-        <ModalTitle>Editar visita</ModalTitle>
-      </ModalHeader>
-      <div style={{ marginBottom: spacing.md }}>
-        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Usuario</div>
-        <div>{user.name} ({user.email})</div>
-      </div>
-      <div style={{ marginBottom: spacing.md }}>
-        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Fecha y hora</div>
-        <Input
-          type="datetime-local"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
-      </div>
-      <div style={{ marginBottom: spacing.md }}>
-        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Estado</div>
-        <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="checked_in">Check-in ✅</option>
-          <option value="registered">Registrado</option>
-          <option value="no_show">No asistió</option>
-          <option value="cancelled">Cancelado</option>
-        </Select>
-      </div>
-      <div style={{ marginBottom: spacing.md }}>
-        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Notas (opcional)</div>
-        <Input
-          placeholder="Ej: Entró tarde, etc."
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-        />
-      </div>
-      <ActionButtons>
-        <Button onClick={handleSave} disabled={busy}>Guardar cambios</Button>
-        <Button $variant="secondary" onClick={onClose}>Cancelar</Button>
-      </ActionButtons>
-    </ModalContent>
-  );
-};
+const PageButton = styled.button`
+  padding: ${spacing.xs} ${spacing.sm};
+  border: 1px solid ${palette.border};
+  border-radius: ${borderRadius.sm};
+  background: ${props => props.$active ? palette.accent : "white"};
+  color: ${props => props.$active ? "white" : palette.text};
+  cursor: pointer;
+  min-width: 36px;
+  
+  &:hover:not(:disabled) {
+    background: ${props => props.$active ? palette.accent : palette.hover};
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  @media (max-width: 768px) {
+    min-width: 32px;
+    padding: ${spacing.xs};
+    font-size: ${fontSize.sm};
+  }
+`;
 
 // ============================================
 // TABLE COMPONENTS
@@ -476,10 +485,13 @@ const Tr = styled.tr`
   }
 `;
 
+// ============================================
+// MOBILE CARD COMPONENT
+// ============================================
 const CardsGrid = styled.div`
   display: none;
-  gap: ${spacing.md};
-  padding: ${spacing.md};
+  gap: ${spacing.sm};
+  padding: ${spacing.sm};
   
   @media (max-width: 768px) {
     display: grid;
@@ -490,14 +502,14 @@ const Card = styled.div`
   background: white;
   border: 1px solid ${palette.border};
   border-radius: ${borderRadius.md};
-  padding: ${spacing.md};
+  padding: ${spacing.sm};
 `;
 
 const CardHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: start;
-  margin-bottom: ${spacing.md};
+  margin-bottom: ${spacing.sm};
   flex-wrap: wrap;
   gap: ${spacing.sm};
 `;
@@ -505,6 +517,7 @@ const CardHeader = styled.div`
 const CardTitle = styled.div`
   font-weight: 600;
   color: ${palette.text};
+  font-size: ${fontSize.md};
 `;
 
 const CardEmail = styled.div`
@@ -513,11 +526,74 @@ const CardEmail = styled.div`
   margin-top: ${spacing.xs};
 `;
 
-const CardActions = styled.div`
-  display: flex;
-  gap: ${spacing.sm};
-  flex-wrap: wrap;
-  margin-top: ${spacing.md};
+const CardInfo = styled.div`
+  font-size: ${fontSize.sm};
+  color: ${palette.textLight};
+  margin-bottom: ${spacing.sm};
+  padding-bottom: ${spacing.sm};
+  border-bottom: 1px solid ${palette.border};
+`;
+
+// Botón de acciones flotante para móvil
+const MobileActionsButton = styled.button`
+  position: fixed;
+  bottom: ${spacing.lg};
+  right: ${spacing.lg};
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background: ${palette.accent};
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  z-index: 100;
+  
+  &:hover {
+    background: #0052a3;
+  }
+  
+  @media (max-width: 768px) {
+    display: flex;
+  }
+`;
+
+const MobileActionsMenu = styled.div`
+  position: fixed;
+  bottom: 80px;
+  right: ${spacing.lg};
+  background: white;
+  border: 1px solid ${palette.border};
+  border-radius: ${borderRadius.md};
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  display: ${props => props.$show ? 'block' : 'none'};
+  z-index: 100;
+  min-width: 180px;
+  
+  button {
+    display: flex;
+    align-items: center;
+    gap: ${spacing.sm};
+    width: 100%;
+    padding: ${spacing.sm} ${spacing.md};
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: ${fontSize.sm};
+    
+    &:hover {
+      background: ${palette.hover};
+    }
+    
+    &:not(:last-child) {
+      border-bottom: 1px solid ${palette.border};
+    }
+  }
 `;
 
 const Badge = styled.span`
@@ -827,6 +903,70 @@ const PeriodTab = styled.button`
 `;
 
 // ============================================
+// EDIT VISIT MODAL
+// ============================================
+const EditVisitModal = ({ visit, user, onClose, onSave, busy }) => {
+  const [status, setStatus] = useState(visit?.status || "checked_in");
+  const [notes, setNotes] = useState(visit?.notes || "");
+  const [date, setDate] = useState(() => {
+    const d = visit?.checkedInAt || visit?.date;
+    return d ? new Date(d).toISOString().slice(0, 16) : "";
+  });
+
+  const handleSave = async () => {
+    await onSave({
+      visitId: visit._id,
+      userId: user._id,
+      status,
+      notes,
+      date: new Date(date).toISOString()
+    });
+    onClose();
+  };
+
+  return (
+    <ModalContent>
+      <ModalHeader>
+        <ModalTitle>Editar visita</ModalTitle>
+      </ModalHeader>
+      <div style={{ marginBottom: spacing.md }}>
+        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Usuario</div>
+        <div>{user.name} ({user.email})</div>
+      </div>
+      <div style={{ marginBottom: spacing.md }}>
+        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Fecha y hora</div>
+        <Input
+          type="datetime-local"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+      </div>
+      <div style={{ marginBottom: spacing.md }}>
+        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Estado</div>
+        <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="checked_in">Check-in ✅</option>
+          <option value="registered">Registrado</option>
+          <option value="no_show">No asistió</option>
+          <option value="cancelled">Cancelado</option>
+        </Select>
+      </div>
+      <div style={{ marginBottom: spacing.md }}>
+        <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Notas (opcional)</div>
+        <Input
+          placeholder="Ej: Entró tarde, etc."
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+      </div>
+      <ActionButtons>
+        <Button onClick={handleSave} disabled={busy}>Guardar cambios</Button>
+        <Button $variant="secondary" onClick={onClose}>Cancelar</Button>
+      </ActionButtons>
+    </ModalContent>
+  );
+};
+
+// ============================================
 // HELPERS
 // ============================================
 const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -1020,6 +1160,64 @@ function ActionMenu({ user, onCheckin, onMoon, onViewProfile, onCredits, onHisto
   );
 }
 
+// Componente de acciones móvil
+function MobileActionMenu({ user, onCheckin, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy }) {
+  const [open, setOpen] = useState(false);
+  
+  const lastVisit = user?.visits?.[0];
+  const actions = [
+    { icon: "✓", label: "Check-in", action: () => onCheckin(user) },
+    { icon: "🌑", label: "MoonBoard", action: () => onMoon(user) },
+    { icon: "👤", label: "Ver datos", action: () => onViewProfile(user) },
+    { icon: "💰", label: "Créditos", action: () => onCredits(user._id) },
+    { icon: "📜", label: "Historial", action: () => onHistory(user) },
+    ...(lastVisit ? [{ icon: "✏️", label: "Editar visita", action: () => onEditVisit(user, lastVisit) }] : []),
+    { icon: "🗑️", label: "Eliminar", action: () => onDelete(user), danger: true }
+  ];
+  
+  return (
+    <>
+      <Button $small onClick={() => setOpen(true)} disabled={busy}>
+        ⋯ Acciones
+      </Button>
+      {open && (
+        <Overlay $show={open} onClick={() => setOpen(false)} />
+      )}
+      {open && (
+        <div style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: 'white',
+          borderRadius: `${borderRadius.lg} ${borderRadius.lg} 0 0`,
+          zIndex: 10000,
+          maxHeight: '70vh',
+          overflow: 'auto',
+          padding: spacing.md,
+          boxShadow: '0 -4px 12px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md, paddingBottom: spacing.sm, borderBottom: `1px solid ${palette.border}` }}>
+            <span style={{ fontWeight: 600 }}>Acciones para {user.name?.split(' ')[0] || 'usuario'}</span>
+            <Button $variant="secondary" $small onClick={() => setOpen(false)}>Cerrar</Button>
+          </div>
+          {actions.map((action, idx) => (
+            <Button
+              key={idx}
+              $variant={action.danger ? "danger" : "secondary"}
+              onClick={() => { action.action(); setOpen(false); }}
+              disabled={busy}
+              style={{ marginBottom: spacing.sm, width: '100%', justifyContent: 'flex-start' }}
+            >
+              {action.icon} {action.label}
+            </Button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 function ModalPortal({ children }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -1080,20 +1278,19 @@ export default function AdminPage() {
   const [uiError, setUiError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // ============================================
-  // NUEVOS ESTADOS: Paginación, Filtros, Ordenamiento
-  // ============================================
+  // Dashboard collapsible
+  const [dashboardExpanded, setDashboardExpanded] = useState(true);
+
+  // Paginación, Filtros, Ordenamiento
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [sortField, setSortField] = useState("name");
   const [sortDirection, setSortDirection] = useState("asc");
   
-  // Filtro por fecha de registro
-  const [registrationFilter, setRegistrationFilter] = useState("all"); // all, today, week, month, custom
+  const [registrationFilter, setRegistrationFilter] = useState("all");
   const [registrationStartDate, setRegistrationStartDate] = useState("");
   const [registrationEndDate, setRegistrationEndDate] = useState("");
   
-  // Ver check-ins por fecha específica
   const [showCheckinsByDateModal, setShowCheckinsByDateModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [checkinsByDate, setCheckinsByDate] = useState([]);
@@ -1263,9 +1460,6 @@ export default function AdminPage() {
     setAuditEvents((prev) => [evt, ...(prev || [])].slice(0, 80));
   };
 
-  // ============================================
-  // FUNCIÓN PARA VER CHECK-INS POR FECHA ESPECÍFICA
-  // ============================================
   const fetchCheckinsByDate = async (date) => {
     if (!date) return;
     setBusy(true);
@@ -1281,9 +1475,6 @@ export default function AdminPage() {
     }
   };
 
-  // ============================================
-  // FILTRO POR FECHA DE REGISTRO
-  // ============================================
   const getRegistrationDateFilter = useCallback(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1309,9 +1500,6 @@ export default function AdminPage() {
     }
   }, [registrationFilter, registrationStartDate, registrationEndDate]);
 
-  // ============================================
-  // ORDENAMIENTO
-  // ============================================
   const handleSort = (field) => {
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -1327,13 +1515,9 @@ export default function AdminPage() {
     return <SortIcon $active={true}>{sortDirection === "asc" ? "↑" : "↓"}</SortIcon>;
   };
 
-  // ============================================
-  // FILTRADO Y ORDENAMIENTO DE USUARIOS
-  // ============================================
   const filteredAndSortedUsers = useMemo(() => {
     let result = [...users];
     
-    // Búsqueda por nombre/email
     const q = query.trim().toLowerCase();
     if (q) {
       result = result.filter((u) => 
@@ -1342,7 +1526,6 @@ export default function AdminPage() {
       );
     }
     
-    // Filtro rápido (waiver, créditos, etc.)
     switch (quickFilter) {
       case "waiver":
         result = result.filter((u) => u?.waiverStatus !== "signed");
@@ -1363,7 +1546,6 @@ export default function AdminPage() {
         break;
     }
     
-    // Filtro por fecha de registro
     const dateFilter = getRegistrationDateFilter();
     if (dateFilter && dateFilter.start) {
       result = result.filter((u) => {
@@ -1376,7 +1558,6 @@ export default function AdminPage() {
       });
     }
     
-    // Ordenamiento
     result.sort((a, b) => {
       let aVal, bVal;
       switch (sortField) {
@@ -1411,9 +1592,6 @@ export default function AdminPage() {
     return result;
   }, [users, query, quickFilter, sortField, sortDirection, getRegistrationDateFilter]);
 
-  // ============================================
-  // PAGINACIÓN
-  // ============================================
   const totalPages = Math.ceil(filteredAndSortedUsers.length / itemsPerPage);
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -1424,14 +1602,10 @@ export default function AdminPage() {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   };
 
-  // Resetear página cuando cambian filtros
   useEffect(() => {
     setCurrentPage(1);
   }, [query, quickFilter, sortField, sortDirection, registrationFilter, registrationStartDate, registrationEndDate]);
 
-  // ============================================
-  // KPI CALCULATIONS
-  // ============================================
   const kpiData = useMemo(() => {
     const now = new Date();
     let periodStart;
@@ -1511,9 +1685,6 @@ export default function AdminPage() {
     };
   }, [users, kpiPeriod]);
 
-  // ============================================
-  // EDIT VISIT FUNCTION
-  // ============================================
   const handleEditVisit = (user, visit) => {
     setEditingVisitUser(user);
     setEditingVisit(visit);
@@ -1542,9 +1713,6 @@ export default function AdminPage() {
     }
   };
 
-  // ============================================
-  // EXPORT FUNCTIONS
-  // ============================================
   const exportToCSV = () => {
     const headers = ["Nombre", "Email", "Teléfono", "Documento", "Tipo Acceso", "Créditos/Mensualidad", "Waiver", "Último Check-in", "Fecha Registro"];
     const rows = filteredAndSortedUsers.map(user => [
@@ -1573,7 +1741,6 @@ export default function AdminPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Delete user
   const handleDeleteUser = async (user) => {
     if (!window.confirm(`¿Eliminar a ${user.name || user.email}? Esta acción no se puede deshacer.`)) {
       return;
@@ -1602,7 +1769,6 @@ export default function AdminPage() {
     }
   };
 
-  // Checkin
   const handleCheckin = (user) => {
     setUiError("");
     setCheckinSuccess("");
@@ -1634,7 +1800,6 @@ export default function AdminPage() {
     }
   };
 
-  // Credits
   const handleAddCredits = (userId) => {
     setUiError("");
     setCreditsSuccess("");
@@ -1666,7 +1831,6 @@ export default function AdminPage() {
     }
   };
 
-  // Renovar
   const handleRenovar = (userId) => {
     setUiError("");
     setSelectedUser(userId);
@@ -1692,7 +1856,6 @@ export default function AdminPage() {
     }
   };
 
-  // Access type
   const openAccessModal = (user) => {
     setUiError("");
     setAccessUser(user);
@@ -1729,7 +1892,6 @@ export default function AdminPage() {
     }
   };
 
-  // Profile
   const handleViewProfile = (user) => {
     setUiError("");
     setEditingProfile(false);
@@ -1771,7 +1933,6 @@ export default function AdminPage() {
     }
   };
 
-  // History
   const openHistory = async (user) => {
     setUiError("");
     setHistoryUser(user);
@@ -1788,7 +1949,6 @@ export default function AdminPage() {
     }
   };
 
-  // Waiver
   const openWaiverForUser = (user) => {
     setUiError("");
     setWaiverAccepted(false);
@@ -1841,7 +2001,6 @@ export default function AdminPage() {
     }
   };
 
-  // New user
   const openNewUser = () => {
     setUiError("");
     setShowNewUserModal(true);
@@ -1932,7 +2091,6 @@ export default function AdminPage() {
     }
   };
 
-  // Moon
   const openMoonModal = (user) => {
     setMoonUser(user);
     setMoonMsg("");
@@ -2005,7 +2163,6 @@ export default function AdminPage() {
     fetchMoonAttendance();
   };
 
-  // Canvas signature functions
   function getCanvasCtx() {
     const c = canvasRef.current;
     if (!c) return null;
@@ -2075,7 +2232,6 @@ export default function AdminPage() {
     return c.toDataURL("image/png");
   }
 
-  // Attendance data
   const attendanceData = useMemo(() => {
     const start = startOfPeriod(attendancePeriod);
     const checkedIn = [];
@@ -2093,7 +2249,6 @@ export default function AdminPage() {
     return checkedIn;
   }, [users, attendancePeriod]);
 
-  // Counts
   const counts = useMemo(() => {
     const total = users.length;
     const waiverPend = users.filter((u) => u?.waiverStatus !== "signed").length;
@@ -2108,7 +2263,6 @@ export default function AdminPage() {
 
   const currentMoonDay = moonDays[moonSelectedDay];
 
-  // Loading state
   if (status === "loading" || (!session && status !== "authenticated")) {
     return (
       <PageShell>
@@ -2125,7 +2279,6 @@ export default function AdminPage() {
     );
   }
 
-  // Render
   return (
     <PageShell>
       <GlobalStyle />
@@ -2163,16 +2316,20 @@ export default function AdminPage() {
           </div>
         </TopBar>
 
-        {/* DASHBOARD KPIS */}
-        <div style={{ padding: `0 ${spacing.xl}`, marginBottom: spacing.md }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md, flexWrap: "wrap", gap: spacing.sm }}>
-            <div style={{ fontWeight: 600 }}>📈 Dashboard de ingresos</div>
-            <div style={{ display: "flex", gap: spacing.sm }}>
-              <PeriodTab $active={kpiPeriod === "today"} onClick={() => setKpiPeriod("today")}>Hoy</PeriodTab>
-              <PeriodTab $active={kpiPeriod === "week"} onClick={() => setKpiPeriod("week")}>Esta semana</PeriodTab>
-              <PeriodTab $active={kpiPeriod === "month"} onClick={() => setKpiPeriod("month")}>Este mes</PeriodTab>
-            </div>
+        {/* DASHBOARD COLLAPSIBLE */}
+        <DashboardHeader onClick={() => setDashboardExpanded(!dashboardExpanded)}>
+          <DashboardTitle>
+            <span>📈 Dashboard de ingresos</span>
+            <Chevron $expanded={dashboardExpanded}>▼</Chevron>
+          </DashboardTitle>
+          <div style={{ display: "flex", gap: spacing.sm }} onClick={(e) => e.stopPropagation()}>
+            <PeriodTab $active={kpiPeriod === "today"} onClick={() => setKpiPeriod("today")}>Hoy</PeriodTab>
+            <PeriodTab $active={kpiPeriod === "week"} onClick={() => setKpiPeriod("week")}>Semana</PeriodTab>
+            <PeriodTab $active={kpiPeriod === "month"} onClick={() => setKpiPeriod("month")}>Mes</PeriodTab>
           </div>
+        </DashboardHeader>
+        
+        {dashboardExpanded && (
           <KPIGrid>
             <KPICard>
               <KPIValue>{kpiData.ticketeraCheckins}</KPIValue>
@@ -2193,20 +2350,19 @@ export default function AdminPage() {
               <KPIValue>{kpiData.totalCheckins}</KPIValue>
               <KPILabel>Total check-ins</KPILabel>
               <KPISub style={{ color: kpiData.checkinChange >= 0 ? palette.success : palette.danger }}>
-                {kpiData.checkinChange >= 0 ? "↑" : "↓"} {Math.abs(kpiData.checkinChange).toFixed(1)}% vs período anterior
+                {kpiData.checkinChange >= 0 ? "↑" : "↓"} {Math.abs(kpiData.checkinChange).toFixed(1)}%
               </KPISub>
             </KPICard>
             <KPICard>
               <KPIValue>{kpiData.uniqueUsers}</KPIValue>
               <KPILabel>Personas distintas</KPILabel>
               <KPISub style={{ color: kpiData.usersChange >= 0 ? palette.success : palette.danger }}>
-                {kpiData.usersChange >= 0 ? "↑" : "↓"} {Math.abs(kpiData.usersChange).toFixed(1)}% vs período anterior
+                {kpiData.usersChange >= 0 ? "↑" : "↓"} {Math.abs(kpiData.usersChange).toFixed(1)}%
               </KPISub>
             </KPICard>
           </KPIGrid>
-        </div>
+        )}
 
-        {/* FILTRO POR FECHA DE REGISTRO */}
         <FilterRow>
           <FilterGroup>
             <FilterLabel>Filtro por fecha de registro</FilterLabel>
@@ -2309,31 +2465,35 @@ export default function AdminPage() {
                             {hasCheckedInToday(user) && <span style={{ marginLeft: spacing.xs }}>✅</span>}
                           </CardTitle>
                           <CardEmail>{user.email}</CardEmail>
-                          <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: spacing.xs }}>
-                            Registrado: {user.createdAt ? formatDate(user.createdAt) : "—"}
-                          </div>
                         </div>
                         <Badge $success={user.accessType === "mensualidad"}>
                           {user.accessType === "mensualidad" ? "Mensualidad" : "Tiquetera"}
                         </Badge>
                       </CardHeader>
+                      <CardInfo>
+                        <div>📞 {user.phone || "—"}</div>
+                        <div>📅 Registro: {user.createdAt ? formatDate(user.createdAt) : "—"}</div>
+                        <div>📋 {user.documentType || ""} {user.documentNumber || ""}</div>
+                      </CardInfo>
                       <AccessInfo 
                         user={user} 
                         onRenovar={handleRenovar}
                         onChangeAccess={openAccessModal}
                         busy={busy}
                       />
-                      <CardActions>
-                        <Button $small onClick={() => handleCheckin(user)}>✓ Check-in</Button>
-                        <Button $variant="secondary" $small onClick={() => openMoonModal(user)}>🌑 Moon</Button>
-                        <Button $variant="secondary" $small onClick={() => handleViewProfile(user)}>Ver datos</Button>
-                        <Button $variant="secondary" $small onClick={() => handleAddCredits(user._id)}>Créditos</Button>
-                        <Button $variant="secondary" $small onClick={() => openHistory(user)}>Historial</Button>
-                        {user?.visits?.[0] && (
-                          <Button $variant="secondary" $small onClick={() => handleEditVisit(user, user.visits[0])}>✏️ Editar visita</Button>
-                        )}
-                        <Button $variant="danger" $small onClick={() => handleDeleteUser(user)}>Eliminar</Button>
-                      </CardActions>
+                      <div style={{ marginTop: spacing.sm }}>
+                        <MobileActionMenu
+                          user={user}
+                          onCheckin={handleCheckin}
+                          onMoon={openMoonModal}
+                          onViewProfile={handleViewProfile}
+                          onCredits={handleAddCredits}
+                          onHistory={openHistory}
+                          onDelete={handleDeleteUser}
+                          onEditVisit={handleEditVisit}
+                          busy={busy}
+                        />
+                      </div>
                     </Card>
                   ))}
                 </CardsGrid>
@@ -2470,7 +2630,7 @@ export default function AdminPage() {
         </div>
       </Container>
 
-      {/* MODALES */}
+      {/* MODALES - mantener igual que antes */}
       <ModalPortal>
         {/* Modal para ver check-ins por fecha específica */}
         <Overlay $show={showCheckinsByDateModal} onClick={() => setShowCheckinsByDateModal(false)} />
