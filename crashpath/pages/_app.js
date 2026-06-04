@@ -1,4 +1,5 @@
 import { SessionProvider } from 'next-auth/react';
+import Head from 'next/head';
 import styled, { createGlobalStyle } from 'styled-components';
 
 const GlobalStyle = createGlobalStyle`
@@ -48,6 +49,28 @@ const BackgroundLogo = styled.div`
 export default function App({ Component, pageProps: { session, ...pageProps } }) {
   return (
     <SessionProvider session={session}>
+      <Head>
+        <title>CrashPath | Gimnasio de Escalada en Bucaramanga</title>
+        <meta name="description" content="CrashPath es un gimnasio de escalada en Bucaramanga enfocado en entrenamiento real. Horario: 3PM - 9PM. Reserva la MoonBoard, entrena en nuestro rocódromo y sé parte de la comunidad." />
+        <meta name="keywords" content="escalada, boulder, gimnasio escalada, rocódromo, CrashPath, Bucaramanga, moonboard, entrenamiento escalada" />
+        <meta name="author" content="CrashPath" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="CrashPath | Gimnasio de Escalada en Bucaramanga" />
+        <meta property="og:description" content="Entrenamiento real de escalada en Bucaramanga. Horario 3PM-10PM. ¡Ven a escalar!" />
+        <meta property="og:url" content="https://www.crashpath.lat" />
+        <meta property="og:site_name" content="CrashPath" />
+    
+        
+        {/* Iconos */}
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        
+        {/* Canonical URL */}
+        <link rel="canonical" href="https://www.crashpath.lat" />
+      </Head>
       <GlobalStyle />
       <BackgroundLogo />
       <Component {...pageProps} />
