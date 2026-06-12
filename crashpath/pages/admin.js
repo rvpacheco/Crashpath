@@ -5,7 +5,9 @@ import { useSession, signIn, signOut } from "next-auth/react";
 import { useRouter } from "next/router";
 import axios from "axios";
 import styled, { createGlobalStyle } from "styled-components";
+import { Eye, EyeOff } from "lucide-react";
 import { getWaiverSnapshot, waiverToParagraphs } from "@/lib/waiver";
+import { PrivacyProvider, usePrivacy } from "@/components/PrivacyContext";
 
 // ============================================
 // SISTEMA DE DISEÑO MINIMALISTA
@@ -906,6 +908,7 @@ const PeriodTab = styled.button`
 // EDIT VISIT MODAL
 // ============================================
 const EditVisitModal = ({ visit, user, onClose, onSave, busy }) => {
+  const { maskName, maskEmail } = usePrivacy();
   const [status, setStatus] = useState(visit?.status || "checked_in");
   const [notes, setNotes] = useState(visit?.notes || "");
   const [date, setDate] = useState(() => {
@@ -931,7 +934,7 @@ const EditVisitModal = ({ visit, user, onClose, onSave, busy }) => {
       </ModalHeader>
       <div style={{ marginBottom: spacing.md }}>
         <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Usuario</div>
-        <div>{user.name} ({user.email})</div>
+        <div>{maskName(user.name)} ({maskEmail(user.email)})</div>
       </div>
       <div style={{ marginBottom: spacing.md }}>
         <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Fecha y hora</div>
@@ -1162,6 +1165,7 @@ function ActionMenu({ user, onCheckin, onMoon, onViewProfile, onCredits, onHisto
 
 // Componente de acciones móvil
 function MobileActionMenu({ user, onCheckin, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy }) {
+  const { maskName } = usePrivacy();
   const [open, setOpen] = useState(false);
   
   const lastVisit = user?.visits?.[0];
@@ -1198,7 +1202,7 @@ function MobileActionMenu({ user, onCheckin, onMoon, onViewProfile, onCredits, o
           boxShadow: '0 -4px 12px rgba(0,0,0,0.1)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md, paddingBottom: spacing.sm, borderBottom: `1px solid ${palette.border}` }}>
-            <span style={{ fontWeight: 600 }}>Acciones para {user.name?.split(' ')[0] || 'usuario'}</span>
+            <span style={{ fontWeight: 600 }}>Acciones para {maskName(user.name?.split(' ')[0]) || 'usuario'}</span>
             <Button $variant="secondary" $small onClick={() => setOpen(false)}>Cerrar</Button>
           </div>
           {actions.map((action, idx) => (
@@ -1226,6 +1230,17 @@ function ModalPortal({ children }) {
 }
 
 function AuditFeed({ events, loading }) {
+  const { maskName, maskEmail } = usePrivacy();
+
+  // Los summaries vienen del servidor con nombre/email embebidos en texto libre;
+  // se sustituyen usando los campos estructurados del evento.
+  const displaySummary = (e) => {
+    let summary = e.summary || `${e.action} - ${e.userName || e.userEmail || ""}`;
+    if (e.userName) summary = summary.split(e.userName).join(maskName(e.userName));
+    if (e.userEmail) summary = summary.split(e.userEmail).join(maskEmail(e.userEmail));
+    return summary;
+  };
+
   return (
     <div style={{ 
       padding: spacing.lg, 
@@ -1250,7 +1265,7 @@ function AuditFeed({ events, loading }) {
             background: "white",
             borderRadius: borderRadius.sm
           }}>
-            <div style={{ fontWeight: 500 }}>{e.summary || `${e.action} - ${e.userName || e.userEmail}`}</div>
+            <div style={{ fontWeight: 500 }}>{displaySummary(e)}</div>
             <div style={{ color: palette.textLight, fontSize: fontSize.sm, marginTop: spacing.xs }}>
               {formatDateTime(e.ts)}
             </div>
@@ -1265,8 +1280,17 @@ function AuditFeed({ events, loading }) {
 // COMPONENTE PRINCIPAL
 // ============================================
 export default function AdminPage() {
+  return (
+    <PrivacyProvider>
+      <AdminPanel />
+    </PrivacyProvider>
+  );
+}
+
+function AdminPanel() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { privacyMode, togglePrivacyMode, maskName, maskEmail, maskPhone, maskDocument } = usePrivacy();
 
   // Estados de datos
   const [users, setUsers] = useState([]);
@@ -1742,7 +1766,7 @@ export default function AdminPage() {
   };
 
   const handleDeleteUser = async (user) => {
-    if (!window.confirm(`¿Eliminar a ${user.name || user.email}? Esta acción no se puede deshacer.`)) {
+    if (!window.confirm(`¿Eliminar a ${maskName(user.name) || maskEmail(user.email)}? Esta acción no se puede deshacer.`)) {
       return;
     }
     
@@ -2121,12 +2145,12 @@ export default function AdminPage() {
         date: dateStr,
         startHour: hour,
       });
-      setMoonSuccess(`✅ Reserva creada para ${moonUser.name}`);
+      setMoonSuccess(`✅ Reserva creada para ${maskName(moonUser.name)}`);
       await fetchMoonSlots();
       await fetchMoonAttendance();
     } catch (e) {
       const code = e?.response?.data?.code;
-      if (code === "ALREADY_RESERVED") setMoonMsg(`${moonUser.name} ya tiene una reserva activa.`);
+      if (code === "ALREADY_RESERVED") setMoonMsg(`${maskName(moonUser.name)} ya tiene una reserva activa.`);
       else if (code === "SLOT_TAKEN") setMoonMsg("Ese slot ya está ocupado.");
       else setMoonMsg(e?.response?.data?.message || "Error al reservar.");
     } finally {
@@ -2298,6 +2322,11 @@ export default function AdminPage() {
             <Button $variant="secondary" onClick={fetchUsers}>
               ↻ Recargar
             </Button>
+            <Button $variant="secondary" onClick={togglePrivacyMode} title={privacyMode ? "Mostrar datos sensibles" : "Ocultar datos sensibles"}>
+              {privacyMode
+                ? <EyeOff size={14} style={{ verticalAlign: "-2px" }} />
+                : <Eye size={14} style={{ verticalAlign: "-2px" }} />} Privacidad
+            </Button>
             <Button onClick={exportToCSV} $variant="secondary">
               📥 Exportar CSV
             </Button>
@@ -2461,19 +2490,19 @@ export default function AdminPage() {
                       <CardHeader>
                         <div>
                           <CardTitle>
-                            {user.name || "Sin nombre"}
+                            {maskName(user.name) || "Sin nombre"}
                             {hasCheckedInToday(user) && <span style={{ marginLeft: spacing.xs }}>✅</span>}
                           </CardTitle>
-                          <CardEmail>{user.email}</CardEmail>
+                          <CardEmail>{maskEmail(user.email)}</CardEmail>
                         </div>
                         <Badge $success={user.accessType === "mensualidad"}>
                           {user.accessType === "mensualidad" ? "Mensualidad" : "Tiquetera"}
                         </Badge>
                       </CardHeader>
                       <CardInfo>
-                        <div>📞 {user.phone || "—"}</div>
+                        <div>📞 {maskPhone(user.phone) || "—"}</div>
                         <div>📅 Registro: {user.createdAt ? formatDate(user.createdAt) : "—"}</div>
-                        <div>📋 {user.documentType || ""} {user.documentNumber || ""}</div>
+                        <div>📋 {user.documentType || ""} {maskDocument(user.documentNumber) || ""}</div>
                       </CardInfo>
                       <AccessInfo 
                         user={user} 
@@ -2527,15 +2556,15 @@ export default function AdminPage() {
                       {paginatedUsers.map((user) => (
                         <Tr key={user._id}>
                           <Td>
-                            <div style={{ fontWeight: 500 }}>{user.name || "Sin nombre"}</div>
+                            <div style={{ fontWeight: 500 }}>{maskName(user.name) || "Sin nombre"}</div>
                             {hasCheckedInToday(user) && <Badge $success style={{ marginTop: spacing.xs }}>✓ Check-in hoy</Badge>}
                           </Td>
                           <Td>
-                            <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{user.email}</div>
+                            <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{maskEmail(user.email)}</div>
                           </Td>
                           <Td>
-                            <div>{user.phone || "—"}</div>
-                            <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{user.documentType || ""} {user.documentNumber || ""}</div>
+                            <div>{maskPhone(user.phone) || "—"}</div>
+                            <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{user.documentType || ""} {maskDocument(user.documentNumber) || ""}</div>
                           </Td>
                           <Td>
                             <AccessInfo 
@@ -2656,8 +2685,8 @@ export default function AdminPage() {
                     gap: spacing.sm
                   }}>
                     <div>
-                      <div style={{ fontWeight: 500 }}>{checkin.userName}</div>
-                      <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{checkin.userEmail}</div>
+                      <div style={{ fontWeight: 500 }}>{maskName(checkin.userName)}</div>
+                      <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{maskEmail(checkin.userEmail)}</div>
                     </div>
                     <div style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
                       <Badge $success={checkin.accessType === "mensualidad"}>
@@ -2735,8 +2764,8 @@ export default function AdminPage() {
             </ModalHeader>
             {checkinUser && (
               <>
-                <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>{checkinUser.name}</div>
-                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>{checkinUser.email}</div>
+                <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>{maskName(checkinUser.name)}</div>
+                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>{maskEmail(checkinUser.email)}</div>
                 <div style={{ display: "flex", gap: spacing.sm, marginBottom: spacing.md, flexWrap: "wrap" }}>
                   <Badge $success={checkinUser.accessType === "mensualidad"}>
                     {checkinUser.accessType === "mensualidad" ? "Mensualidad" : "Tiquetera"}
@@ -2808,8 +2837,8 @@ export default function AdminPage() {
             </ModalHeader>
             {accessUser && (
               <>
-                <div style={{ fontWeight: 600 }}>{accessUser.name}</div>
-                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>{accessUser.email}</div>
+                <div style={{ fontWeight: 600 }}>{maskName(accessUser.name)}</div>
+                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>{maskEmail(accessUser.email)}</div>
                 <Select value={accessTypeDraft} onChange={(e) => setAccessTypeDraft(e.target.value)}>
                   <option value="ticketera">Tiquetera (créditos)</option>
                   <option value="mensualidad">Mensualidad</option>
@@ -2899,15 +2928,15 @@ export default function AdminPage() {
                   </>
                 ) : (
                   <>
-                    <div><strong>Nombre:</strong> {viewingUser.name || "—"}</div>
-                    <div><strong>Email:</strong> {viewingUser.email || "—"}</div>
-                    <div><strong>Teléfono:</strong> {viewingUser.phone || "—"}</div>
-                    <div><strong>Documento:</strong> {viewingUser.documentType || "—"} {viewingUser.documentNumber || ""}</div>
+                    <div><strong>Nombre:</strong> {maskName(viewingUser.name) || "—"}</div>
+                    <div><strong>Email:</strong> {maskEmail(viewingUser.email) || "—"}</div>
+                    <div><strong>Teléfono:</strong> {maskPhone(viewingUser.phone) || "—"}</div>
+                    <div><strong>Documento:</strong> {viewingUser.documentType || "—"} {maskDocument(viewingUser.documentNumber) || ""}</div>
                     <div><strong>EPS:</strong> {viewingUser.epsName || "—"}</div>
                     <Divider />
                     <div><strong>Contacto Emergencia:</strong></div>
-                    <div>Nombre: {viewingUser.emergencyContactName || "—"}</div>
-                    <div>Teléfono: {viewingUser.emergencyContactPhone || "—"}</div>
+                    <div>Nombre: {maskName(viewingUser.emergencyContactName) || "—"}</div>
+                    <div>Teléfono: {maskPhone(viewingUser.emergencyContactPhone) || "—"}</div>
                     <div><strong>Fecha registro:</strong> {viewingUser.createdAt ? formatDate(viewingUser.createdAt) : "—"}</div>
                     {viewingUser.esMinor && <Badge $warning style={{ marginTop: spacing.sm }}>⚠️ Menor de edad</Badge>}
                     <Divider />
@@ -2955,8 +2984,8 @@ export default function AdminPage() {
             </ModalHeader>
             {historyUser && (
               <>
-                <div style={{ fontWeight: 600 }}>{historyUser.name || "Sin nombre"}</div>
-                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>{historyUser.email}</div>
+                <div style={{ fontWeight: 600 }}>{maskName(historyUser.name) || "Sin nombre"}</div>
+                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>{maskEmail(historyUser.email)}</div>
               </>
             )}
             {historyLoading ? (
@@ -3075,7 +3104,7 @@ export default function AdminPage() {
             <Modal $show>
               <ModalContent>
                 <ModalHeader>
-                  <ModalTitle>Firmar Waiver — {waiverUser?.name || "Usuario"}</ModalTitle>
+                  <ModalTitle>Firmar Waiver — {maskName(waiverUser?.name) || "Usuario"}</ModalTitle>
                 </ModalHeader>
                 <WaiverBox>
                   {waiverToParagraphs(waiverSnapshotExistingUser.text).map((p, idx) => (
@@ -3108,7 +3137,7 @@ export default function AdminPage() {
         <Modal $show={showMoonModal}>
           <ModalContent>
             <ModalHeader>
-              <ModalTitle>🌑 MoonBoard - {moonUser?.name}</ModalTitle>
+              <ModalTitle>🌑 MoonBoard - {maskName(moonUser?.name)}</ModalTitle>
             </ModalHeader>
             {moonLoading ? (
               <div style={{ textAlign: "center", padding: spacing.lg, color: palette.textLight }}>Cargando slots...</div>
@@ -3147,8 +3176,8 @@ export default function AdminPage() {
                             <Badge $danger>Pasado</Badge>
                           ) : slot.taken ? (
                             <div style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
-                              <Badge>{slot.takenBy?.name || "Ocupado"}</Badge>
-                              <Button $variant="danger" $small onClick={() => openCancelMoon(slot.reservationId, slot.takenBy?.name)} disabled={moonSubmitting}>
+                              <Badge>{maskName(slot.takenBy?.name) || "Ocupado"}</Badge>
+                              <Button $variant="danger" $small onClick={() => openCancelMoon(slot.reservationId, maskName(slot.takenBy?.name))} disabled={moonSubmitting}>
                                 Cancelar
                               </Button>
                             </div>
@@ -3252,8 +3281,8 @@ export default function AdminPage() {
                         {items.map(({ user, ts }, idx) => (
                           <AttendanceRow key={`${user._id}-${idx}`}>
                             <div>
-                              <div style={{ fontWeight: 500 }}>{user.name || "Sin nombre"}</div>
-                              <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{user.email}</div>
+                              <div style={{ fontWeight: 500 }}>{maskName(user.name) || "Sin nombre"}</div>
+                              <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{maskEmail(user.email)}</div>
                             </div>
                             <div style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
                               {formatCheckinTime(ts) && <Badge>🕐 {formatCheckinTime(ts)}</Badge>}
@@ -3281,10 +3310,10 @@ export default function AdminPage() {
                 moonAttendance.map((r) => (
                   <div key={r._id} style={{ padding: spacing.md, borderBottom: `1px solid ${palette.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: spacing.sm }}>
                     <div>
-                      <div style={{ fontWeight: 500 }}>{r.userName || r.userEmail}</div>
+                      <div style={{ fontWeight: 500 }}>{maskName(r.userName) || maskEmail(r.userEmail)}</div>
                       <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{formatTabDate(r.date)} · {String(r.startHour).padStart(2, "0")}:00</div>
                     </div>
-                    <Button $variant="danger" $small onClick={() => openCancelMoon(r._id, r.userName)} disabled={moonSubmitting}>Cancelar</Button>
+                    <Button $variant="danger" $small onClick={() => openCancelMoon(r._id, maskName(r.userName))} disabled={moonSubmitting}>Cancelar</Button>
                   </div>
                 ))
               )}
