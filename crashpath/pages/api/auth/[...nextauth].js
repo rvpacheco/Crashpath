@@ -97,4 +97,11 @@ export async function isAdminRequest(req, res) {
     res.status(401).json({ message: "No autorizado" });
     throw new Error("Not authorized");
   }
+
+  // Devuelve datos del admin para usarlos como `actor` en auditoría.
+  return {
+    email,
+    name: token?.user?.name || token?.name || null,
+    sub: token?.sub || null,
+  };
 }
