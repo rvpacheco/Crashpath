@@ -993,9 +993,10 @@ function sameDay(a, b) {
 
 function hasCheckedInToday(user) {
   const today = new Date();
-  if (user?.checkedInToday === true) return true;
-  if (user?.lastCheckinAt && sameDay(user.lastCheckinAt, today)) return true;
-  if (user?.lastVisitAt && sameDay(user.lastVisitAt, today)) return true;
+  // Fuente de verdad: el array de visitas (refleja cancelaciones). NO usar
+  // lastCheckinAt/lastVisitAt/checkedInToday como atajo: son campos pegajosos
+  // que NO se limpian al cancelar, y dejaban al usuario marcado como presente
+  // aunque se cancelara su check-in.
   const visits = user?.visits || [];
   return visits.some((v) => {
     const ts = v?.checkedInAt || v?.date;
