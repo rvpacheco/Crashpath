@@ -474,6 +474,27 @@ const ServiceCTA = styled(Link)`
   }
 `;
 
+const Price = styled.div`
+  margin-top: 4px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  font-size: 32px;
+  color: ${(p) => p.$t.text};
+
+  span {
+    font-size: 13px;
+    font-weight: 700;
+    color: ${(p) => p.$t.muted};
+    letter-spacing: 0;
+  }
+`;
+
+const PriceDetail = styled.div`
+  font-size: 13px;
+  line-height: 1.7;
+  color: ${(p) => p.$t.muted};
+`;
+
 const AboutGrid = styled.div`
   margin-top: 26px;
   display: grid;
@@ -593,6 +614,9 @@ export default function CrashPathLanding() {
             <Link href="#services" passHref legacyBehavior>
               <NavLink $t={t}>Servicios</NavLink>
             </Link>
+            <Link href="#precios" passHref legacyBehavior>
+              <NavLink $t={t}>Precios</NavLink>
+            </Link>
             <Link href="#about" passHref legacyBehavior>
               <NavLink $t={t}>CrashPath</NavLink>
             </Link>
@@ -630,6 +654,9 @@ export default function CrashPathLanding() {
               </Link>
               <Link href="#services" passHref legacyBehavior>
                 <MobileLink $t={t} onClick={() => setMenuOpen(false)}>Servicios</MobileLink>
+              </Link>
+              <Link href="#precios" passHref legacyBehavior>
+                <MobileLink $t={t} onClick={() => setMenuOpen(false)}>Precios</MobileLink>
               </Link>
               <Link href="#about" passHref legacyBehavior>
                 <MobileLink $t={t} onClick={() => setMenuOpen(false)}>CrashPath</MobileLink>
@@ -746,6 +773,68 @@ export default function CrashPathLanding() {
                 $kind="primary"
               >
                 ESCRIBIR POR WHATSAPP
+              </ServiceCTA>
+            </ServiceBlock>
+          </ServiceGrid>
+        </SectionInner>
+      </Section>
+
+      {/* PRECIOS */}
+      <Section id="precios">
+        <SectionInner>
+          <SectionTitle>Precios</SectionTitle>
+          <SectionKicker $t={t}>
+            Pago en efectivo o transferencia · Las guiadas a roca se cotizan por WhatsApp
+          </SectionKicker>
+
+          <ServiceGrid>
+            {/* PASE DEL DÍA */}
+            <ServiceBlock $t={t}>
+              <ServiceTag $t={t}>PASE DEL DÍA</ServiceTag>
+              <ServiceName $t={t}>Un día de escalada</ServiceName>
+              <Price $t={t}>
+                $20.000 <span>sin zapatos</span>
+              </Price>
+              <PriceDetail $t={t}>
+                $30.000 con alquiler de pies de gato. Ideal para probar o para visitantes.
+              </PriceDetail>
+              <ServiceMeta $t={t}>Acceso por el día · horario de tarde</ServiceMeta>
+              <ServiceCTA href="/reservas" $t={t} $kind="primary">
+                REGISTRAR VISITA
+              </ServiceCTA>
+            </ServiceBlock>
+
+            {/* TICKETERA */}
+            <ServiceBlock $t={t}>
+              <ServiceTag $t={t}>TICKETERA</ServiceTag>
+              <ServiceName $t={t}>8 entradas</ServiceName>
+              <Price $t={t}>
+                $120.000 <span>· 8 visitas</span>
+              </Price>
+              <PriceDetail $t={t}>
+                $15.000 por visita. Para quien va seguido sin atarse a un mes.
+              </PriceDetail>
+              <ServiceMeta $t={t}>Las entradas no vencen mientras entrenes</ServiceMeta>
+              <ServiceCTA href="/reservas" $t={t} $kind="ghost">
+                REGISTRAR VISITA
+              </ServiceCTA>
+            </ServiceBlock>
+
+            {/* MENSUALIDAD */}
+            <ServiceBlock $t={t} $highlight>
+              <ServiceTag $t={t} $highlight>
+                MENSUALIDAD
+              </ServiceTag>
+              <ServiceName $t={t}>Acceso ilimitado</ServiceName>
+              <Price $t={t}>
+                $120.000 <span>/ mes</span>
+              </Price>
+              <PriceDetail $t={t}>
+                $150.000 con pies de gato incluidos todo el mes. La mejor opción si entrenas constante.
+              </PriceDetail>
+              <ServiceMeta $t={t}>Escala todos los días dentro del horario</ServiceMeta>
+              <ServiceCTA href="/reservas" $t={t} $kind="primary">
+                EMPEZAR AHORA
               </ServiceCTA>
             </ServiceBlock>
           </ServiceGrid>
