@@ -3279,8 +3279,8 @@ function AdminPanel() {
                           <span>{formatDayLabel(items[0].ts)}</span>
                           <Badge>{items.length} ingreso{items.length !== 1 ? "s" : ""}</Badge>
                         </DayGroupHeader>
-                        {items.map(({ user, ts }, idx) => (
-                          <AttendanceRow key={`${user._id}-${idx}`}>
+                        {items.map(({ user, visit, ts }, idx) => (
+                          <AttendanceRow key={`${user._id}-${visit?._id || idx}`}>
                             <div>
                               <div style={{ fontWeight: 500 }}>{maskName(user.name) || "Sin nombre"}</div>
                               <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{maskEmail(user.email)}</div>
@@ -3290,7 +3290,7 @@ function AdminPanel() {
                               <Badge $success={user.accessType === "mensualidad"}>
                                 {user.accessType === "mensualidad" ? "Mens" : "Tiq"}
                               </Badge>
-                              <Button $variant="secondary" $small onClick={() => handleEditVisit(user, items[0].visit)}>✏️</Button>
+                              <Button $variant="secondary" $small onClick={() => handleEditVisit(user, visit)}>✏️</Button>
                             </div>
                           </AttendanceRow>
                         ))}
