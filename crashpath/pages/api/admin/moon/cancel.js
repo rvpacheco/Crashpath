@@ -1,6 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import MoonReservation from "../../../../models/MoonReservation";
+import { logAudit } from "../../../../lib/audit";
 
 const secret = process.env.NEXTAUTH_SECRET;
 
@@ -33,7 +34,15 @@ export default async function handler(req, res) {
     reservation.cancelReason = `Cancelado por admin: ${token.email || token.sub}`;
     await reservation.save();
 
-    return res.status(200).json({ message: "Reserva cancelada" });
+    const auditEvent = await logAudit({
+      action: "MOON_CANCEL",
+      actor: { email: token?.email, name: token?.name, id: token?.sub },
+      user: { _id: reservation.userId, email: reservation.userEmail, name: reservation.userName },
+      summary: `Reserva moon cancelada (slot ${String(reservation.startHour).padStart(2, "0")}:00)`,
+      meta: { reservationId: String(reservation._id), startHour: reservation.startHour },
+    });
+
+    return res.status(200).json({ message: "Reserva cancelada", auditEvent });
   } catch (err) {
     console.error("admin/moon/cancel error:", err);
     return res.status(500).json({ message: "Error al cancelar la reserva" });

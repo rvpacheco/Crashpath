@@ -2,6 +2,7 @@ import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import MoonReservation from "../../../../models/MoonReservation";
 import User from "../../../../models/User";
+import { logAudit } from "../../../../lib/audit";
 
 const secret = process.env.NEXTAUTH_SECRET;
 
@@ -101,14 +102,24 @@ export default async function handler(req, res) {
       meta: getReqMeta(req),
     });
 
+    const dateStr = requestedDay.toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+    const auditEvent = await logAudit({
+      action: "MOON_RESERVE",
+      actor: { email: token?.email, name: token?.name, id: token?.sub },
+      user: { _id: resolvedUserId, email: resolvedEmail, name: resolvedName },
+      summary: `Reserva moon creada: ${dateStr} ${String(hour).padStart(2, "0")}:00`,
+      meta: { reservationId: String(reservation._id), date: dateStr, startHour: hour },
+    });
+
     return res.status(201).json({
       message: "Reserva creada",
       reservation: {
         _id: String(reservation._id),
-        date: requestedDay.toLocaleDateString("en-CA", { timeZone: "America/Bogota" }),
+        date: dateStr,
         startHour: hour,
         label: `${String(hour).padStart(2, "0")}:00 – ${String(hour + 1).padStart(2, "0")}:30`,
       },
+      auditEvent,
     });
   } catch (err) {
     if (err.code === 11000) {

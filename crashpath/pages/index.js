@@ -1,7 +1,9 @@
-"use client";
-
+import { useState } from "react";
+import Head from "next/head";
 import Link from "next/link";
 import styled, { createGlobalStyle } from "styled-components";
+import Seo from "../components/Seo";
+import LocalBusinessJsonLd from "../components/LocalBusinessJsonLd";
 
 const themes = {
   day: {
@@ -54,6 +56,7 @@ const Header = styled.header`
 `;
 
 const HeaderInner = styled.div`
+  position: relative;
   max-width: 1200px;
   margin: 0 auto;
   padding: 16px 14px;
@@ -104,6 +107,68 @@ const LogoMark = styled.div`
   text-transform: uppercase;
   color: ${(p) => p.$t.heroText};
   font-size: 12px;
+`;
+
+const MenuButton = styled.button`
+  pointer-events: auto;
+  justify-self: end;
+  grid-column: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  cursor: pointer;
+  color: ${(p) => p.$t.heroText};
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(10, 10, 10, 0.28);
+  backdrop-filter: blur(10px);
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
+  }
+
+  @media (min-width: 860px) {
+    display: none;
+  }
+`;
+
+const MobileMenu = styled.nav`
+  pointer-events: auto;
+  position: absolute;
+  top: calc(100% - 4px);
+  right: 14px;
+  z-index: 60;
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  min-width: 180px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(10, 10, 10, 0.82);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
+
+  @media (min-width: 860px) {
+    display: none;
+  }
+`;
+
+const MobileLink = styled.a`
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: ${(p) => p.$t.heroMuted};
+  padding: 12px 12px;
+  border-radius: 10px;
+
+  &:hover {
+    color: ${(p) => p.$t.heroText};
+    background: rgba(255, 255, 255, 0.08);
+  }
 `;
 
 const Hero = styled.section`
@@ -409,6 +474,27 @@ const ServiceCTA = styled(Link)`
   }
 `;
 
+const Price = styled.div`
+  margin-top: 4px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  font-size: 32px;
+  color: ${(p) => p.$t.text};
+
+  span {
+    font-size: 13px;
+    font-weight: 700;
+    color: ${(p) => p.$t.muted};
+    letter-spacing: 0;
+  }
+`;
+
+const PriceDetail = styled.div`
+  font-size: 13px;
+  line-height: 1.7;
+  color: ${(p) => p.$t.muted};
+`;
+
 const AboutGrid = styled.div`
   margin-top: 26px;
   display: grid;
@@ -501,8 +587,21 @@ const WHATSAPP_URL = "https://wa.me/573208608016";
 const INSTAGRAM_URL = "https://www.instagram.com/crash_path/";
 
 export default function CrashPathLanding() {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <Page $t={t}>
+      <Seo
+        description="Gimnasio de escalada en Bucaramanga: MoonBoard 25° y 40°, placa principal y guiadas a roca natural. Entrena de 3 a 9 PM, de lunes a sábado. Todos los niveles."
+        path="/"
+        keywords="escalada Bucaramanga, gimnasio de escalada, rocódromo, MoonBoard, boulder, escalada en roca, climbing gym Colombia"
+      />
+      <LocalBusinessJsonLd />
+      <Head>
+        {/* Precarga del hero (LCP): la imagen va vía CSS-in-JS y el navegador
+            la descubre tarde; este hint la baja antes. */}
+        <link rel="preload" as="image" href={heroImage} fetchpriority="high" />
+      </Head>
       <GlobalStyle $t={t} />
 
       {/* Fixed transparent header */}
@@ -515,6 +614,9 @@ export default function CrashPathLanding() {
             <Link href="#services" passHref legacyBehavior>
               <NavLink $t={t}>Servicios</NavLink>
             </Link>
+            <Link href="#precios" passHref legacyBehavior>
+              <NavLink $t={t}>Precios</NavLink>
+            </Link>
             <Link href="#about" passHref legacyBehavior>
               <NavLink $t={t}>CrashPath</NavLink>
             </Link>
@@ -523,6 +625,44 @@ export default function CrashPathLanding() {
           <CenterLogo>
             <LogoMark $t={t}>CRASHPATH</LogoMark>
           </CenterLogo>
+
+          <MenuButton
+            $t={t}
+            type="button"
+            aria-label="Abrir menú"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            {menuOpen ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="6" y1="6" x2="18" y2="18" />
+                <line x1="18" y1="6" x2="6" y2="18" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            )}
+          </MenuButton>
+
+          {menuOpen && (
+            <MobileMenu>
+              <Link href="#home" passHref legacyBehavior>
+                <MobileLink $t={t} onClick={() => setMenuOpen(false)}>Home</MobileLink>
+              </Link>
+              <Link href="#services" passHref legacyBehavior>
+                <MobileLink $t={t} onClick={() => setMenuOpen(false)}>Servicios</MobileLink>
+              </Link>
+              <Link href="#precios" passHref legacyBehavior>
+                <MobileLink $t={t} onClick={() => setMenuOpen(false)}>Precios</MobileLink>
+              </Link>
+              <Link href="#about" passHref legacyBehavior>
+                <MobileLink $t={t} onClick={() => setMenuOpen(false)}>CrashPath</MobileLink>
+              </Link>
+            </MobileMenu>
+          )}
         </HeaderInner>
       </Header>
 
@@ -588,7 +728,7 @@ export default function CrashPathLanding() {
                 reserva previa — llegas y entrenas.
               </ServiceDesc>
               <ServiceMeta $t={t}>
-                Lunes a Sábado · 3:00 PM – 10:00 PM
+                Lunes a Sábado · 3:00 PM – 9:00 PM
               </ServiceMeta>
               <ServiceCTA href="/reservas" $t={t} $kind="primary">
                 REGISTRAR VISITA
@@ -639,6 +779,68 @@ export default function CrashPathLanding() {
         </SectionInner>
       </Section>
 
+      {/* PRECIOS */}
+      <Section id="precios">
+        <SectionInner>
+          <SectionTitle>Precios</SectionTitle>
+          <SectionKicker $t={t}>
+            Pago en efectivo o transferencia · Las guiadas a roca se cotizan por WhatsApp
+          </SectionKicker>
+
+          <ServiceGrid>
+            {/* PASE DEL DÍA */}
+            <ServiceBlock $t={t}>
+              <ServiceTag $t={t}>PASE DEL DÍA</ServiceTag>
+              <ServiceName $t={t}>Un día de escalada</ServiceName>
+              <Price $t={t}>
+                $20.000 <span>sin zapatos</span>
+              </Price>
+              <PriceDetail $t={t}>
+                $30.000 con alquiler de pies de gato. Ideal para probar o para visitantes.
+              </PriceDetail>
+              <ServiceMeta $t={t}>Acceso por el día · horario de tarde</ServiceMeta>
+              <ServiceCTA href="/reservas" $t={t} $kind="primary">
+                REGISTRAR VISITA
+              </ServiceCTA>
+            </ServiceBlock>
+
+            {/* TICKETERA */}
+            <ServiceBlock $t={t}>
+              <ServiceTag $t={t}>TICKETERA</ServiceTag>
+              <ServiceName $t={t}>8 entradas</ServiceName>
+              <Price $t={t}>
+                $120.000 <span>· 8 visitas</span>
+              </Price>
+              <PriceDetail $t={t}>
+                $15.000 por visita. Para quien va seguido sin atarse a un mes.
+              </PriceDetail>
+              <ServiceMeta $t={t}>Las entradas no vencen mientras entrenes</ServiceMeta>
+              <ServiceCTA href="/reservas" $t={t} $kind="ghost">
+                REGISTRAR VISITA
+              </ServiceCTA>
+            </ServiceBlock>
+
+            {/* MENSUALIDAD */}
+            <ServiceBlock $t={t} $highlight>
+              <ServiceTag $t={t} $highlight>
+                MENSUALIDAD
+              </ServiceTag>
+              <ServiceName $t={t}>Acceso ilimitado</ServiceName>
+              <Price $t={t}>
+                $120.000 <span>/ mes</span>
+              </Price>
+              <PriceDetail $t={t}>
+                $150.000 con pies de gato incluidos todo el mes. La mejor opción si entrenas constante.
+              </PriceDetail>
+              <ServiceMeta $t={t}>Escala todos los días dentro del horario</ServiceMeta>
+              <ServiceCTA href="/reservas" $t={t} $kind="primary">
+                EMPEZAR AHORA
+              </ServiceCTA>
+            </ServiceBlock>
+          </ServiceGrid>
+        </SectionInner>
+      </Section>
+
       {/* ABOUT / HOW IT WORKS NOW */}
       <Section id="about">
         <SectionInner>
@@ -655,7 +857,7 @@ export default function CrashPathLanding() {
               <AboutText $t={t}>
                 CrashPath ahora es un gimnasio de escalada enfocado en
                 entrenamiento real. Puedes escalar libremente dentro del horario
-                de la tarde (<b>3:00 PM – 10:00 PM</b>), usando tanto la{" "}
+                de la tarde (<b>3:00 PM – 9:00 PM</b>), usando tanto la{" "}
                 <b>MoonBoard</b> como nuestra <b>placa principal</b>.
                 <br />
                 <br />

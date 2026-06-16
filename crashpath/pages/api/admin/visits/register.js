@@ -2,6 +2,7 @@
 import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
+import { logAudit } from "../../../../lib/audit";
 
 const secret = process.env.NEXTAUTH_SECRET;
 
@@ -121,6 +122,14 @@ export default async function handler(req, res) {
 
     await user.save();
 
+    const auditEvent = await logAudit({
+      action: "VISIT_REGISTER",
+      actor: { email: token?.email, name: token?.name, id: token?.sub },
+      user,
+      summary: `Visita registrada (${user.accessType})${user.accessType === "ticketera" ? ` -1 crédito, quedan ${user.credits ?? 0}` : ""}`,
+      meta: { accessType: user.accessType, credits: user.credits ?? 0 },
+    });
+
     return res.status(200).json({
       message:
         user.accessType === "ticketera"
@@ -129,6 +138,7 @@ export default async function handler(req, res) {
       credits: user.credits ?? 0,
       accessType: user.accessType,
       user,
+      auditEvent,
     });
   } catch (err) {
     console.error("admin visits register error:", err);

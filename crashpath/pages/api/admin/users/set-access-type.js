@@ -2,6 +2,7 @@
 import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
+import { logAudit } from "../../../../lib/audit";
 
 const secret = process.env.NEXTAUTH_SECRET;
 
@@ -100,21 +101,20 @@ export default async function handler(req, res) {
       if (user.credits == null) user.credits = 0;
     }
 
-    // (opcional) log de eventos del usuario
-    user.events = user.events || [];
-    user.events.push({
-      ts: new Date(),
-      action: "ACCESS_TYPE_CHANGED",
-      summary: `Acceso: ${prevType} → ${accessType}`,
-      actorEmail: token?.email || token?.user?.email || "admin",
-    });
-
     await user.save();
+
+    const auditEvent = await logAudit({
+      action: "ACCESS_TYPE_CHANGED",
+      actor: { email: token?.email || token?.user?.email, name: token?.name, id: token?.sub },
+      user,
+      summary: `Acceso: ${prevType} → ${accessType}`,
+      meta: { from: prevType, to: accessType, months: accessType === "mensualidad" ? months : undefined },
+    });
 
     return res.status(200).json({
       message: "Access type updated",
       user,
-      // auditEvent: ... si tu backend lo arma, devuélvelo aquí
+      auditEvent,
     });
   } catch (err) {
     console.error("set-access-type error:", err);
