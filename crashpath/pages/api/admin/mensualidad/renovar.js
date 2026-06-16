@@ -3,6 +3,7 @@ import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
+import { logAudit } from "../../../../lib/audit";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -64,6 +65,14 @@ export default async function handler(req, res) {
 
     await user.save();
 
+    const auditEvent = await logAudit({
+      action: "MENSUALIDAD_RENEW",
+      actor: { email: session.user?.email, name: session.user?.name },
+      user,
+      summary: `Mensualidad renovada +${months} mes(es) (vence ${newEndDate.toLocaleDateString("en-CA")})`,
+      meta: { months, newEndDate },
+    });
+
     return res.status(200).json({
       message: "Mensualidad renovada correctamente.",
       mensualidad: {
@@ -72,6 +81,7 @@ export default async function handler(req, res) {
         endDate: user.mensualidad.endDate,
         renewals: user.mensualidad.renewals,
       },
+      auditEvent,
     });
   } catch (error) {
     console.error("[renovar mensualidad]", error);

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
+import { logAudit } from "@/lib/audit";
 
 export default async function handler(req, res) {
   const session = await getServerSession(req, res, authOptions);
@@ -44,16 +45,18 @@ export default async function handler(req, res) {
     }
     
     await user.save();
-    
-    res.status(200).json({ 
+
+    const auditEvent = await logAudit({
+      action: "VISIT_EDIT",
+      actor: { email: session.user?.email, name: session.user?.name },
+      user,
+      summary: `Visita editada${status ? `: ${status}` : ""}`,
+      meta: { visitId: id, status, notes, date },
+    });
+
+    res.status(200).json({
       message: "Visita actualizada correctamente",
-      auditEvent: {
-        action: "edit_visit",
-        userId: user._id,
-        userName: user.name,
-        summary: `Visita editada por admin: ${status}`,
-        ts: new Date()
-      }
+      auditEvent,
     });
   } catch (error) {
     console.error("Error editing visit:", error);

@@ -1,6 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
+import { logAudit } from "../../../../lib/audit";
 
 const secret = process.env.NEXTAUTH_SECRET;
 
@@ -148,10 +149,18 @@ export default async function handler(req, res) {
       }
 
       const newVisit = (updated.visits || []).find((v) => String(v._id) === String(existingToday._id));
+      const auditEvent = await logAudit({
+        action: "CHECKIN",
+        actor: { email: actorEmail, name: actorName, id: token?.sub },
+        user: updated,
+        summary: `Check-in${isTicketera ? ` (-1 crédito, quedan ${updated.credits})` : ""}`,
+        meta: { visitId: String(existingToday._id), accessType: user.accessType, credits: updated.credits },
+      });
       return res.status(200).json({
         message: "Checked in",
         visit: newVisit,
         credits: updated.credits,
+        auditEvent,
       });
     }
 
@@ -207,10 +216,19 @@ export default async function handler(req, res) {
 
     const lastVisit = (updated.visits || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
 
+    const auditEvent = await logAudit({
+      action: "CHECKIN",
+      actor: { email: actorEmail, name: actorName, id: token?.sub },
+      user: updated,
+      summary: `Check-in (visita creada)${isTicketera ? ` -1 crédito, quedan ${updated.credits}` : ""}`,
+      meta: { visitId: lastVisit ? String(lastVisit._id) : null, accessType: user.accessType, credits: updated.credits },
+    });
+
     return res.status(200).json({
       message: "Checked in (visit created by admin)",
       visit: lastVisit,
       credits: updated.credits,
+      auditEvent,
     });
   } catch (error) {
     console.error("admin checkin error:", error);

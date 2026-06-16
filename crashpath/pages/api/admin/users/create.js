@@ -1,6 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
+import { logAudit } from "../../../../lib/audit";
 
 const secret = process.env.NEXTAUTH_SECRET;
 
@@ -99,7 +100,15 @@ export default async function handler(req, res) {
       waiverStatus: "pending",
     });
 
-    return res.status(200).json({ message: "User created", user });
+    const auditEvent = await logAudit({
+      action: "USER_CREATE",
+      actor: { email: token?.email, name: token?.name, id: token?.sub },
+      user,
+      summary: `Usuario creado: ${user.name} (${resolvedAccessType})`,
+      meta: { accessType: resolvedAccessType, esMinor },
+    });
+
+    return res.status(200).json({ message: "User created", user, auditEvent });
   } catch (error) {
     console.error("admin users create error:", error);
 

@@ -2,6 +2,7 @@
 import { isAdminRequest } from "../../auth/[...nextauth]";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
+import { logAudit } from "../../../../lib/audit";
 
 const VALID_DOC_TYPES = ["CC", "CE", "TI", "PP", "NIT", "OTRO"];
 
@@ -9,8 +10,9 @@ export default async function handler(req, res) {
   if (req.method !== "POST")
     return res.status(405).json({ message: "Method not allowed" });
 
+  let actor;
   try {
-    await isAdminRequest(req, res);
+    actor = await isAdminRequest(req, res);
   } catch {
     return;
   }
@@ -66,18 +68,18 @@ export default async function handler(req, res) {
     if (!user)
       return res.status(404).json({ message: "Usuario no encontrado." });
 
+    const auditEvent = await logAudit({
+      action: "UPDATE_PROFILE",
+      actor,
+      user,
+      summary: `Perfil actualizado: ${user.name}`,
+      meta: { fields: Object.keys(updateFields) },
+    });
+
     return res.status(200).json({
       message: "Perfil actualizado correctamente.",
       user,
-      auditEvent: {
-        action: "UPDATE_PROFILE",
-        userId: String(user._id),
-        userName: user.name,
-        userEmail: user.email,
-        actorEmail: "admin",
-        summary: `Perfil actualizado: ${user.name}`,
-        ts: new Date().toISOString(),
-      },
+      auditEvent,
     });
   } catch (err) {
     console.error("UPDATE PROFILE ERROR:", err);
