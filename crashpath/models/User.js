@@ -114,6 +114,15 @@ const UserSchema = new mongoose.Schema(
     // Solo aplica si accessType === "ticketera"
     credits: { type: Number, default: 0 },
 
+    // Datos de la tiquetera vigente (compra y vencimiento).
+    // El vencimiento se MUESTRA en el panel pero NO bloquea el check-in:
+    // el admin decide (política "trackear y avisar").
+    tiquetera: {
+      startDate: { type: Date },
+      endDate: { type: Date },
+      totalUses: { type: Number, default: 8 },
+    },
+
     // Solo aplica si accessType === "mensualidad"
     mensualidad: { type: MensualidadSchema, default: () => ({}) },
 
@@ -175,6 +184,12 @@ UserSchema.virtual("mensualidadVencida").get(function () {
   if (this.accessType !== "mensualidad") return null;
   if (!this.mensualidad?.endDate) return true;
   return new Date() > new Date(this.mensualidad.endDate);
+});
+
+UserSchema.virtual("tiqueteraVencida").get(function () {
+  if (this.accessType !== "ticketera") return null;
+  if (!this.tiquetera?.endDate) return null; // sin fecha => no se sabe, no alarmar
+  return new Date() > new Date(this.tiquetera.endDate);
 });
 
 /* -------------------- HOOKS -------------------- */

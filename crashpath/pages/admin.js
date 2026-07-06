@@ -1102,9 +1102,17 @@ function AccessInfo({ user, onRenovar, onChangeAccess, busy }) {
       </div>
     );
   }
+  // Tiquetera: el vencimiento se muestra pero NO bloquea (el admin decide).
+  const tiqEnd = user.tiquetera?.endDate ? new Date(user.tiquetera.endDate) : null;
+  const tiqVencida = tiqEnd ? tiqEnd < new Date() : false;
   return (
     <div style={{ display: "flex", gap: spacing.sm, alignItems: "center", flexWrap: "wrap" }}>
       <Badge>{user.credits ?? 0} créditos</Badge>
+      {tiqEnd && (
+        <Badge $success={!tiqVencida} $danger={tiqVencida}>
+          {tiqVencida ? "✗ Tiquetera vencida" : `✓ Vence ${formatDate(tiqEnd)}`}
+        </Badge>
+      )}
       <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
         Cambiar
       </Button>
@@ -1333,6 +1341,14 @@ function AdminPanel() {
   const [showWaiverModal, setShowWaiverModal] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+
+  // Import/Export Excel operativo
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importSelected, setImportSelected] = useState(() => new Set());
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const importFileRef = useRef(null);
   const [showMoonModal, setShowMoonModal] = useState(false);
   const [showCancelMoonModal, setShowCancelMoonModal] = useState(false);
   const [showEditVisitModal, setShowEditVisitModal] = useState(false);
@@ -1738,32 +1754,102 @@ function AdminPanel() {
     }
   };
 
-  const exportToCSV = () => {
-    const headers = ["Nombre", "Email", "Teléfono", "Documento", "Tipo Acceso", "Créditos/Mensualidad", "Waiver", "Último Check-in", "Fecha Registro"];
-    const rows = filteredAndSortedUsers.map(user => [
-      user.name || "",
-      user.email || "",
-      user.phone || "",
-      `${user.documentType || ""} ${user.documentNumber || ""}`,
-      user.accessType === "mensualidad" ? "Mensualidad" : "Tiquetera",
-      user.accessType === "mensualidad" 
-        ? getMensualidadStatus(user.mensualidad).label 
-        : `${user.credits ?? 0} créditos`,
-      user.waiverStatus === "signed" ? "Firmado" : "Pendiente",
-      user.lastCheckinAt ? formatDateTime(user.lastCheckinAt) : "Nunca",
-      user.createdAt ? formatDate(user.createdAt) : "—"
-    ]);
-    
-    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.href = url;
-    link.setAttribute("download", `usuarios_${formatDate(new Date())}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const exportExcel = () => {
+    // Export en formato Excel operativo (hojas MENSUALIDADES + TIQUETERAS).
+    window.location.href = "/api/admin/export-xlsx";
+  };
+
+  // ── Import Excel (antibobos: preview → confirmar → aplicar) ──────────
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite re-seleccionar el mismo archivo
+    if (!file) return;
+    setUiError("");
+    setImportResult(null);
+    setImportBusy(true);
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result).split(",")[1]);
+        fr.onerror = () => reject(new Error("No se pudo leer el archivo"));
+        fr.readAsDataURL(file);
+      });
+      const res = await axios.post("/api/admin/import-xlsx", { mode: "preview", file: b64 });
+      const rows = res.data?.rows || [];
+      setImportPreview(res.data);
+      // Antibobos: solo los match exactos vienen marcados por defecto.
+      setImportSelected(new Set(rows.filter((r) => r.matchType === "exact").map((r) => r.id)));
+      setShowImportModal(true);
+    } catch (err) {
+      setUiError(err?.response?.data?.message || "No se pudo leer el Excel.");
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const toggleImportRow = (id) => {
+    setImportSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const applyImport = async () => {
+    if (!importPreview) return;
+    const rows = importPreview.rows
+      .filter((r) => importSelected.has(r.id) && r.user)
+      .map((r) => ({
+        userId: r.user._id,
+        sheet: r.sheet,
+        excelName: r.excelName,
+        proposed: r.proposed,
+      }));
+    if (rows.length === 0) return;
+    setUiError("");
+    setImportBusy(true);
+    try {
+      const res = await axios.post("/api/admin/import-xlsx", { mode: "apply", rows });
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      setImportResult(res.data);
+      await fetchUsers();
+    } catch (err) {
+      setUiError(err?.response?.data?.message || "No se pudo aplicar el import.");
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const closeImportModal = () => {
+    if (importBusy) return;
+    setShowImportModal(false);
+    setImportPreview(null);
+    setImportResult(null);
+    setImportSelected(new Set());
+  };
+
+  const describeImportCurrent = (r) => {
+    if (!r.current) return "—";
+    if (r.sheet === "mensualidades") {
+      const acc = r.current.accessType || "sin modalidad";
+      return `${acc}${r.current.endDate ? ` · vence ${formatDate(r.current.endDate)}` : ""}`;
+    }
+    return `${r.current.credits ?? 0} créditos${r.current.endDate ? ` · vence ${formatDate(r.current.endDate)}` : ""}`;
+  };
+
+  const describeImportProposed = (r) => {
+    if (r.sheet === "mensualidades") {
+      return `Mensualidad ${r.proposed.active ? "ACTIVA" : "vencida"}${r.proposed.endDate ? ` · vence ${formatDate(r.proposed.endDate)}` : ""}`;
+    }
+    return `Tiquetera · ${r.proposed.credits ?? 0} créditos${r.proposed.endDate ? ` · vence ${formatDate(r.proposed.endDate)}` : ""}`;
+  };
+
+  const importChip = (t) => {
+    if (t === "exact") return <Badge $success>✓ exacto</Badge>;
+    if (t === "fuzzy") return <Badge>≈ revisar</Badge>;
+    if (t === "ambiguous") return <Badge $danger>ambiguo</Badge>;
+    return <Badge $danger>no encontrado</Badge>;
   };
 
   const handleDeleteUser = async (user) => {
@@ -2328,9 +2414,19 @@ function AdminPanel() {
                 ? <EyeOff size={14} style={{ verticalAlign: "-2px" }} />
                 : <Eye size={14} style={{ verticalAlign: "-2px" }} />} Privacidad
             </Button>
-            <Button onClick={exportToCSV} $variant="secondary">
-              📥 Exportar CSV
+            <Button onClick={exportExcel} $variant="secondary">
+              📥 Exportar Excel
             </Button>
+            <Button onClick={() => importFileRef.current?.click()} $variant="secondary" disabled={importBusy}>
+              📤 {importBusy ? "Leyendo..." : "Importar Excel"}
+            </Button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".xlsx"
+              style={{ display: "none" }}
+              onChange={handleImportFile}
+            />
             <Button onClick={() => fetchCheckinsByDate(new Date().toISOString().slice(0, 10))} $variant="secondary">
               📅 Ver check-ins de hoy
             </Button>
@@ -3021,6 +3117,122 @@ function AdminPanel() {
             <ActionButtons>
               <Button $variant="secondary" onClick={() => setShowHistoryModal(false)}>Cerrar</Button>
             </ActionButtons>
+          </ModalContent>
+        </Modal>
+
+        {/* Import Excel Modal (preview antibobos) */}
+        <Overlay $show={showImportModal} onClick={closeImportModal} />
+        <Modal $show={showImportModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>Importar Excel — vista previa</ModalTitle>
+            </ModalHeader>
+
+            {importResult ? (
+              <>
+                <div style={{ fontWeight: 600, marginBottom: spacing.md }}>
+                  ✅ {importResult.updated?.length || 0} usuario(s) actualizados.
+                </div>
+                {importResult.failed?.length > 0 && (
+                  <ErrorBox style={{ marginBottom: spacing.md }}>
+                    ⚠️ {importResult.failed.length} fila(s) fallaron:
+                    <ul style={{ margin: `${spacing.xs} 0 0`, paddingLeft: 18 }}>
+                      {importResult.failed.map((f, i) => (
+                        <li key={i}>{f.excelName || f.userId}: {f.error}</li>
+                      ))}
+                    </ul>
+                  </ErrorBox>
+                )}
+                <ActionButtons>
+                  <Button onClick={closeImportModal}>Cerrar</Button>
+                </ActionButtons>
+              </>
+            ) : importPreview ? (
+              <>
+                <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap", marginBottom: spacing.md }}>
+                  <Badge $success>{importPreview.summary.exact} exactos</Badge>
+                  <Badge>{importPreview.summary.fuzzy} por revisar</Badge>
+                  <Badge $danger>{importPreview.summary.ambiguous} ambiguos</Badge>
+                  <Badge $danger>{importPreview.summary.none} no encontrados</Badge>
+                </div>
+                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
+                  Nada se guarda hasta que confirmes. Los "≈ revisar" vienen desmarcados:
+                  márcalos solo si el emparejamiento es correcto.
+                </div>
+
+                <div style={{ maxHeight: "380px", overflowY: "auto", border: `1px solid ${palette.border}`, borderRadius: borderRadius.sm }}>
+                  {importPreview.rows.map((r) => (
+                    <div
+                      key={r.id}
+                      style={{
+                        display: "flex",
+                        gap: spacing.sm,
+                        alignItems: "flex-start",
+                        padding: spacing.sm,
+                        borderBottom: `1px solid ${palette.border}`,
+                        opacity: r.user ? 1 : 0.65,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        style={{ marginTop: 3 }}
+                        disabled={!r.user || importBusy}
+                        checked={importSelected.has(r.id)}
+                        onChange={() => toggleImportRow(r.id)}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", gap: spacing.sm, flexWrap: "wrap", alignItems: "center" }}>
+                          <span style={{ fontWeight: 600 }}>{maskName(r.excelName)}</span>
+                          {importChip(r.matchType)}
+                          <Badge>{r.sheet === "mensualidades" ? "Mensualidad" : "Tiquetera"}</Badge>
+                        </div>
+                        {r.user && (
+                          <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: 2 }}>
+                            → {maskName(r.user.name)} ({maskEmail(r.user.email)})
+                          </div>
+                        )}
+                        {r.matchType === "ambiguous" && r.candidates?.length > 0 && (
+                          <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: 2 }}>
+                            Candidatos: {r.candidates.map((c) => maskName(c.name)).join(", ")} — resuélvelo a mano.
+                          </div>
+                        )}
+                        {r.matchType === "none" && (
+                          <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: 2 }}>
+                            No existe en el panel — créalo a mano con su email real.
+                          </div>
+                        )}
+                        {r.user && (
+                          <div style={{ fontSize: fontSize.sm, marginTop: 2 }}>
+                            {describeImportCurrent(r)} <strong>→</strong> {describeImportProposed(r)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {importPreview.omitted?.length > 0 && (
+                  <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: spacing.md }}>
+                    Filas omitidas (dato más viejo en la otra hoja):{" "}
+                    {importPreview.omitted.map((o) => maskName(o.nombre)).join(", ")}
+                  </div>
+                )}
+
+                <ActionButtons>
+                  <Button
+                    onClick={applyImport}
+                    disabled={importBusy || [...importSelected].filter((id) => importPreview.rows.find((r) => r.id === id && r.user)).length === 0}
+                  >
+                    {importBusy
+                      ? "Aplicando..."
+                      : `Aplicar ${[...importSelected].length} cambio(s)`}
+                  </Button>
+                  <Button $variant="secondary" onClick={closeImportModal} disabled={importBusy}>
+                    Cancelar
+                  </Button>
+                </ActionButtons>
+              </>
+            ) : null}
           </ModalContent>
         </Modal>
 
