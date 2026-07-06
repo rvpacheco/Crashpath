@@ -49,20 +49,29 @@ function cellText(v) {
   return String(v);
 }
 
+// Las fechas del Excel son "días calendario" sin zona horaria. Se guardan como
+// medianoche de Bogotá (05:00Z, misma convención que el sistema moon) para que
+// el panel muestre el MISMO día que dice el Excel y no el anterior.
+const BOGOTA_OFFSET_MS = 5 * 3600000;
+
 function toDate(v) {
   if (v == null || v === "") return null;
-  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return null;
+    // exceljs ya la parseó como medianoche UTC: correr a medianoche Bogotá
+    return new Date(v.getTime() + BOGOTA_OFFSET_MS);
+  }
   // Celdas con fórmula (ej. "=B2+30"): exceljs devuelve { formula, result }
   if (typeof v === "object" && v.result != null) return toDate(v.result);
   if (typeof v === "number") {
     // Serial de Excel (época 1899-12-30)
     if (v < 20000 || v > 60000) return null; // fuera de rango razonable
-    return new Date(Date.UTC(1899, 11, 30) + v * 86400000);
+    return new Date(Date.UTC(1899, 11, 30) + v * 86400000 + BOGOTA_OFFSET_MS);
   }
   const s = String(v).trim();
   // dd/mm/yyyy
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+  if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], 5));
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }

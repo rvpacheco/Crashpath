@@ -9,6 +9,19 @@ import { isAdminRequest } from "../auth/[...nextauth]";
 
 const DATE_FMT = "dd/mm/yyyy";
 
+/**
+ * Convierte una fecha al "día calendario de Bogotá" como Date UTC-medianoche,
+ * que es lo que exceljs escribe tal cual. Sin esto, una renovación hecha a las
+ * 9pm de Bogotá (02:00Z del día siguiente) saldría en el Excel con un día más.
+ */
+function bogotaDay(dateLike) {
+  if (!dateLike) return null;
+  const d = new Date(dateLike);
+  if (isNaN(d.getTime())) return null;
+  const ymd = d.toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+  return new Date(`${ymd}T00:00:00.000Z`);
+}
+
 function estadoMensualidad(m) {
   if (!m?.endDate) return "Vencido";
   return new Date(m.endDate) > new Date() ? "Disponible" : "Vencido";
@@ -55,8 +68,8 @@ export default async function handler(req, res) {
       .forEach((u) => {
         wsM.addRow({
           nombre: u.name || "",
-          inicio: u.mensualidad?.startDate ? new Date(u.mensualidad.startDate) : null,
-          fin: u.mensualidad?.endDate ? new Date(u.mensualidad.endDate) : null,
+          inicio: bogotaDay(u.mensualidad?.startDate),
+          fin: bogotaDay(u.mensualidad?.endDate),
           uso: estadoMensualidad(u.mensualidad),
         });
       });
@@ -80,8 +93,8 @@ export default async function handler(req, res) {
         const pendientes = Math.max(0, u.credits ?? 0);
         wsT.addRow({
           nombre: u.name || "",
-          inicio: u.tiquetera?.startDate ? new Date(u.tiquetera.startDate) : null,
-          fin: u.tiquetera?.endDate ? new Date(u.tiquetera.endDate) : null,
+          inicio: bogotaDay(u.tiquetera?.startDate),
+          fin: bogotaDay(u.tiquetera?.endDate),
           usos: Math.max(0, total - pendientes),
           pendientes,
           // En el panel la tiquetera solo existe si ya se pagó.
