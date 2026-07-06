@@ -95,6 +95,14 @@ export default async function handler(req, res) {
           return res.status(400).json({ message: "Invalid credits" });
         }
         user.credits = Math.max(0, Math.trunc(n));
+
+        // Venta de tiquetera: vigencia de 60 días desde hoy.
+        // (El vencimiento se muestra en el panel pero no bloquea check-in.)
+        if (user.credits > 0) {
+          const startDate = new Date();
+          const endDate = new Date(startDate.getTime() + 60 * 86400000);
+          user.tiquetera = { startDate, endDate, totalUses: user.credits };
+        }
       }
 
       // si el user no tiene credits field, asegúrate:

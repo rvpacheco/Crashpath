@@ -38,6 +38,22 @@ export default async function handler(req, res) {
     const before = user.credits ?? 0;
     // No permitir saldo negativo
     user.credits = Math.max(0, before + delta);
+
+    // Recarga (delta > 0) sobre tiquetera vencida o sin fechas: inicia una
+    // vigencia nueva de 60 días. Si la tiquetera está activa, un ajuste NO
+    // toca sus fechas (una corrección de +1 no debe regalar 60 días).
+    if (delta > 0 && user.accessType === 'ticketera') {
+      const end = user.tiquetera?.endDate ? new Date(user.tiquetera.endDate) : null;
+      if (!end || end < new Date()) {
+        const startDate = new Date();
+        user.tiquetera = {
+          startDate,
+          endDate: new Date(startDate.getTime() + 60 * 86400000),
+          totalUses: user.credits,
+        };
+      }
+    }
+
     await user.save();
 
     const auditEvent = await logAudit({
