@@ -3,19 +3,9 @@ import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { logAudit } from "../../../../lib/audit";
+import { dayRangeBogota } from "../../../../lib/dates";
 
 const secret = process.env.NEXTAUTH_SECRET;
-
-function startOfTodayLocal() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-function endOfTodayLocal() {
-  const d = new Date();
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
 
 function isProfileComplete(u) {
   const dt = String(u?.documentType || "").trim();
@@ -85,8 +75,8 @@ export default async function handler(req, res) {
       });
     }
 
-    const start = startOfTodayLocal();
-    const end = endOfTodayLocal();
+    // Día calendario de Bogotá (en Vercel el server es UTC)
+    const { start, end } = dayRangeBogota();
 
     const todaysVisit = (user.visits || []).find((v) => {
       const d = v?.date ? new Date(v.date) : null;
