@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
+import { dayRangeBogota } from "@/lib/dates";
 
 export default async function handler(req, res) {
   const session = await getServerSession(req, res, authOptions);
@@ -22,10 +23,12 @@ export default async function handler(req, res) {
   await dbConnect();
   
   try {
-    const startDate = new Date(date);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(date);
-    endDate.setHours(23, 59, 59, 999);
+    // "YYYY-MM-DD" se interpreta como día calendario de Bogotá (no UTC)
+    const range = dayRangeBogota(date);
+    if (!range) {
+      return res.status(400).json({ message: "Fecha inválida" });
+    }
+    const { start: startDate, end: endDate } = range;
     
     const users = await User.find({
       "visits.date": { $gte: startDate, $lte: endDate },

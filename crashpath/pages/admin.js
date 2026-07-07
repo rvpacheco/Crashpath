@@ -1241,6 +1241,22 @@ function ModalPortal({ children }) {
   return createPortal(children, document.body);
 }
 
+// Sidebar del feed de auditoría. OJO: los media queries NO funcionan en
+// style inline de React (así estuvo invisible desde siempre); tiene que ser
+// un styled-component.
+const AuditAside = styled.aside`
+  padding: ${spacing.lg};
+  border-left: 1px solid ${palette.border};
+  background: ${palette.bg};
+  min-width: 280px;
+  max-width: 340px;
+  display: none;
+
+  @media (min-width: 1024px) {
+    display: block;
+  }
+`;
+
 function AuditFeed({ events, loading }) {
   const { maskName, maskEmail } = usePrivacy();
 
@@ -1254,16 +1270,7 @@ function AuditFeed({ events, loading }) {
   };
 
   return (
-    <div style={{ 
-      padding: spacing.lg, 
-      borderLeft: `1px solid ${palette.border}`,
-      background: palette.bg,
-      minWidth: "280px",
-      display: "none",
-      "@media (min-width: 1024px)": {
-        display: "block"
-      }
-    }}>
+    <AuditAside>
       <div style={{ fontWeight: 600, marginBottom: spacing.md }}>
         Actividad reciente
         {loading && <span style={{ color: palette.textLight, marginLeft: spacing.sm }}>···</span>}
@@ -1284,7 +1291,7 @@ function AuditFeed({ events, loading }) {
           </div>
         ))}
       </div>
-    </div>
+    </AuditAside>
   );
 }
 

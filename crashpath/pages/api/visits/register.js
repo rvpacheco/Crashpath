@@ -1,6 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../lib/mongodb";
 import User from "../../../models/User";
+import { dayRangeBogota } from "../../../lib/dates";
 
 const secret = process.env.NEXTAUTH_SECRET;
 
@@ -50,17 +51,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // ====== Determinar día objetivo ======
-    const target = req.body?.date ? new Date(req.body.date) : new Date();
-    if (Number.isNaN(target.getTime())) {
+    // ====== Determinar día objetivo (día calendario de BOGOTÁ, no del
+    // servidor: en Vercel el servidor es UTC y "hoy" arrancaría a las 7pm) ======
+    const range = dayRangeBogota(req.body?.date);
+    if (!range) {
       return res.status(400).json({ message: "Invalid date" });
     }
-
-    const startOfDay = new Date(target);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(target);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { start: startOfDay, end: endOfDay } = range;
 
     // ====== Documento de check-in ======
     // El check-in solo marca asistencia: no descuenta créditos ni valida modalidad.
