@@ -1085,7 +1085,7 @@ const INITIAL_FORM = {
 // ============================================
 // SUBCOMPONENTES
 // ============================================
-function AccessInfo({ user, onRenovar, onChangeAccess, busy }) {
+function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, busy }) {
   if (user.accessType === "mensualidad") {
     const { active, label } = getMensualidadStatus(user.mensualidad);
     return (
@@ -1113,6 +1113,9 @@ function AccessInfo({ user, onRenovar, onChangeAccess, busy }) {
           {tiqVencida ? "✗ Tiquetera vencida" : `✓ Vence ${formatDate(tiqEnd)}`}
         </Badge>
       )}
+      <Button $variant="secondary" $small onClick={() => onEditTiquetera(user)} disabled={busy}>
+        📅 Fechas
+      </Button>
       <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
         Cambiar
       </Button>
@@ -1341,6 +1344,12 @@ function AdminPanel() {
   const [showWaiverModal, setShowWaiverModal] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+
+  // Editor de fechas de tiquetera
+  const [showTiqueteraModal, setShowTiqueteraModal] = useState(false);
+  const [tiqueteraUser, setTiqueteraUser] = useState(null);
+  const [tiqueteraStart, setTiqueteraStart] = useState("");
+  const [tiqueteraEnd, setTiqueteraEnd] = useState("");
 
   // Import/Export Excel operativo
   const [showImportModal, setShowImportModal] = useState(false);
@@ -1818,6 +1827,43 @@ function AdminPanel() {
       setUiError(err?.response?.data?.message || "No se pudo aplicar el import.");
     } finally {
       setImportBusy(false);
+    }
+  };
+
+  // ── Editor de fechas de tiquetera ──────────────────────────────────
+  const toBogotaDay = (d) =>
+    d ? new Date(d).toLocaleDateString("en-CA", { timeZone: "America/Bogota" }) : "";
+
+  const openTiqueteraDates = (user) => {
+    setUiError("");
+    setTiqueteraUser(user);
+    setTiqueteraStart(toBogotaDay(user.tiquetera?.startDate));
+    setTiqueteraEnd(toBogotaDay(user.tiquetera?.endDate));
+    setShowTiqueteraModal(true);
+  };
+
+  const submitTiqueteraDates = async () => {
+    if (!tiqueteraUser) return;
+    if (!tiqueteraStart && !tiqueteraEnd) {
+      setUiError("Pon al menos una fecha.");
+      return;
+    }
+    setBusy(true);
+    setUiError("");
+    try {
+      const res = await axios.post("/api/admin/users/tiquetera-dates", {
+        userId: tiqueteraUser._id,
+        startDate: tiqueteraStart || undefined,
+        endDate: tiqueteraEnd || undefined,
+      });
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      await fetchUsers();
+      setShowTiqueteraModal(false);
+      setTiqueteraUser(null);
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudieron actualizar las fechas.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -2601,10 +2647,11 @@ function AdminPanel() {
                         <div>📅 Registro: {user.createdAt ? formatDate(user.createdAt) : "—"}</div>
                         <div>📋 {user.documentType || ""} {maskDocument(user.documentNumber) || ""}</div>
                       </CardInfo>
-                      <AccessInfo 
-                        user={user} 
+                      <AccessInfo
+                        user={user}
                         onRenovar={handleRenovar}
                         onChangeAccess={openAccessModal}
+                        onEditTiquetera={openTiqueteraDates}
                         busy={busy}
                       />
                       <div style={{ marginTop: spacing.sm }}>
@@ -2664,10 +2711,11 @@ function AdminPanel() {
                             <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{user.documentType || ""} {maskDocument(user.documentNumber) || ""}</div>
                           </Td>
                           <Td>
-                            <AccessInfo 
-                              user={user} 
+                            <AccessInfo
+                              user={user}
                               onRenovar={handleRenovar}
                               onChangeAccess={openAccessModal}
+                              onEditTiquetera={openTiqueteraDates}
                               busy={busy}
                             />
                           </Td>
@@ -3117,6 +3165,70 @@ function AdminPanel() {
             <ActionButtons>
               <Button $variant="secondary" onClick={() => setShowHistoryModal(false)}>Cerrar</Button>
             </ActionButtons>
+          </ModalContent>
+        </Modal>
+
+        {/* Editor de fechas de tiquetera */}
+        <Overlay $show={showTiqueteraModal} onClick={() => !busy && setShowTiqueteraModal(false)} />
+        <Modal $show={showTiqueteraModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>Fechas de tiquetera</ModalTitle>
+            </ModalHeader>
+            {tiqueteraUser && (
+              <>
+                <div style={{ fontWeight: 600 }}>{maskName(tiqueteraUser.name) || "Sin nombre"}</div>
+                <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
+                  {maskEmail(tiqueteraUser.email)} · {tiqueteraUser.credits ?? 0} créditos
+                </div>
+                <div style={{ marginBottom: spacing.md }}>
+                  <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Fecha de compra</div>
+                  <Input
+                    type="date"
+                    value={tiqueteraStart}
+                    onChange={(e) => setTiqueteraStart(e.target.value)}
+                  />
+                </div>
+                <div style={{ marginBottom: spacing.md }}>
+                  <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Vence</div>
+                  <Input
+                    type="date"
+                    value={tiqueteraEnd}
+                    onChange={(e) => setTiqueteraEnd(e.target.value)}
+                  />
+                  <div style={{ display: "flex", gap: spacing.sm, marginTop: spacing.sm, flexWrap: "wrap" }}>
+                    <Button
+                      $variant="secondary"
+                      $small
+                      onClick={() => {
+                        const base = tiqueteraStart ? new Date(`${tiqueteraStart}T12:00:00`) : new Date();
+                        setTiqueteraEnd(new Date(base.getTime() + 60 * 86400000).toISOString().slice(0, 10));
+                      }}
+                    >
+                      +60 días
+                    </Button>
+                    <Button
+                      $variant="secondary"
+                      $small
+                      onClick={() => {
+                        const base = tiqueteraStart ? new Date(`${tiqueteraStart}T12:00:00`) : new Date();
+                        setTiqueteraEnd(new Date(base.getTime() + 90 * 86400000).toISOString().slice(0, 10));
+                      }}
+                    >
+                      +90 días
+                    </Button>
+                  </div>
+                </div>
+                <ActionButtons>
+                  <Button onClick={submitTiqueteraDates} disabled={busy}>
+                    {busy ? "Guardando..." : "Guardar"}
+                  </Button>
+                  <Button $variant="secondary" onClick={() => setShowTiqueteraModal(false)} disabled={busy}>
+                    Cancelar
+                  </Button>
+                </ActionButtons>
+              </>
+            )}
           </ModalContent>
         </Modal>
 
