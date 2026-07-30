@@ -6,7 +6,7 @@ import { logAudit } from "../../../../lib/audit";
 
 const secret = process.env.NEXTAUTH_SECRET;
 
-const OPEN_HOUR = 15;
+const OPEN_HOUR = 16;
 const CLOSE_HOUR = 22;
 const DURATION_H = 1.5;
 const MAX_DAYS_AHEAD = 7;
