@@ -10,7 +10,10 @@ const adminEmails = [
   "mattucm01@gmail.com",
   "mattucm@hotmail.com",
   "rvpacheco17@gmail.com",
-  "jdba.94@gmail.com"
+  "jdba.94@gmail.com",
+  "miguelvarbla@gmail.com",
+  "dmp702@gmail.com",
+  "miguelcomposi@gmail.com"
 ].map((e) => e.trim().toLowerCase());
 
 async function refreshAccessToken(token) {

@@ -592,7 +592,7 @@ export default function CrashPathLanding() {
   return (
     <Page $t={t}>
       <Seo
-        description="Gimnasio de escalada en Bucaramanga: MoonBoard 25° y 40°, placa principal y guiadas a roca natural. Entrena de 3 a 9 PM, de lunes a sábado. Todos los niveles."
+        description="Gimnasio de escalada en Bucaramanga: MoonBoard 25° y 40°, placa principal y guiadas a roca natural. Entrena de 4 a 9 PM, de lunes a sábado. Todos los niveles."
         path="/"
         keywords="escalada Bucaramanga, gimnasio de escalada, rocódromo, MoonBoard, boulder, escalada en roca, climbing gym Colombia"
       />
@@ -728,7 +728,7 @@ export default function CrashPathLanding() {
                 reserva previa — llegas y entrenas.
               </ServiceDesc>
               <ServiceMeta $t={t}>
-                Lunes a Sábado · 3:00 PM – 9:00 PM
+                Lunes a Sábado · 4:00 PM – 9:00 PM
               </ServiceMeta>
               <ServiceCTA href="/reservas" $t={t} $kind="primary">
                 REGISTRAR VISITA
@@ -814,7 +814,7 @@ export default function CrashPathLanding() {
               <PriceDetail $t={t}>
                 $15.000 por visita. Para quien va seguido sin atarse a un mes.
               </PriceDetail>
-              <ServiceMeta $t={t}>Las entradas no vencen mientras entrenes</ServiceMeta>
+              <ServiceMeta $t={t}>Vigencia de 60 días</ServiceMeta>
               <ServiceCTA href="/reservas" $t={t} $kind="ghost">
                 REGISTRAR VISITA
               </ServiceCTA>
@@ -857,7 +857,7 @@ export default function CrashPathLanding() {
               <AboutText $t={t}>
                 CrashPath ahora es un gimnasio de escalada enfocado en
                 entrenamiento real. Puedes escalar libremente dentro del horario
-                de la tarde (<b>3:00 PM – 9:00 PM</b>), usando tanto la{" "}
+                de la tarde (<b>4:00 PM – 9:00 PM</b>), usando tanto la{" "}
                 <b>MoonBoard</b> como nuestra <b>placa principal</b>.
                 <br />
                 <br />
@@ -866,7 +866,7 @@ export default function CrashPathLanding() {
               </AboutText>
 
               <Bullets $t={t}>
-                <li>Acceso libre en horario de tarde (3pm–9pm).</li>
+                <li>Acceso libre en horario de tarde (4pm–9pm).</li>
                 <li>MoonBoard a 25° y 40° disponible.</li>
                 <li>Nueva placa principal de escalada.</li>
                 <li>Enfoque en técnica, fuerza y resistencia.</li>

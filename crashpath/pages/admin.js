@@ -2079,6 +2079,19 @@ function AdminPanel() {
     });
     setViewingUser(user);
     setShowProfileModal(true);
+
+    // La lista viene sin los campos pesados (firma del waiver, snapshot);
+    // se hidrata el detalle completo en segundo plano.
+    axios
+      .get(`/api/admin/users/${user._id}`)
+      .then((res) => {
+        if (res.data?.user) {
+          setViewingUser((prev) =>
+            prev && String(prev._id) === String(user._id) ? res.data.user : prev
+          );
+        }
+      })
+      .catch(() => {});
   };
 
   const submitEditProfile = async () => {
