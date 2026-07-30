@@ -20,6 +20,7 @@ export default async function handler(req, res) {
   const {
     userId,
     name,
+    email,
     phone,
     documentType,
     documentNumber,
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
 
   // Validaciones básicas
   const cleanName = (name || "").trim();
+  const cleanEmail = (email || "").trim().toLowerCase();
   const cleanPhone = (phone || "").trim();
   const cleanDocType = (documentType || "").trim().toUpperCase();
   const cleanDocNumber = (documentNumber || "").trim();
@@ -43,15 +45,32 @@ export default async function handler(req, res) {
   if (!cleanName)
     return res.status(400).json({ message: "El nombre es obligatorio." });
 
+  if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))
+    return res.status(400).json({ message: "Email inválido." });
+
   if (cleanDocType && !VALID_DOC_TYPES.includes(cleanDocType))
     return res.status(400).json({ message: "Tipo de documento inválido." });
 
   await dbConnect();
 
   try {
+    // Email: importante para usuarios importados/walk-in con placeholder
+    // @crashpath.local — al ponerles su email real de Google, el login los
+    // conecta con esta misma cuenta (login busca por email).
+    if (cleanEmail) {
+      const emailInUse = await User.findOne({ email: cleanEmail, _id: { $ne: userId } });
+      if (emailInUse) {
+        return res.status(409).json({
+          message: "Ese email ya está en uso por otra cuenta.",
+          code: "EMAIL_IN_USE",
+        });
+      }
+    }
+
     const updateFields = {};
 
     if (cleanName) updateFields.name = cleanName;
+    if (cleanEmail) updateFields.email = cleanEmail;
     if (cleanPhone) updateFields.phone = cleanPhone;
     if (cleanDocType) updateFields.documentType = cleanDocType;
     if (cleanDocNumber) updateFields.documentNumber = cleanDocNumber;

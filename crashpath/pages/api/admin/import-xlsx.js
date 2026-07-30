@@ -15,7 +15,10 @@
 //  - Varias filas de la misma persona: gana la más reciente por fecha.
 //  - Persona en AMBAS hojas: gana la hoja con fecha más reciente; la otra
 //    fila se reporta como omitida.
-//  - No se crean usuarios: los no encontrados solo se reportan.
+//  - Los NO encontrados se pueden CREAR (si el admin marca la fila): quedan
+//    con email placeholder @crashpath.local (editable después en el perfil),
+//    waiver pendiente y perfil incompleto — el admin los completa cuando
+//    la persona vuelva al gym.
 import ExcelJS from "exceljs";
 import dbConnect from "../../../lib/mongodb";
 import User from "../../../models/User";
@@ -291,18 +294,45 @@ async function buildPreview(fileBase64) {
 
 /* ---------------- fase APPLY ---------------- */
 
+/** Email placeholder para usuarios creados desde el Excel (sin email real).
+ *  Editable después desde el perfil; al poner el email real de Google, el
+ *  login conecta a la persona con esta misma cuenta. */
+function makeImportEmail(nombre) {
+  const slug =
+    normalizeName(nombre).replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 24) ||
+    "miembro";
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `import_${slug}_${rand}@crashpath.local`;
+}
+
 async function applyRows(rows, actor) {
   await dbConnect();
-  const results = { updated: [], failed: [] };
+  const results = { updated: [], created: [], failed: [] };
 
   for (const row of rows) {
     try {
       const userId = row?.userId;
       const p = row?.proposed || {};
-      if (!userId || !row?.sheet) throw new Error("Fila incompleta");
+      if (!row?.sheet) throw new Error("Fila incompleta");
 
-      const user = await User.findById(userId);
-      if (!user) throw new Error("Usuario no existe");
+      let user;
+      let isNew = false;
+      if (userId) {
+        user = await User.findById(userId);
+        if (!user) throw new Error("Usuario no existe");
+      } else {
+        // Crear usuario nuevo desde la fila del Excel
+        const name = String(row?.excelName || "").trim();
+        if (!name) throw new Error("Nombre vacío");
+        user = new User({
+          name,
+          email: makeImportEmail(name),
+          credits: 0,
+          waiverStatus: "pending",
+          profileStatus: "incomplete",
+        });
+        isNew = true;
+      }
 
       if (row.sheet === "mensualidades") {
         user.accessType = "mensualidad";
@@ -326,20 +356,26 @@ async function applyRows(rows, actor) {
       }
 
       await user.save();
-      results.updated.push({ userId: String(user._id), name: user.name, sheet: row.sheet });
+      const entry = { userId: String(user._id), name: user.name, sheet: row.sheet };
+      if (isNew) results.created.push(entry);
+      else results.updated.push(entry);
     } catch (e) {
       results.failed.push({ userId: row?.userId || null, excelName: row?.excelName || "", error: e.message });
     }
   }
 
+  const parts = [];
+  if (results.updated.length) parts.push(`${results.updated.length} actualizados`);
+  if (results.created.length) parts.push(`${results.created.length} creados (completar datos y waiver)`);
+  if (results.failed.length) parts.push(`${results.failed.length} fallidos`);
+
   const auditEvent = await logAudit({
     action: "IMPORT_XLSX",
     actor,
-    summary: `Import Excel: ${results.updated.length} usuario(s) actualizados${
-      results.failed.length ? `, ${results.failed.length} fallidos` : ""
-    }`,
+    summary: `Import Excel: ${parts.join(", ") || "sin cambios"}`,
     meta: {
       updated: results.updated,
+      created: results.created,
       failed: results.failed,
     },
   });

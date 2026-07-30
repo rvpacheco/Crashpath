@@ -1793,8 +1793,15 @@ function AdminPanel() {
       const res = await axios.post("/api/admin/import-xlsx", { mode: "preview", file: b64 });
       const rows = res.data?.rows || [];
       setImportPreview(res.data);
-      // Antibobos: solo los match exactos vienen marcados por defecto.
-      setImportSelected(new Set(rows.filter((r) => r.matchType === "exact").map((r) => r.id)));
+      // Antibobos: exactos y nuevos (a crear) vienen marcados; los fuzzy
+      // desmarcados para que el admin los revise uno a uno.
+      setImportSelected(
+        new Set(
+          rows
+            .filter((r) => r.matchType === "exact" || r.matchType === "none")
+            .map((r) => r.id)
+        )
+      );
       setShowImportModal(true);
     } catch (err) {
       setUiError(err?.response?.data?.message || "No se pudo leer el Excel.");
@@ -1815,9 +1822,9 @@ function AdminPanel() {
   const applyImport = async () => {
     if (!importPreview) return;
     const rows = importPreview.rows
-      .filter((r) => importSelected.has(r.id) && r.user)
+      .filter((r) => importSelected.has(r.id) && (r.user || r.matchType === "none"))
       .map((r) => ({
-        userId: r.user._id,
+        userId: r.user?._id || null, // null => se crea el usuario
         sheet: r.sheet,
         excelName: r.excelName,
         proposed: r.proposed,
@@ -1902,7 +1909,7 @@ function AdminPanel() {
     if (t === "exact") return <Badge $success>✓ exacto</Badge>;
     if (t === "fuzzy") return <Badge>≈ revisar</Badge>;
     if (t === "ambiguous") return <Badge $danger>ambiguo</Badge>;
-    return <Badge $danger>no encontrado</Badge>;
+    return <Badge>🆕 se creará</Badge>;
   };
 
   const handleDeleteUser = async (user) => {
@@ -2062,6 +2069,7 @@ function AdminPanel() {
     setEditSuccess("");
     setEditForm({
       name: user.name || "",
+      email: user.email || "",
       phone: user.phone || "",
       documentType: user.documentType || "CC",
       documentNumber: user.documentNumber || "",
@@ -3050,6 +3058,21 @@ function AdminPanel() {
                       <Input value={editForm.name} onChange={(e) => setEditForm(s => ({ ...s, name: e.target.value }))} />
                     </div>
                     <div style={{ marginBottom: spacing.md }}>
+                      <div style={{ fontSize: fontSize.sm, fontWeight: 600, marginBottom: spacing.xs }}>Email</div>
+                      <Input
+                        type="email"
+                        value={editForm.email}
+                        onChange={(e) => setEditForm(s => ({ ...s, email: e.target.value }))}
+                        placeholder="email real de Google"
+                      />
+                      {String(editForm.email || "").endsWith("@crashpath.local") && (
+                        <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: spacing.xs }}>
+                          ⚠️ Email temporal — pon el email real de Google para que esta persona
+                          pueda iniciar sesión y conectar con esta cuenta.
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ marginBottom: spacing.md }}>
                       <div style={{ fontSize: fontSize.sm, fontWeight: 600, marginBottom: spacing.xs }}>Teléfono</div>
                       <Input value={editForm.phone} onChange={(e) => setEditForm(s => ({ ...s, phone: e.target.value }))} />
                     </div>
@@ -3250,8 +3273,16 @@ function AdminPanel() {
             {importResult ? (
               <>
                 <div style={{ fontWeight: 600, marginBottom: spacing.md }}>
-                  ✅ {importResult.updated?.length || 0} usuario(s) actualizados.
+                  ✅ {importResult.updated?.length || 0} actualizados
+                  {importResult.created?.length > 0 && ` · 🆕 ${importResult.created.length} creados`}
                 </div>
+                {importResult.created?.length > 0 && (
+                  <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
+                    Los creados quedaron con email temporal, waiver pendiente y perfil
+                    incompleto. Cuando cada persona vuelva: Perfil → ✏️ editar (email real
+                    de Google + datos) y firmar el waiver.
+                  </div>
+                )}
                 {importResult.failed?.length > 0 && (
                   <ErrorBox style={{ marginBottom: spacing.md }}>
                     ⚠️ {importResult.failed.length} fila(s) fallaron:
@@ -3272,11 +3303,13 @@ function AdminPanel() {
                   <Badge $success>{importPreview.summary.exact} exactos</Badge>
                   <Badge>{importPreview.summary.fuzzy} por revisar</Badge>
                   <Badge $danger>{importPreview.summary.ambiguous} ambiguos</Badge>
-                  <Badge $danger>{importPreview.summary.none} no encontrados</Badge>
+                  <Badge>{importPreview.summary.none} nuevos por crear</Badge>
                 </div>
                 <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
                   Nada se guarda hasta que confirmes. Los "≈ revisar" vienen desmarcados:
-                  márcalos solo si el emparejamiento es correcto.
+                  márcalos solo si el emparejamiento es correcto. Los "🆕 se creará" entran
+                  como usuarios nuevos con email temporal, waiver pendiente y perfil
+                  incompleto — se completan cuando la persona vuelva.
                 </div>
 
                 <div style={{ maxHeight: "380px", overflowY: "auto", border: `1px solid ${palette.border}`, borderRadius: borderRadius.sm }}>
@@ -3289,13 +3322,13 @@ function AdminPanel() {
                         alignItems: "flex-start",
                         padding: spacing.sm,
                         borderBottom: `1px solid ${palette.border}`,
-                        opacity: r.user ? 1 : 0.65,
+                        opacity: r.matchType === "ambiguous" ? 0.65 : 1,
                       }}
                     >
                       <input
                         type="checkbox"
                         style={{ marginTop: 3 }}
-                        disabled={!r.user || importBusy}
+                        disabled={r.matchType === "ambiguous" || importBusy}
                         checked={importSelected.has(r.id)}
                         onChange={() => toggleImportRow(r.id)}
                       />
@@ -3317,7 +3350,8 @@ function AdminPanel() {
                         )}
                         {r.matchType === "none" && (
                           <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: 2 }}>
-                            No existe en el panel — créalo a mano con su email real.
+                            🆕 Se creará: {describeImportProposed(r)} · email temporal,
+                            waiver y datos pendientes (completar cuando vuelva).
                           </div>
                         )}
                         {r.user && (
@@ -3340,7 +3374,12 @@ function AdminPanel() {
                 <ActionButtons>
                   <Button
                     onClick={applyImport}
-                    disabled={importBusy || [...importSelected].filter((id) => importPreview.rows.find((r) => r.id === id && r.user)).length === 0}
+                    disabled={
+                      importBusy ||
+                      [...importSelected].filter((id) =>
+                        importPreview.rows.find((r) => r.id === id && (r.user || r.matchType === "none"))
+                      ).length === 0
+                    }
                   >
                     {importBusy
                       ? "Aplicando..."
