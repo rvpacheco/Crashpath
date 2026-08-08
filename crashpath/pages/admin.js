@@ -7,6 +7,7 @@ import axios from "axios";
 import styled, { createGlobalStyle } from "styled-components";
 import { Eye, EyeOff } from "lucide-react";
 import { getWaiverSnapshot, waiverToParagraphs } from "@/lib/waiver";
+import { addMonthsToDay, mensualidadDayHint, todayBogotaDay } from "@/lib/dates";
 import { PrivacyProvider, usePrivacy } from "@/components/PrivacyContext";
 
 // ============================================
@@ -1085,7 +1086,7 @@ const INITIAL_FORM = {
 // ============================================
 // SUBCOMPONENTES
 // ============================================
-function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, busy }) {
+function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMensualidad, busy }) {
   if (user.accessType === "mensualidad") {
     const { active, label } = getMensualidadStatus(user.mensualidad);
     return (
@@ -1095,6 +1096,9 @@ function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, busy }) 
         </Badge>
         <Button $variant="secondary" $small onClick={() => onRenovar(user._id)} disabled={busy}>
           Renovar
+        </Button>
+        <Button $variant="secondary" $small onClick={() => onEditMensualidad(user)} disabled={busy}>
+          📅 Fechas
         </Button>
         <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
           Cambiar
@@ -1352,8 +1356,10 @@ function AdminPanel() {
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
 
-  // Editor de fechas de tiquetera
+  // Editor de fechas (mismo modal para tiquetera y mensualidad; `datesMode`
+  // decide labels, atajos y endpoint)
   const [showTiqueteraModal, setShowTiqueteraModal] = useState(false);
+  const [datesMode, setDatesMode] = useState("tiquetera");
   const [tiqueteraUser, setTiqueteraUser] = useState(null);
   const [tiqueteraStart, setTiqueteraStart] = useState("");
   const [tiqueteraEnd, setTiqueteraEnd] = useState("");
@@ -1850,9 +1856,19 @@ function AdminPanel() {
 
   const openTiqueteraDates = (user) => {
     setUiError("");
+    setDatesMode("tiquetera");
     setTiqueteraUser(user);
     setTiqueteraStart(toBogotaDay(user.tiquetera?.startDate));
     setTiqueteraEnd(toBogotaDay(user.tiquetera?.endDate));
+    setShowTiqueteraModal(true);
+  };
+
+  const openMensualidadDates = (user) => {
+    setUiError("");
+    setDatesMode("mensualidad");
+    setTiqueteraUser(user);
+    setTiqueteraStart(toBogotaDay(user.mensualidad?.startDate));
+    setTiqueteraEnd(toBogotaDay(user.mensualidad?.endDate));
     setShowTiqueteraModal(true);
   };
 
@@ -1865,7 +1881,11 @@ function AdminPanel() {
     setBusy(true);
     setUiError("");
     try {
-      const res = await axios.post("/api/admin/users/tiquetera-dates", {
+      const endpoint =
+        datesMode === "mensualidad"
+          ? "/api/admin/users/mensualidad-dates"
+          : "/api/admin/users/tiquetera-dates";
+      const res = await axios.post(endpoint, {
         userId: tiqueteraUser._id,
         startDate: tiqueteraStart || undefined,
         endDate: tiqueteraEnd || undefined,
@@ -2680,6 +2700,7 @@ function AdminPanel() {
                         onRenovar={handleRenovar}
                         onChangeAccess={openAccessModal}
                         onEditTiquetera={openTiqueteraDates}
+                        onEditMensualidad={openMensualidadDates}
                         busy={busy}
                       />
                       <div style={{ marginTop: spacing.sm }}>
@@ -2744,6 +2765,7 @@ function AdminPanel() {
                               onRenovar={handleRenovar}
                               onChangeAccess={openAccessModal}
                               onEditTiquetera={openTiqueteraDates}
+                              onEditMensualidad={openMensualidadDates}
                               busy={busy}
                             />
                           </Td>
@@ -3211,21 +3233,40 @@ function AdminPanel() {
           </ModalContent>
         </Modal>
 
-        {/* Editor de fechas de tiquetera */}
+        {/* Editor de fechas — tiquetera o mensualidad según datesMode */}
         <Overlay $show={showTiqueteraModal} onClick={() => !busy && setShowTiqueteraModal(false)} />
         <Modal $show={showTiqueteraModal}>
           <ModalContent>
             <ModalHeader>
-              <ModalTitle>Fechas de tiquetera</ModalTitle>
+              <ModalTitle>
+                {datesMode === "mensualidad" ? "Fechas de mensualidad" : "Fechas de tiquetera"}
+              </ModalTitle>
             </ModalHeader>
             {tiqueteraUser && (
               <>
                 <div style={{ fontWeight: 600 }}>{maskName(tiqueteraUser.name) || "Sin nombre"}</div>
                 <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
-                  {maskEmail(tiqueteraUser.email)} · {tiqueteraUser.credits ?? 0} créditos
+                  {maskEmail(tiqueteraUser.email)}
+                  {datesMode === "mensualidad"
+                    ? ` · ${getMensualidadStatus(tiqueteraUser.mensualidad).label}`
+                    : ` · ${tiqueteraUser.credits ?? 0} créditos`}
                 </div>
+                {datesMode === "mensualidad" && (
+                  <div
+                    style={{
+                      fontSize: fontSize.sm,
+                      color: palette.textLight,
+                      marginBottom: spacing.md,
+                    }}
+                  >
+                    Corrección manual. Para registrar una venta o renovación usa{" "}
+                    <strong>Renovar</strong>.
+                  </div>
+                )}
                 <div style={{ marginBottom: spacing.md }}>
-                  <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>Fecha de compra</div>
+                  <div style={{ fontWeight: 600, marginBottom: spacing.xs }}>
+                    {datesMode === "mensualidad" ? "Inicio de vigencia" : "Fecha de compra"}
+                  </div>
                   <Input
                     type="date"
                     value={tiqueteraStart}
@@ -3240,28 +3281,70 @@ function AdminPanel() {
                     onChange={(e) => setTiqueteraEnd(e.target.value)}
                   />
                   <div style={{ display: "flex", gap: spacing.sm, marginTop: spacing.sm, flexWrap: "wrap" }}>
-                    <Button
-                      $variant="secondary"
-                      $small
-                      onClick={() => {
-                        const base = tiqueteraStart ? new Date(`${tiqueteraStart}T12:00:00`) : new Date();
-                        setTiqueteraEnd(new Date(base.getTime() + 60 * 86400000).toISOString().slice(0, 10));
-                      }}
-                    >
-                      +60 días
-                    </Button>
-                    <Button
-                      $variant="secondary"
-                      $small
-                      onClick={() => {
-                        const base = tiqueteraStart ? new Date(`${tiqueteraStart}T12:00:00`) : new Date();
-                        setTiqueteraEnd(new Date(base.getTime() + 90 * 86400000).toISOString().slice(0, 10));
-                      }}
-                    >
-                      +90 días
-                    </Button>
+                    {datesMode === "mensualidad" ? (
+                      <>
+                        <Button
+                          $variant="secondary"
+                          $small
+                          onClick={() =>
+                            setTiqueteraEnd(addMonthsToDay(tiqueteraStart || todayBogotaDay(), 1))
+                          }
+                        >
+                          +1 mes
+                        </Button>
+                        <Button
+                          $variant="secondary"
+                          $small
+                          onClick={() =>
+                            setTiqueteraEnd(addMonthsToDay(tiqueteraStart || todayBogotaDay(), 3))
+                          }
+                        >
+                          +3 meses
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          $variant="secondary"
+                          $small
+                          onClick={() => {
+                            const base = tiqueteraStart ? new Date(`${tiqueteraStart}T12:00:00`) : new Date();
+                            setTiqueteraEnd(new Date(base.getTime() + 60 * 86400000).toISOString().slice(0, 10));
+                          }}
+                        >
+                          +60 días
+                        </Button>
+                        <Button
+                          $variant="secondary"
+                          $small
+                          onClick={() => {
+                            const base = tiqueteraStart ? new Date(`${tiqueteraStart}T12:00:00`) : new Date();
+                            setTiqueteraEnd(new Date(base.getTime() + 90 * 86400000).toISOString().slice(0, 10));
+                          }}
+                        >
+                          +90 días
+                        </Button>
+                      </>
+                    )}
                   </div>
+                  {datesMode === "mensualidad" && (() => {
+                    const hint = mensualidadDayHint(tiqueteraEnd);
+                    if (!hint) return null;
+                    return (
+                      <div
+                        style={{
+                          marginTop: spacing.sm,
+                          fontSize: fontSize.sm,
+                          fontWeight: 600,
+                          color: hint.ok ? palette.success : palette.danger,
+                        }}
+                      >
+                        {hint.text}
+                      </div>
+                    );
+                  })()}
                 </div>
+                {uiError && <ErrorBox>{uiError}</ErrorBox>}
                 <ActionButtons>
                   <Button onClick={submitTiqueteraDates} disabled={busy}>
                     {busy ? "Guardando..." : "Guardar"}
