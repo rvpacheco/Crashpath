@@ -53,6 +53,14 @@ const VisitSchema = new mongoose.Schema(
     checkedOutAt: Date,
     notes: String,
 
+    // ── Visita de invitado ────────────────────────────────────────────
+    // El invitado entró con la cortesía de un socio. Se guarda plano (y no
+    // como objeto anidado) porque en Mongoose un path anidado siempre existe
+    // como {} y no sirve para preguntar "¿esta visita fue cortesía?".
+    esCortesia: { type: Boolean, default: false },
+    cortesiaHostId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    cortesiaHostName: { type: String },
+
     // ✅ auditoría por visita
     events: { type: [VisitEventSchema], default: [] },
   },
@@ -76,6 +84,38 @@ const MensualidadSchema = new mongoose.Schema(
         newEndDate: { type: Date },
       },
     ],
+  },
+  { _id: false }
+);
+
+/* -------------------- CORTESÍA (pase de invitado) -------------------- */
+/**
+ * Un socio con mensualidad o tiquetera tiene UNA cortesía para llevar a
+ * alguien. Se renueva con cada compra/renovación (no se acumula) y vence
+ * junto con el acceso. La lógica vive en lib/cortesia.js.
+ */
+const CortesiaUsoSchema = new mongoose.Schema(
+  {
+    ts: { type: Date, default: Date.now },
+
+    // El invitado queda como usuario propio (walk-in) para tener su waiver
+    // firmado y su propia visita; acá solo se guarda el vínculo.
+    guestUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    guestName: { type: String },
+    guestDocument: { type: String },
+
+    visitId: { type: mongoose.Schema.Types.ObjectId },
+    adminEmail: { type: String },
+  },
+  { _id: true }
+);
+
+const CortesiaSchema = new mongoose.Schema(
+  {
+    disponibles: { type: Number, default: 0, min: 0 },
+    otorgadaEn: { type: Date },
+    vence: { type: Date },
+    usos: { type: [CortesiaUsoSchema], default: [] },
   },
   { _id: false }
 );
@@ -125,6 +165,9 @@ const UserSchema = new mongoose.Schema(
 
     // Solo aplica si accessType === "mensualidad"
     mensualidad: { type: MensualidadSchema, default: () => ({}) },
+
+    // Pase de invitado. Aplica a las dos modalidades.
+    cortesia: { type: CortesiaSchema, default: () => ({}) },
 
     visits: { type: [VisitSchema], default: [] },
 
@@ -184,6 +227,17 @@ UserSchema.virtual("mensualidadVencida").get(function () {
   if (this.accessType !== "mensualidad") return null;
   if (!this.mensualidad?.endDate) return true;
   return new Date() > new Date(this.mensualidad.endDate);
+});
+
+// Mismo criterio que estadoCortesia() en lib/cortesia.js: hay saldo y no venció.
+// (El panel usa /api/admin/users, que va por aggregate y no trae virtuals, así
+// que allá se calcula con el helper; esto es para las rutas que sí serializan
+// el documento, como /api/user.)
+UserSchema.virtual("cortesiaDisponible").get(function () {
+  const disponibles = this.cortesia?.disponibles ?? 0;
+  if (disponibles <= 0) return false;
+  const vence = this.cortesia?.vence ? new Date(this.cortesia.vence) : null;
+  return !vence || vence >= new Date();
 });
 
 UserSchema.virtual("tiqueteraVencida").get(function () {

@@ -4,6 +4,7 @@ import User from "../../../../models/User";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
 import { logAudit } from "../../../../lib/audit";
+import { otorgarCortesia } from "../../../../lib/cortesia";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -63,14 +64,18 @@ export default async function handler(req, res) {
       newEndDate,
     });
 
+    // Renovar el mes renueva la cortesía: vuelve a 1 (no se acumula) y vence
+    // con la mensualidad.
+    otorgarCortesia(user, { vence: newEndDate, ts: now });
+
     await user.save();
 
     const auditEvent = await logAudit({
       action: "MENSUALIDAD_RENEW",
       actor: { email: session.user?.email, name: session.user?.name },
       user,
-      summary: `Mensualidad renovada +${months} mes(es) (vence ${newEndDate.toLocaleDateString("en-CA")})`,
-      meta: { months, newEndDate },
+      summary: `Mensualidad renovada +${months} mes(es) (vence ${newEndDate.toLocaleDateString("en-CA")}) · cortesía renovada`,
+      meta: { months, newEndDate, cortesia: user.cortesia?.disponibles ?? 0 },
     });
 
     return res.status(200).json({
@@ -81,6 +86,7 @@ export default async function handler(req, res) {
         endDate: user.mensualidad.endDate,
         renewals: user.mensualidad.renewals,
       },
+      cortesia: user.cortesia,
       auditEvent,
     });
   } catch (error) {

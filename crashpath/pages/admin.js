@@ -8,6 +8,7 @@ import styled, { createGlobalStyle } from "styled-components";
 import { Eye, EyeOff } from "lucide-react";
 import { getWaiverSnapshot, waiverToParagraphs } from "@/lib/waiver";
 import { addMonthsToDay, mensualidadDayHint, todayBogotaDay } from "@/lib/dates";
+import { estadoCortesia } from "@/lib/cortesia";
 import { PrivacyProvider, usePrivacy } from "@/components/PrivacyContext";
 
 // ============================================
@@ -1083,10 +1084,53 @@ const INITIAL_FORM = {
   accessType: "ticketera", mensualidadMeses: 1, esMinor: false,
 };
 
+// Invitado que entra con la cortesía de un socio. Pide lo mínimo legal
+// (identificación + contacto de emergencia); la EPS es opcional para no
+// trancar el mostrador.
+const INITIAL_GUEST = {
+  name: "", documentType: "CC", documentNumber: "", phone: "",
+  epsName: "", emergencyContactName: "", emergencyContactPhone: "",
+  esMinor: false,
+};
+
 // ============================================
 // SUBCOMPONENTES
 // ============================================
+/** Badge de la cortesía (pase de invitado). Aplica a las dos modalidades. */
+function CortesiaBadge({ user }) {
+  const st = estadoCortesia(user);
+  if (st.disponible) {
+    return (
+      <Badge $success title={st.vence ? `Vence ${formatDate(st.vence)}` : "Sin vencimiento cargado"}>
+        🎟️ Cortesía
+      </Badge>
+    );
+  }
+  if (st.vencida) return <Badge $danger>🎟️ Cortesía vencida</Badge>;
+  if (st.ultimoUso) {
+    return (
+      <Badge title={`Último invitado: ${st.ultimoUso.guestName || "—"}`}>
+        🎟️ Cortesía usada
+      </Badge>
+    );
+  }
+  return null;
+}
+
 function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMensualidad, busy }) {
+  // Invitado que entró con la cortesía de un socio: no tiene modalidad propia.
+  // Sin este caso se mostraría como "Tiquetera · 0 créditos", que no es cierto.
+  if (user.userType === "walkin" && !user.accessType) {
+    return (
+      <div style={{ display: "flex", gap: spacing.sm, alignItems: "center", flexWrap: "wrap" }}>
+        <Badge>👤 Invitado</Badge>
+        <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
+          Volver socio
+        </Button>
+      </div>
+    );
+  }
+
   if (user.accessType === "mensualidad") {
     const { active, label } = getMensualidadStatus(user.mensualidad);
     return (
@@ -1094,6 +1138,7 @@ function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMe
         <Badge $success={active} $danger={!active}>
           {active ? "✓" : "✗"} {label}
         </Badge>
+        <CortesiaBadge user={user} />
         <Button $variant="secondary" $small onClick={() => onRenovar(user._id)} disabled={busy}>
           Renovar
         </Button>
@@ -1117,6 +1162,7 @@ function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMe
           {tiqVencida ? "✗ Tiquetera vencida" : `✓ Vence ${formatDate(tiqEnd)}`}
         </Badge>
       )}
+      <CortesiaBadge user={user} />
       <Button $variant="secondary" $small onClick={() => onEditTiquetera(user)} disabled={busy}>
         📅 Fechas
       </Button>
@@ -1127,7 +1173,7 @@ function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMe
   );
 }
 
-function ActionMenu({ user, onCheckin, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy }) {
+function ActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   
@@ -1152,6 +1198,9 @@ function ActionMenu({ user, onCheckin, onMoon, onViewProfile, onCredits, onHisto
         <DropdownMenu>
           <DropdownItem onClick={() => { onCheckin(user); setOpen(false); }}>
             ✓ Check-in
+          </DropdownItem>
+          <DropdownItem onClick={() => { onCortesia(user); setOpen(false); }}>
+            🎟️ Usar cortesía
           </DropdownItem>
           <DropdownItem onClick={() => { onMoon(user); setOpen(false); }}>
             🌑 MoonBoard
@@ -1180,13 +1229,14 @@ function ActionMenu({ user, onCheckin, onMoon, onViewProfile, onCredits, onHisto
 }
 
 // Componente de acciones móvil
-function MobileActionMenu({ user, onCheckin, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy }) {
+function MobileActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy }) {
   const { maskName } = usePrivacy();
   const [open, setOpen] = useState(false);
   
   const lastVisit = user?.visits?.[0];
   const actions = [
     { icon: "✓", label: "Check-in", action: () => onCheckin(user) },
+    { icon: "🎟️", label: "Usar cortesía", action: () => onCortesia(user) },
     { icon: "🌑", label: "MoonBoard", action: () => onMoon(user) },
     { icon: "👤", label: "Ver datos", action: () => onViewProfile(user) },
     { icon: "💰", label: "Créditos", action: () => onCredits(user._id) },
@@ -1390,6 +1440,13 @@ function AdminPanel() {
   const [waiverUser, setWaiverUser] = useState(null);
   const [checkinUser, setCheckinUser] = useState(null);
   const [checkinSuccess, setCheckinSuccess] = useState("");
+
+  // Cortesía (pase de invitado): paso 1 datos del invitado, paso 2 su waiver
+  const [showCortesiaModal, setShowCortesiaModal] = useState(false);
+  const [cortesiaHost, setCortesiaHost] = useState(null);
+  const [cortesiaStep, setCortesiaStep] = useState(1);
+  const [cortesiaForm, setCortesiaForm] = useState(INITIAL_GUEST);
+  const [cortesiaSuccess, setCortesiaSuccess] = useState("");
   
   // Edit visit
   const [editingVisit, setEditingVisit] = useState(null);
@@ -1448,16 +1505,24 @@ function AdminPanel() {
     participantName: (waiverUser?.name || "").trim(),
   }), [waiverCityLine, waiverUser?.esMinor, waiverUser?.name]);
 
+  const waiverSnapshotGuest = useMemo(() => getWaiverSnapshot({
+    cityLine: waiverCityLine,
+    isMinor: !!cortesiaForm.esMinor,
+    participantName: (cortesiaForm.name || "").trim(),
+  }), [waiverCityLine, cortesiaForm.esMinor, cortesiaForm.name]);
+
   // Body scroll lock
   useEffect(() => {
     const open = showCreditsModal || showProfileModal || showNewUserModal || showRenovarModal ||
       showCheckinModal || showHistoryModal || showWaiverModal || showAccessModal ||
-      showAttendanceModal || showMoonModal || showCancelMoonModal || showEditVisitModal || showCheckinsByDateModal;
+      showAttendanceModal || showMoonModal || showCancelMoonModal || showEditVisitModal ||
+      showCheckinsByDateModal || showCortesiaModal;
     document.body.classList.toggle("modal-open", open);
     return () => document.body.classList.remove("modal-open");
   }, [showCreditsModal, showProfileModal, showNewUserModal, showRenovarModal,
     showCheckinModal, showHistoryModal, showWaiverModal, showAccessModal,
-    showAttendanceModal, showMoonModal, showCancelMoonModal, showEditVisitModal, showCheckinsByDateModal]);
+    showAttendanceModal, showMoonModal, showCancelMoonModal, showEditVisitModal,
+    showCheckinsByDateModal, showCortesiaModal]);
 
   // Data fetching
   const fetchUsers = useCallback(async () => {
@@ -1604,6 +1669,9 @@ function AdminPanel() {
         break;
       case "checkinHoy":
         result = result.filter((u) => hasCheckedInToday(u));
+        break;
+      case "conCortesia":
+        result = result.filter((u) => estadoCortesia(u).disponible);
         break;
       default:
         break;
@@ -1986,6 +2054,102 @@ function AdminPanel() {
       await fetchUsers();
     } catch (error) {
       setUiError(error?.response?.data?.message || "No se pudo registrar el check-in.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── Cortesía (pase de invitado) ────────────────────────────────────
+  const openCortesia = (user) => {
+    setUiError("");
+    setCortesiaSuccess("");
+    setCortesiaHost(user);
+    setCortesiaForm(INITIAL_GUEST);
+    setCortesiaStep(1);
+    hasInkRef.current = false;
+    setWaiverAccepted(false);
+    setShowCortesiaModal(true);
+  };
+
+  const closeCortesia = () => {
+    if (busy) return;
+    setShowCortesiaModal(false);
+    setCortesiaHost(null);
+    setCortesiaStep(1);
+    setCortesiaSuccess("");
+    setUiError("");
+  };
+
+  // Paso 1 → 2: solo valida en el cliente y monta el canvas. El invitado no se
+  // crea hasta el submit final, así el waiver y el check-in van juntos.
+  const cortesiaNextStep = () => {
+    setUiError("");
+    const f = cortesiaForm;
+    if (!f.name.trim()) return setUiError("El nombre del invitado es obligatorio.");
+    if (!f.documentNumber.trim()) return setUiError("El documento del invitado es obligatorio.");
+    if (!f.phone.trim()) return setUiError("El teléfono del invitado es obligatorio.");
+    if (!f.emergencyContactName.trim() || !f.emergencyContactPhone.trim())
+      return setUiError("Completa el contacto de emergencia del invitado.");
+    setCortesiaStep(2);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      resizeCanvasToDevicePixels();
+      clearSignature();
+    }));
+  };
+
+  const submitCortesia = async () => {
+    setUiError("");
+    if (!cortesiaHost?._id) return;
+    if (!waiverAccepted) return setUiError("El invitado debe aceptar el waiver.");
+    const canvas = canvasRef.current;
+    if (!canvas) return setUiError("Canvas no disponible.");
+    if (isCanvasBlank(canvas) || !hasInkRef.current) return setUiError("La firma es obligatoria.");
+
+    const { text: waiverTextSnapshot, version } = waiverSnapshotGuest;
+    const nombre = cortesiaForm.name.trim();
+
+    setBusy(true);
+    try {
+      const res = await axios.post("/api/admin/cortesia/usar", {
+        hostId: cortesiaHost._id,
+        guest: {
+          ...cortesiaForm,
+          name: nombre,
+          documentType: normalizeDocType(cortesiaForm.documentType),
+        },
+        waiver: {
+          version,
+          waiverTextSnapshot,
+          signatureImageUrl: exportSignatureDataUrl(),
+          signatureText: cortesiaForm.esMinor ? `Representante legal de ${nombre}` : nombre,
+        },
+      });
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      setCortesiaSuccess(`✅ ${nombre} quedó con check-in como invitado de ${cortesiaHost.name}.`);
+      await fetchUsers();
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudo registrar la cortesía.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Otorgar/quitar a mano: para los socios que ya venían con tiquetera vigente
+  // (el automático solo dispara en la próxima compra) y para corregir errores.
+  const setCortesiaManual = async (accion) => {
+    setUiError("");
+    if (!cortesiaHost?._id) return;
+    setBusy(true);
+    try {
+      const res = await axios.post("/api/admin/cortesia/set", {
+        userId: cortesiaHost._id,
+        accion,
+      });
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      setCortesiaHost((h) => (h ? { ...h, cortesia: res.data?.cortesia } : h));
+      await fetchUsers();
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudo actualizar la cortesía.");
     } finally {
       setBusy(false);
     }
@@ -2463,7 +2627,8 @@ function AdminPanel() {
     const sinCreditos = users.filter((u) => u?.accessType === "ticketera" && (u?.credits ?? 0) <= 0).length;
     const menores = users.filter((u) => !!u?.esMinor).length;
     const checkinHoy = users.filter((u) => hasCheckedInToday(u)).length;
-    return { total, waiverPend, mensualidadVencida, sinCreditos, menores, checkinHoy };
+    const conCortesia = users.filter((u) => estadoCortesia(u).disponible).length;
+    return { total, waiverPend, mensualidadVencida, sinCreditos, menores, checkinHoy, conCortesia };
   }, [users]);
 
   const currentMoonDay = moonDays[moonSelectedDay];
@@ -2658,6 +2823,9 @@ function AdminPanel() {
           <FilterChip $active={quickFilter === "checkinHoy"} onClick={() => setQuickFilter("checkinHoy")}>
             Check-in hoy · {counts.checkinHoy}
           </FilterChip>
+          <FilterChip $active={quickFilter === "conCortesia"} onClick={() => setQuickFilter("conCortesia")}>
+            Con cortesía · {counts.conCortesia}
+          </FilterChip>
         </FiltersBar>
 
         {uiError && <div style={{ padding: `0 ${spacing.xl}` }}><ErrorBox>{uiError}</ErrorBox></div>}
@@ -2707,6 +2875,7 @@ function AdminPanel() {
                         <MobileActionMenu
                           user={user}
                           onCheckin={handleCheckin}
+                          onCortesia={openCortesia}
                           onMoon={openMoonModal}
                           onViewProfile={handleViewProfile}
                           onCredits={handleAddCredits}
@@ -2788,6 +2957,7 @@ function AdminPanel() {
                             <ActionMenu
                               user={user}
                               onCheckin={handleCheckin}
+                              onCortesia={openCortesia}
                               onMoon={openMoonModal}
                               onViewProfile={handleViewProfile}
                               onCredits={handleAddCredits}
@@ -2881,11 +3051,15 @@ function AdminPanel() {
                   }}>
                     <div>
                       <div style={{ fontWeight: 500 }}>{maskName(checkin.userName)}</div>
-                      <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{maskEmail(checkin.userEmail)}</div>
+                      <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>
+                        {checkin.esCortesia
+                          ? `🎟️ Invitado de ${maskName(checkin.cortesiaHostName) || "un socio"}`
+                          : maskEmail(checkin.userEmail)}
+                      </div>
                     </div>
                     <div style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
                       <Badge $success={checkin.accessType === "mensualidad"}>
-                        {checkin.accessType === "mensualidad" ? "Mens" : "Tiq"}
+                        {checkin.esCortesia ? "Cortesía" : checkin.accessType === "mensualidad" ? "Mens" : "Tiq"}
                       </Badge>
                       <span style={{ fontSize: fontSize.sm, color: palette.textLight }}>
                         {formatCheckinTime(checkin.time)}
@@ -2999,6 +3173,145 @@ function AdminPanel() {
             </ActionButtons>
           </ModalContent>
         </Modal>
+
+        {/* Cortesía Modal — el invitado entra con el pase del socio.
+            Paso 1: sus datos. Paso 2: su waiver firmado + check-in. */}
+        {showCortesiaModal && cortesiaHost && (() => {
+          const st = estadoCortesia(cortesiaHost);
+          return (
+            <>
+              <Overlay $show onClick={() => !busy && closeCortesia()} />
+              <Modal $show>
+                <ModalContent>
+                  <ModalHeader>
+                    <ModalTitle>
+                      🎟️ {cortesiaStep === 1 ? "Usar cortesía" : "Waiver del invitado"}
+                    </ModalTitle>
+                  </ModalHeader>
+
+                  <div style={{ fontWeight: 600 }}>{maskName(cortesiaHost.name)}</div>
+                  <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
+                    {st.disponible
+                      ? `Cortesía disponible${st.vence ? ` · vence ${formatDate(st.vence)}` : ""}`
+                      : st.vencida
+                        ? "Cortesía vencida"
+                        : st.ultimoUso
+                          ? `Ya la usó el ${formatDate(st.ultimoUso.ts)} con ${st.ultimoUso.guestName || "un invitado"}`
+                          : "Sin cortesía"}
+                  </div>
+
+                  {cortesiaSuccess ? (
+                    <>
+                      <SuccessBox>{cortesiaSuccess}</SuccessBox>
+                      <ActionButtons>
+                        <Button $variant="secondary" onClick={closeCortesia}>Cerrar</Button>
+                      </ActionButtons>
+                    </>
+                  ) : !st.disponible ? (
+                    <>
+                      <ErrorBox>
+                        {st.vencida
+                          ? "⚠️ La cortesía venció con su tiquetera/mensualidad."
+                          : "⚠️ Este socio no tiene cortesía disponible."}
+                      </ErrorBox>
+                      <p style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
+                        Se renueva sola al renovar la mensualidad o cargar créditos. Si ya
+                        compró y no aparece, se la puedes dar a mano.
+                      </p>
+                      {uiError && <ErrorBox>{uiError}</ErrorBox>}
+                      <ActionButtons>
+                        <Button onClick={() => setCortesiaManual("otorgar")} disabled={busy}>
+                          {busy ? "Guardando..." : "Otorgar cortesía"}
+                        </Button>
+                        <Button $variant="secondary" onClick={closeCortesia} disabled={busy}>Cancelar</Button>
+                      </ActionButtons>
+                    </>
+                  ) : cortesiaStep === 1 ? (
+                    <>
+                      <p style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
+                        El invitado queda con su propia ficha, su waiver firmado y su check-in
+                        del día. Al confirmar se gasta la cortesía del socio.
+                      </p>
+                      <Input placeholder="Nombre completo del invitado" value={cortesiaForm.name}
+                        onChange={(e) => setCortesiaForm(s => ({ ...s, name: e.target.value }))} />
+                      <div style={{ display: "flex", gap: spacing.sm }}>
+                        <Select value={cortesiaForm.documentType} style={{ width: "80px" }}
+                          onChange={(e) => setCortesiaForm(s => ({ ...s, documentType: e.target.value }))}>
+                          {["CC", "CE", "TI", "PP", "NIT", "OTRO"].map(t => <option key={t} value={t}>{t}</option>)}
+                        </Select>
+                        <Input placeholder="Número Documento" value={cortesiaForm.documentNumber} style={{ flex: 1 }}
+                          onChange={(e) => setCortesiaForm(s => ({ ...s, documentNumber: e.target.value }))} />
+                      </div>
+                      <Input placeholder="Teléfono" value={cortesiaForm.phone}
+                        onChange={(e) => setCortesiaForm(s => ({ ...s, phone: e.target.value }))} />
+                      <Input placeholder="EPS (opcional)" value={cortesiaForm.epsName}
+                        onChange={(e) => setCortesiaForm(s => ({ ...s, epsName: e.target.value }))} />
+                      <Input placeholder="Contacto Emergencia (Nombre)" value={cortesiaForm.emergencyContactName}
+                        onChange={(e) => setCortesiaForm(s => ({ ...s, emergencyContactName: e.target.value }))} />
+                      <Input placeholder="Contacto Emergencia (Teléfono)" value={cortesiaForm.emergencyContactPhone}
+                        onChange={(e) => setCortesiaForm(s => ({ ...s, emergencyContactPhone: e.target.value }))} />
+                      <RadioRow>
+                        <label><input type="radio" checked={!cortesiaForm.esMinor}
+                          onChange={() => setCortesiaForm(s => ({ ...s, esMinor: false }))} /> Mayor de edad</label>
+                        <label><input type="radio" checked={cortesiaForm.esMinor}
+                          onChange={() => setCortesiaForm(s => ({ ...s, esMinor: true }))} /> Menor de edad</label>
+                      </RadioRow>
+                      {uiError && <ErrorBox>{uiError}</ErrorBox>}
+                      <ActionButtons>
+                        <Button onClick={cortesiaNextStep} disabled={busy}>Continuar</Button>
+                        <Button $variant="secondary" onClick={closeCortesia} disabled={busy}>Cancelar</Button>
+                      </ActionButtons>
+                      {/* Escape hatch: cortesía otorgada por error (ajuste de
+                          créditos que era corrección, socio equivocado, etc.) */}
+                      <div style={{ marginTop: spacing.md, textAlign: "center" }}>
+                        <Button $variant="secondary" $small onClick={() => setCortesiaManual("quitar")} disabled={busy}>
+                          {busy ? "Quitando..." : "Quitar esta cortesía"}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <WaiverBox>
+                        {waiverToParagraphs(waiverSnapshotGuest.text).map((p, idx) => (
+                          <p key={idx} style={{ marginBottom: spacing.md }}>{p}</p>
+                        ))}
+                      </WaiverBox>
+                      <CheckboxRow>
+                        <input type="checkbox" checked={waiverAccepted}
+                          onChange={(e) => setWaiverAccepted(e.target.checked)} />
+                        <span>
+                          {cortesiaForm.esMinor
+                            ? "Acepto el consentimiento como representante legal del menor"
+                            : "Acepto el consentimiento"}
+                        </span>
+                      </CheckboxRow>
+                      <SigCanvas ref={canvasRef} onMouseDown={startDraw} onMouseMove={moveDraw} onMouseUp={endDraw}
+                        onMouseLeave={endDraw} onTouchStart={startDraw} onTouchMove={moveDraw} onTouchEnd={endDraw} />
+                      <SigRow>
+                        <span style={{ fontSize: fontSize.sm, color: palette.textLight }}>
+                          Firmando como: <strong>
+                            {cortesiaForm.esMinor
+                              ? `Representante legal de ${cortesiaForm.name || "—"}`
+                              : cortesiaForm.name || "—"}
+                          </strong>
+                        </span>
+                        <Button $variant="secondary" $small type="button"
+                          onClick={() => { setUiError(""); clearSignature(); }}>Limpiar</Button>
+                      </SigRow>
+                      {uiError && <ErrorBox>{uiError}</ErrorBox>}
+                      <ActionButtons>
+                        <Button onClick={submitCortesia} disabled={busy}>
+                          {busy ? "Registrando..." : "✓ Firmar y hacer check-in"}
+                        </Button>
+                        <Button $variant="secondary" onClick={() => setCortesiaStep(1)} disabled={busy}>Atrás</Button>
+                      </ActionButtons>
+                    </>
+                  )}
+                </ModalContent>
+              </Modal>
+            </>
+          );
+        })()}
 
         {/* Renovar Modal */}
         <Overlay $show={showRenovarModal} onClick={() => !busy && setShowRenovarModal(false)} />
@@ -3218,6 +3531,7 @@ function AdminPanel() {
                       </div>
                       <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: spacing.xs }}>
                         {v.createdBy === "admin" ? "Registrado por admin" : "Auto-registro"}
+                        {v.esCortesia && ` · 🎟️ cortesía de ${v.cortesiaHostName || "un socio"}`}
                       </div>
                       <div style={{ marginTop: spacing.xs }}>
                         <Button $variant="secondary" $small onClick={() => handleEditVisit(historyUser, v)}>✏️ Editar</Button>

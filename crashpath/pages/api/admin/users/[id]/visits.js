@@ -36,6 +36,8 @@ export default async function handler(req, res) {
     checkedInAt: v.checkedInAt || null,
     checkedOutAt: v.checkedOutAt || null,
     notes: v.notes || "",
+    esCortesia: !!v.esCortesia,
+    cortesiaHostName: v.cortesiaHostName || null,
   }));
 
   return res.status(200).json({

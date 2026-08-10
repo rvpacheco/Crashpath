@@ -7,6 +7,7 @@ import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { isAdminRequest } from "../../auth/[...nextauth]";
 import { logAudit } from "../../../../lib/audit";
+import { sincronizarVencimiento } from "../../../../lib/cortesia";
 
 function parseDay(v) {
   if (!v) return null;
@@ -67,6 +68,10 @@ export default async function handler(req, res) {
       endDate: endDate || user.tiquetera?.endDate,
       totalUses: user.tiquetera?.totalUses || 8,
     };
+
+    // La cortesía vence con la tiquetera: si se corre el vencimiento, se corre
+    // con él. Solo si todavía tiene saldo (no revive una cortesía ya usada).
+    sincronizarVencimiento(user, user.tiquetera.endDate);
 
     await user.save();
 

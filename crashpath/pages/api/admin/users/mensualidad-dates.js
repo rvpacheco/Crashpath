@@ -23,6 +23,7 @@ import User from "../../../../models/User";
 import { isAdminRequest } from "../../auth/[...nextauth]";
 import { logAudit } from "../../../../lib/audit";
 import { parseDayEdge } from "../../../../lib/dates";
+import { sincronizarVencimiento } from "../../../../lib/cortesia";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -87,6 +88,10 @@ export default async function handler(req, res) {
     // ya pasó, nunca la vuelve a prender. Al corregir una fecha a futuro hay
     // que reactivarla acá o el flag queda desfasado del vencimiento real.
     user.mensualidad.active = !!nextEnd && new Date(nextEnd) > new Date();
+
+    // La cortesía vence con el acceso: si se corre el vencimiento, se corre con
+    // él. Solo si todavía tiene saldo (no revive una cortesía ya usada).
+    sincronizarVencimiento(user, user.mensualidad.endDate);
 
     await user.save();
 

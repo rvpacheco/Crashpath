@@ -3,6 +3,7 @@ import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { logAudit } from "../../../../lib/audit";
+import { otorgarCortesia } from "../../../../lib/cortesia";
 
 const secret = process.env.NEXTAUTH_SECRET;
 
@@ -78,6 +79,9 @@ export default async function handler(req, res) {
         ],
       };
 
+      // Vender/activar mensualidad renueva la cortesía (vuelve a 1, vence con el mes)
+      otorgarCortesia(user, { vence: endDate, ts: now });
+
       // ojo: NO tocamos créditos aquí (los de ticketera los puedes dejar como saldo guardado)
     }
 
@@ -102,6 +106,9 @@ export default async function handler(req, res) {
           const startDate = new Date();
           const endDate = new Date(startDate.getTime() + 60 * 86400000);
           user.tiquetera = { startDate, endDate, totalUses: user.credits };
+
+          // Tiquetera nueva => cortesía nueva (vence con la tiquetera)
+          otorgarCortesia(user, { vence: endDate, ts: startDate });
         }
       }
 

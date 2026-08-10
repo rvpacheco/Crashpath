@@ -63,9 +63,15 @@ export default async function handler(req, res) {
     const now = new Date();
 
     let mensualidadData = undefined;
+    // Cortesía: la mensualidad arranca vigente, así que el socio ya tiene su
+    // pase de invitado. La tiquetera se crea en 0 créditos (se cargan aparte
+    // con /api/admin/adjust-credits) y es ahí donde se otorga la cortesía.
+    let cortesiaData = undefined;
     if (resolvedAccessType === "mensualidad") {
       const endDate = new Date(now);
       endDate.setMonth(endDate.getMonth() + mensualidadMeses);
+
+      cortesiaData = { disponibles: 1, otorgadaEn: now, vence: endDate, usos: [] };
 
       mensualidadData = {
         active: true,
@@ -97,6 +103,7 @@ export default async function handler(req, res) {
       accessType: resolvedAccessType,
       credits: resolvedAccessType === "ticketera" ? 0 : undefined,
       mensualidad: mensualidadData,
+      cortesia: cortesiaData,
       waiverStatus: "pending",
     });
 

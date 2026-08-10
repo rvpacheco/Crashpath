@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     const users = await User.find({
       "visits.date": { $gte: startDate, $lte: endDate },
       "visits.status": { $in: ["checked_in", "registered"] }
-    }).select("name email accessType visits");
+    }).select("name email accessType userType visits");
     
     const checkins = [];
     users.forEach(user => {
@@ -46,6 +46,10 @@ export default async function handler(req, res) {
               userName: user.name,
               userEmail: user.email,
               accessType: user.accessType,
+              // Invitado que entró con la cortesía de un socio: no tiene
+              // modalidad propia, así que la UI lo etiqueta aparte.
+              esCortesia: !!visit.esCortesia,
+              cortesiaHostName: visit.cortesiaHostName || null,
               time: visit.checkedInAt || visit.date,
               status: visit.status
             });
