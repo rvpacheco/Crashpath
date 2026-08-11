@@ -16,6 +16,13 @@ export default async function handler(req, res) {
     const events = await AuditLog.find(filter).sort({ ts: -1 }).limit(limit).lean();
     res.status(200).json({ events });
   } catch (e) {
-    res.status(500).json({ message: "No se pudo cargar auditoría." });
+    // isAdminRequest responde 401 y DESPUÉS lanza. Sin el guardia, este catch
+    // escribe encima de una respuesta ya cerrada: al cliente igual le llega el
+    // 401, pero Next registra un 500 que nunca existió y ese ruido tapa los
+    // 500 de verdad en los logs. Mismo patrón que /api/admin/users.
+    console.error("Error cargando auditoría:", e.message);
+    if (!res.headersSent) {
+      res.status(500).json({ message: "No se pudo cargar auditoría." });
+    }
   }
 }
