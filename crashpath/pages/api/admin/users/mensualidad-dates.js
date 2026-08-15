@@ -20,7 +20,7 @@
 // /api/admin/mensualidad/renovar, que es lo único que escribe en `renewals`.
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
-import { isAdminRequest } from "../../auth/[...nextauth]";
+import { requireAuth, PERMISOS } from "../../../../lib/authz";
 import { logAudit } from "../../../../lib/audit";
 import { parseDayEdge } from "../../../../lib/dates";
 import { sincronizarVencimiento } from "../../../../lib/cortesia";
@@ -32,7 +32,10 @@ export default async function handler(req, res) {
 
   let actor;
   try {
-    actor = await isAdminRequest(req, res);
+    // Solo admin: correr un vencimiento a mano regala acceso sin que quede
+    // como venta. El voluntario cobra por /mensualidad/renovar, que sí deja
+    // rastro de plata.
+    actor = await requireAuth(req, res, PERMISOS.EDITAR_FECHAS);
   } catch {
     return;
   }

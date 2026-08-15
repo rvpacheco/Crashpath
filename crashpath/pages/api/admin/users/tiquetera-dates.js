@@ -5,7 +5,7 @@
 // Bogotá (05:00Z), la misma convención del import y del sistema moon.
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
-import { isAdminRequest } from "../../auth/[...nextauth]";
+import { requireAuth, PERMISOS } from "../../../../lib/authz";
 import { logAudit } from "../../../../lib/audit";
 import { sincronizarVencimiento } from "../../../../lib/cortesia";
 
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
   let actor;
   try {
-    actor = await isAdminRequest(req, res);
+    actor = await requireAuth(req, res, PERMISOS.EDITAR_FECHAS);
   } catch {
     return;
   }

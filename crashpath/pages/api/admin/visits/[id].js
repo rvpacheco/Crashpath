@@ -1,16 +1,17 @@
 // pages/api/admin/visits/[id].js
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]";
+import { requireAuth, PERMISOS } from "@/lib/authz";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 import { logAudit } from "@/lib/audit";
 
 export default async function handler(req, res) {
-  const session = await getServerSession(req, res, authOptions);
-  
-  if (!session || !session.isAdmin) {
-    return res.status(401).json({ message: "No autorizado" });
+  let actor;
+  try {
+    actor = await requireAuth(req, res, PERMISOS.CHECKIN);
+  } catch {
+    return;
   }
+
   
   if (req.method !== "PUT") {
     return res.status(405).json({ message: "Método no permitido" });
@@ -48,7 +49,7 @@ export default async function handler(req, res) {
 
     const auditEvent = await logAudit({
       action: "VISIT_EDIT",
-      actor: { email: session.user?.email, name: session.user?.name },
+      actor,
       user,
       summary: `Visita editada${status ? `: ${status}` : ""}`,
       meta: { visitId: id, status, notes, date },
