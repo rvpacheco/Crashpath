@@ -1,9 +1,7 @@
-import { getToken } from "next-auth/jwt";
+import { requireAuth, PERMISOS } from "../../../../lib/authz";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { logAudit } from "../../../../lib/audit";
-
-const secret = process.env.NEXTAUTH_SECRET;
 
 function normalizeEmail(v) {
   return typeof v === "string" ? v.trim().toLowerCase() : "";
@@ -55,9 +53,12 @@ function canAccessOrFail(user) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
 
-  const token = await getToken({ req, secret });
-  if (!token) return res.status(401).json({ message: "Not authenticated" });
-  if (!token.isAdmin) return res.status(403).json({ message: "Admin only" });
+  let actor;
+  try {
+    actor = await requireAuth(req, res, PERMISOS.CHECKIN);
+  } catch {
+    return;
+  }
 
   const { userId, email, date, createIfMissing = true, notes = "" } = req.body || {};
   if (!userId && !email) return res.status(400).json({ message: "Provide userId or email" });
@@ -71,9 +72,11 @@ export default async function handler(req, res) {
   const meta = getReqMeta(req);
   const now = new Date();
 
-  const actorRole = "admin";
-  const actorEmail = token.email || null;
-  const actorName = token.name || null;
+  // El rol queda en el evento de la visita: "quién abrió el muro hoy" tiene
+  // que poder leerse sin cruzar contra la lista de admins de ese día.
+  const actorRole = actor.rol;
+  const actorEmail = actor.email;
+  const actorName = actor.name;
 
   const buildCheckinEvent = (extraNotes = "") => ({
     ts: now,
@@ -151,7 +154,7 @@ export default async function handler(req, res) {
       const newVisit = (updated.visits || []).find((v) => String(v._id) === String(existingToday._id));
       const auditEvent = await logAudit({
         action: "CHECKIN",
-        actor: { email: actorEmail, name: actorName, id: token?.sub },
+        actor,
         user: updated,
         summary: `Check-in${isTicketera ? ` (-1 crédito, quedan ${updated.credits})` : ""}`,
         meta: { visitId: String(existingToday._id), accessType: user.accessType, credits: updated.credits },
@@ -174,7 +177,7 @@ export default async function handler(req, res) {
     const visitDoc = {
       date: now,
       status: "checked_in",
-      createdBy: "admin",
+      createdBy: actorRole,
       checkedInAt: now,
       notes: String(notes || "").slice(0, 400),
       events: [
@@ -185,7 +188,7 @@ export default async function handler(req, res) {
           actorEmail,
           actorName,
           meta,
-          notes: "Visit created by admin check-in",
+          notes: "Visita creada por check-in de mostrador",
         },
       ],
     };
@@ -218,7 +221,7 @@ export default async function handler(req, res) {
 
     const auditEvent = await logAudit({
       action: "CHECKIN",
-      actor: { email: actorEmail, name: actorName, id: token?.sub },
+      actor,
       user: updated,
       summary: `Check-in (visita creada)${isTicketera ? ` -1 crédito, quedan ${updated.credits}` : ""}`,
       meta: { visitId: lastVisit ? String(lastVisit._id) : null, accessType: user.accessType, credits: updated.credits },

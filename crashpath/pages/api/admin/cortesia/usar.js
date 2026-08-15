@@ -19,7 +19,8 @@
 import mongoose from "mongoose";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
-import { isAdminRequest } from "../../auth/[...nextauth]";
+import { requireAuth, PERMISOS, opcionesRecorte } from "../../../../lib/authz";
+import { recortarCortesia } from "../../../../lib/redact";
 import { logAudit } from "../../../../lib/audit";
 import { dayRangeBogota } from "../../../../lib/dates";
 import { estadoCortesia } from "../../../../lib/cortesia";
@@ -55,7 +56,7 @@ export default async function handler(req, res) {
 
   let actor;
   try {
-    actor = await isAdminRequest(req, res);
+    actor = await requireAuth(req, res, PERMISOS.CORTESIA_USAR);
   } catch {
     return;
   }
@@ -197,7 +198,7 @@ export default async function handler(req, res) {
         ...(guest.waiverMeta || {}),
         ip: meta.ip || "",
         userAgent: meta.userAgent || "",
-        signedBy: "admin",
+        signedBy: actor.rol,
         adminEmail: actor?.email || "",
       };
     }
@@ -253,7 +254,7 @@ export default async function handler(req, res) {
       const visitDoc = {
         date: now,
         status: "checked_in",
-        createdBy: "admin",
+        createdBy: actor.rol,
         checkedInAt: now,
         esCortesia: true,
         cortesiaHostId: host._id,
@@ -263,7 +264,7 @@ export default async function handler(req, res) {
           {
             ts: now,
             action: "CHECKIN",
-            actor: "admin",
+            actor: actor.rol,
             actorEmail: actor?.email || null,
             actorName: actor?.name || null,
             meta: { ...meta, esCortesia: true, hostId: String(host._id) },
@@ -297,19 +298,36 @@ export default async function handler(req, res) {
         },
       });
 
+      // El documento del invitado vuelve solo para quien puede ver datos
+      // sensibles. Ojo: no alcanza con que el voluntario lo acabe de teclear
+      // —si el invitado ya existía, `fill` no pisa lo que había, así que lo
+      // que sale de acá es el dato guardado, no el que escribió. Y `cortesia`
+      // arrastra el historial de usos, con el documento de invitados viejos.
+      const { verSensible } = opcionesRecorte(actor);
+
+      // El registro de auditoría SÍ guarda el documento del invitado (es el
+      // rastro legal y solo lo leen los admins), pero el mismo evento vuelve
+      // en esta respuesta para que el panel lo pinte al instante. Recortar
+      // `guest` y `cortesia` no alcanzaba: el dato se colaba por acá.
+      const auditVisible =
+        verSensible || !auditEvent
+          ? auditEvent
+          : { ...auditEvent, meta: { ...(auditEvent.meta || {}), guestDocument: undefined } };
+
       return res.status(200).json({
         message: "Cortesía registrada: el invitado quedó con check-in.",
         guest: {
           _id: guest._id,
           name: guest.name,
           email: guest.email,
-          documentType: guest.documentType,
-          documentNumber: guest.documentNumber,
+          ...(verSensible
+            ? { documentType: guest.documentType, documentNumber: guest.documentNumber }
+            : {}),
           isNew: guestIsNew,
         },
         visit,
-        cortesia: consumed.cortesia,
-        auditEvent,
+        cortesia: recortarCortesia(consumed.cortesia, { verSensible }),
+        auditEvent: auditVisible,
       });
     } catch (err) {
       // Si falla el check-in, la cortesía no se puede quedar gastada.

@@ -1,13 +1,14 @@
-import { getToken } from "next-auth/jwt";
+import { requireAuth, PERMISOS } from "../../../../lib/authz";
 import dbConnect from "../../../../lib/mongodb";
 import MoonReservation from "../../../../models/MoonReservation";
 
-const secret = process.env.NEXTAUTH_SECRET;
-
 export default async function handler(req, res) {
-  const token = await getToken({ req, secret });
-  if (!token) return res.status(401).json({ message: "Not authenticated" });
-  if (!token.isAdmin) return res.status(403).json({ message: "Admin only" });
+  let actor;
+  try {
+    actor = await requireAuth(req, res, PERMISOS.MOON);
+  } catch {
+    return;
+  }
 
   await dbConnect();
 

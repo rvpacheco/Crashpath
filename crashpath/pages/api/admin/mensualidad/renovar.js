@@ -1,8 +1,8 @@
 
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../auth/[...nextauth]";
+import { requireAuth, PERMISOS, opcionesRecorte } from "../../../../lib/authz";
+import { recortarCortesia } from "../../../../lib/redact";
 import { logAudit } from "../../../../lib/audit";
 import { otorgarCortesia } from "../../../../lib/cortesia";
 
@@ -11,9 +11,12 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: "Método no permitido." });
   }
 
-  const session = await getServerSession(req, res, authOptions);
-  if (!session?.isAdmin) {
-    return res.status(403).json({ message: "No autorizado." });
+  // Renovar el mes es una venta y el voluntario cobra durante su turno.
+  let actor;
+  try {
+    actor = await requireAuth(req, res, PERMISOS.COBRAR);
+  } catch {
+    return;
   }
 
   await dbConnect();
@@ -59,8 +62,8 @@ export default async function handler(req, res) {
 
     user.mensualidad.renewals.push({
       renewedAt: now,
-      renewedBy: "admin",
-      adminEmail: session.user?.email ?? "desconocido",
+      renewedBy: actor.rol,
+      adminEmail: actor.email ?? "desconocido",
       newEndDate,
     });
 
@@ -72,7 +75,7 @@ export default async function handler(req, res) {
 
     const auditEvent = await logAudit({
       action: "MENSUALIDAD_RENEW",
-      actor: { email: session.user?.email, name: session.user?.name },
+      actor,
       user,
       summary: `Mensualidad renovada +${months} mes(es) (vence ${newEndDate.toLocaleDateString("en-CA")}) · cortesía renovada`,
       meta: { months, newEndDate, cortesia: user.cortesia?.disponibles ?? 0 },
@@ -86,7 +89,7 @@ export default async function handler(req, res) {
         endDate: user.mensualidad.endDate,
         renewals: user.mensualidad.renewals,
       },
-      cortesia: user.cortesia,
+      cortesia: recortarCortesia(user.cortesia, opcionesRecorte(actor)),
       auditEvent,
     });
   } catch (error) {

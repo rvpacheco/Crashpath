@@ -16,7 +16,8 @@ function asObjectId(v) {
  *
  * @param {Object}   params
  * @param {string}   params.action   - Código de acción, ej "ADJUST_CREDITS"
- * @param {Object}   [params.actor]  - Quién la ejecutó: { id?, email?, name? }
+ * @param {Object}   [params.actor]  - Quién la ejecutó: { id?, email?, name?, rol? }
+ *                                     (el actor que devuelve requireAuth calza tal cual)
  * @param {Object}   [params.user]   - Usuario afectado: { _id|id?, email?, name? }
  * @param {string}   [params.summary]- Texto para la UI
  * @param {Object}   [params.meta]   - Datos extra (antes/después, etc.)
@@ -40,6 +41,7 @@ export async function logAudit({ action, actor, user, summary, meta } = {}) {
       actorId: asObjectId(actor?.id),
       actorEmail: actor?.email || undefined,
       actorName: actor?.name || undefined,
+      actorRol: actor?.rol || undefined,
       userId: userObjectId,
       userEmail: user?.email || undefined,
       userName: user?.name || undefined,

@@ -1,11 +1,10 @@
 // pages/api/admin/users/set-access-type.js
-import { getToken } from "next-auth/jwt";
+import { requireAuth, PERMISOS, opcionesRecorte } from "../../../../lib/authz";
+import { recortarUsuario } from "../../../../lib/redact";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { logAudit } from "../../../../lib/audit";
 import { otorgarCortesia } from "../../../../lib/cortesia";
-
-const secret = process.env.NEXTAUTH_SECRET;
 
 function addMonths(date, months) {
   const d = new Date(date);
@@ -21,9 +20,14 @@ function nowISO() {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
 
-  const token = await getToken({ req, secret });
-  if (!token) return res.status(401).json({ message: "Not authenticated" });
-  if (!token?.isAdmin) return res.status(403).json({ message: "Forbidden" });
+  // Elegir modalidad es parte de la venta (con quién arranca la tiquetera o
+  // el mes), así que va con COBRAR.
+  let actor;
+  try {
+    actor = await requireAuth(req, res, PERMISOS.COBRAR);
+  } catch {
+    return;
+  }
 
   const userId = String(req.body?.userId || "").trim();
   const accessType = String(req.body?.accessType || "").trim().toLowerCase();
@@ -71,8 +75,8 @@ export default async function handler(req, res) {
           ...(user.mensualidad?.renewals || []),
           {
             renewedAt: now,
-            renewedBy: "admin",
-            adminEmail: token?.email || token?.user?.email || "admin",
+            renewedBy: actor.rol,
+            adminEmail: actor.email || "admin",
             monthsAdded: months,
             previousAccessType: prevType,
           },
@@ -120,7 +124,7 @@ export default async function handler(req, res) {
 
     const auditEvent = await logAudit({
       action: "ACCESS_TYPE_CHANGED",
-      actor: { email: token?.email || token?.user?.email, name: token?.name, id: token?.sub },
+      actor,
       user,
       summary: `Acceso: ${prevType} → ${accessType}`,
       meta: { from: prevType, to: accessType, months: accessType === "mensualidad" ? months : undefined },
@@ -128,7 +132,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       message: "Access type updated",
-      user,
+      user: recortarUsuario(user, opcionesRecorte(actor)),
       auditEvent,
     });
   } catch (err) {

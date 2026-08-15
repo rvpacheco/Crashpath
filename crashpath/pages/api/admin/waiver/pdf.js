@@ -2,7 +2,7 @@
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import PDFDocument from "pdfkit";
-import { isAdminRequest } from "../../auth/[...nextauth]";
+import { requireAuth, PERMISOS } from "../../../../lib/authz";
 
 function safe(s) {
   return String(s ?? "");
@@ -22,7 +22,15 @@ function safeFilename(name) {
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ message: "Method not allowed" });
 
-  await isAdminRequest(req, res);
+  // El PDF trae documento, contacto de emergencia y la firma escaneada: es
+  // justo lo que el voluntario no puede ver, así que pide VER_SENSIBLE.
+  try {
+    await requireAuth(req, res, PERMISOS.VER_SENSIBLE);
+  } catch {
+    // El guardia ya respondió; sin este catch la excepción sube y Next
+    // registra un 500 encima de una respuesta cerrada.
+    return;
+  }
   await dbConnect();
 
   try {

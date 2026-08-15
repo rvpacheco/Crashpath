@@ -9,6 +9,10 @@ const AuditLogSchema = new Schema(
     actorId: { type: Schema.Types.ObjectId, ref: "User" },
     actorEmail: { type: String },
     actorName: { type: String },
+    // Con qué rol actuó. El email solo no alcanza para leer la historia: la
+    // lista de admins cambia y los turnos de voluntario duran un día, así que
+    // dentro de un mes no habría cómo saber con qué permiso se cobró esto.
+    actorRol: { type: String, enum: ["admin", "staff"] },
 
     userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     userEmail: { type: String },

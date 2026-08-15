@@ -9,6 +9,9 @@ import { Eye, EyeOff } from "lucide-react";
 import { getWaiverSnapshot, waiverToParagraphs } from "@/lib/waiver";
 import { addMonthsToDay, mensualidadDayHint, todayBogotaDay } from "@/lib/dates";
 import { clasificarCheckin, estadoCortesia } from "@/lib/cortesia";
+import { PERMISOS } from "@/lib/permisos";
+import { etiquetaTurno } from "@/lib/staff";
+import { estadoGate, ACCION_LOGIN, ACCION_REINTENTAR, ACCION_INICIO } from "@/lib/gateAdmin";
 import { PrivacyProvider, usePrivacy } from "@/components/PrivacyContext";
 
 // ============================================
@@ -112,6 +115,24 @@ const Title = styled.h1`
 const Subtitle = styled.p`
   font-size: ${fontSize.sm};
   color: ${palette.textLight};
+`;
+
+const TurnoBanner = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 ${spacing.xl};
+  padding: ${spacing.sm} ${spacing.md};
+  border-radius: ${borderRadius.md};
+  background: #FFF7E6;
+  border: 1px solid #F0C36D;
+  color: #7A5200;
+  font-size: ${fontSize.sm};
+  font-weight: 500;
+
+  @media (max-width: 768px) {
+    margin: 0 ${spacing.md};
+  }
 `;
 
 const TopBar = styled.div`
@@ -1117,16 +1138,18 @@ function CortesiaBadge({ user }) {
   return null;
 }
 
-function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMensualidad, busy }) {
+function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMensualidad, busy, can = () => false }) {
   // Invitado que entró con la cortesía de un socio: no tiene modalidad propia.
   // Sin este caso se mostraría como "Tiquetera · 0 créditos", que no es cierto.
   if (user.userType === "walkin" && !user.accessType) {
     return (
       <div style={{ display: "flex", gap: spacing.sm, alignItems: "center", flexWrap: "wrap" }}>
         <Badge>👤 Invitado</Badge>
-        <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
-          Volver socio
-        </Button>
+        {can(PERMISOS.COBRAR) && (
+          <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
+            Volver socio
+          </Button>
+        )}
       </div>
     );
   }
@@ -1139,15 +1162,21 @@ function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMe
           {active ? "✓" : "✗"} {label}
         </Badge>
         <CortesiaBadge user={user} />
-        <Button $variant="secondary" $small onClick={() => onRenovar(user._id)} disabled={busy}>
-          Renovar
-        </Button>
-        <Button $variant="secondary" $small onClick={() => onEditMensualidad(user)} disabled={busy}>
-          📅 Fechas
-        </Button>
-        <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
-          Cambiar
-        </Button>
+        {can(PERMISOS.COBRAR) && (
+          <Button $variant="secondary" $small onClick={() => onRenovar(user._id)} disabled={busy}>
+            Renovar
+          </Button>
+        )}
+        {can(PERMISOS.EDITAR_FECHAS) && (
+          <Button $variant="secondary" $small onClick={() => onEditMensualidad(user)} disabled={busy}>
+            📅 Fechas
+          </Button>
+        )}
+        {can(PERMISOS.COBRAR) && (
+          <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
+            Cambiar
+          </Button>
+        )}
       </div>
     );
   }
@@ -1163,17 +1192,21 @@ function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMe
         </Badge>
       )}
       <CortesiaBadge user={user} />
-      <Button $variant="secondary" $small onClick={() => onEditTiquetera(user)} disabled={busy}>
-        📅 Fechas
-      </Button>
-      <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
-        Cambiar
-      </Button>
+      {can(PERMISOS.EDITAR_FECHAS) && (
+        <Button $variant="secondary" $small onClick={() => onEditTiquetera(user)} disabled={busy}>
+          📅 Fechas
+        </Button>
+      )}
+      {can(PERMISOS.COBRAR) && (
+        <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
+          Cambiar
+        </Button>
+      )}
     </div>
   );
 }
 
-function ActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy }) {
+function ActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy, can = () => false }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   
@@ -1199,29 +1232,39 @@ function ActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCred
           <DropdownItem onClick={() => { onCheckin(user); setOpen(false); }}>
             ✓ Check-in
           </DropdownItem>
-          <DropdownItem onClick={() => { onCortesia(user); setOpen(false); }}>
-            🎟️ Usar cortesía
-          </DropdownItem>
-          <DropdownItem onClick={() => { onMoon(user); setOpen(false); }}>
-            🌑 MoonBoard
-          </DropdownItem>
-          <DropdownItem onClick={() => { onViewProfile(user); setOpen(false); }}>
-            👤 Ver datos
-          </DropdownItem>
-          <DropdownItem onClick={() => { onCredits(user._id); setOpen(false); }}>
-            💰 Créditos
-          </DropdownItem>
+          {can(PERMISOS.CORTESIA_USAR) && (
+            <DropdownItem onClick={() => { onCortesia(user); setOpen(false); }}>
+              🎟️ Usar cortesía
+            </DropdownItem>
+          )}
+          {can(PERMISOS.MOON) && (
+            <DropdownItem onClick={() => { onMoon(user); setOpen(false); }}>
+              🌑 MoonBoard
+            </DropdownItem>
+          )}
+          {can(PERMISOS.VER_SENSIBLE) && (
+            <DropdownItem onClick={() => { onViewProfile(user); setOpen(false); }}>
+              👤 Ver datos
+            </DropdownItem>
+          )}
+          {can(PERMISOS.COBRAR) && (
+            <DropdownItem onClick={() => { onCredits(user._id); setOpen(false); }}>
+              💰 Créditos
+            </DropdownItem>
+          )}
           <DropdownItem onClick={() => { onHistory(user); setOpen(false); }}>
             📜 Historial
           </DropdownItem>
-          {lastVisit && (
+          {lastVisit && can(PERMISOS.CHECKIN) && (
             <DropdownItem onClick={() => { onEditVisit(user, lastVisit); setOpen(false); }}>
               ✏️ Editar última visita
             </DropdownItem>
           )}
-          <DropdownItem $danger onClick={() => { onDelete(user); setOpen(false); }}>
-            🗑️ Eliminar
-          </DropdownItem>
+          {can(PERMISOS.BORRAR_USUARIO) && (
+            <DropdownItem $danger onClick={() => { onDelete(user); setOpen(false); }}>
+              🗑️ Eliminar
+            </DropdownItem>
+          )}
         </DropdownMenu>
       )}
     </Dropdown>
@@ -1229,21 +1272,22 @@ function ActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCred
 }
 
 // Componente de acciones móvil
-function MobileActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy }) {
+function MobileActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy, can = () => false }) {
   const { maskName } = usePrivacy();
   const [open, setOpen] = useState(false);
   
   const lastVisit = user?.visits?.[0];
+  // Mismos permisos que el menú de escritorio, en el mismo orden.
   const actions = [
-    { icon: "✓", label: "Check-in", action: () => onCheckin(user) },
-    { icon: "🎟️", label: "Usar cortesía", action: () => onCortesia(user) },
-    { icon: "🌑", label: "MoonBoard", action: () => onMoon(user) },
-    { icon: "👤", label: "Ver datos", action: () => onViewProfile(user) },
-    { icon: "💰", label: "Créditos", action: () => onCredits(user._id) },
+    can(PERMISOS.CHECKIN) && { icon: "✓", label: "Check-in", action: () => onCheckin(user) },
+    can(PERMISOS.CORTESIA_USAR) && { icon: "🎟️", label: "Usar cortesía", action: () => onCortesia(user) },
+    can(PERMISOS.MOON) && { icon: "🌑", label: "MoonBoard", action: () => onMoon(user) },
+    can(PERMISOS.VER_SENSIBLE) && { icon: "👤", label: "Ver datos", action: () => onViewProfile(user) },
+    can(PERMISOS.COBRAR) && { icon: "💰", label: "Créditos", action: () => onCredits(user._id) },
     { icon: "📜", label: "Historial", action: () => onHistory(user) },
-    ...(lastVisit ? [{ icon: "✏️", label: "Editar visita", action: () => onEditVisit(user, lastVisit) }] : []),
-    { icon: "🗑️", label: "Eliminar", action: () => onDelete(user), danger: true }
-  ];
+    lastVisit && can(PERMISOS.CHECKIN) && { icon: "✏️", label: "Editar visita", action: () => onEditVisit(user, lastVisit) },
+    can(PERMISOS.BORRAR_USUARIO) && { icon: "🗑️", label: "Eliminar", action: () => onDelete(user), danger: true },
+  ].filter(Boolean);
   
   return (
     <>
@@ -1364,6 +1408,30 @@ function AdminPanel() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { privacyMode, togglePrivacyMode, maskName, maskEmail, maskPhone, maskDocument } = usePrivacy();
+
+  // Rol y permisos. NO salen de la sesión: session.isAdmin queda congelado en
+  // el JWT desde el login, así que un turno de voluntario otorgado hace un
+  // minuto no aparecería y uno revocado seguiría abriendo el panel.
+  const [rolInfo, setRolInfo] = useState(null);
+  const [rolError, setRolError] = useState(false);
+
+  // Panel de voluntarios (solo admin)
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [staffTurnos, setStaffTurnos] = useState([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffEmail, setStaffEmail] = useState("");
+  const [staffName, setStaffName] = useState("");
+  const [staffMsg, setStaffMsg] = useState("");
+  const [staffOk, setStaffOk] = useState(true);
+
+  // Esconder un botón es comodidad, no seguridad: el endpoint vuelve a
+  // preguntar por su cuenta (lib/authz.js).
+  const can = useCallback(
+    (permiso) => (rolInfo?.permisos || []).includes(permiso),
+    [rolInfo]
+  );
+  const esVoluntario = rolInfo?.rol === "staff";
+  const verSensible = can(PERMISOS.VER_SENSIBLE);
 
   // Estados de datos
   const [users, setUsers] = useState([]);
@@ -1577,11 +1645,49 @@ function AdminPanel() {
     if (didInit.current) return;
     if (status === "loading") return;
     didInit.current = true;
-    if (!session) { signIn(); return; }
-    if (!session.isAdmin) { router.push("/"); return; }
-    fetchUsers();
-    fetchAudit();
-  }, [session, status, router, fetchUsers, fetchAudit]);
+
+    // Sin sesión ya no se dispara signIn() a ciegas: antes, quien caía en
+    // /admin sin haber entrado se quedaba en "Cargando sesión..." para
+    // siempre y sin botón. Ahora la pantalla de abajo ofrece el login.
+    if (!session) return;
+
+    (async () => {
+      let info = null;
+      try {
+        const res = await axios.get("/api/me/rol");
+        info = res.data || null;
+      } catch {
+        // No se pudo averiguar el rol (Mongo caído, red). No se echa a nadie:
+        // se muestra el error y se ofrece reintentar, porque mandar a un admin
+        // al inicio por un problema de red es peor que dejarlo insistir.
+        setRolError(true);
+        return;
+      }
+
+      setRolInfo(info);
+      if (!info?.rol) return;
+
+      fetchUsers();
+      // La auditoría es solo de admin; pedirla como voluntario daría 403.
+      if ((info.permisos || []).includes(PERMISOS.VER_AUDITORIA)) fetchAudit();
+    })();
+  }, [session, status, fetchUsers, fetchAudit]);
+
+  // El turno se cae a medianoche o cuando un admin lo corta, y eso puede pasar
+  // con el panel abierto. Sin esto, el voluntario vería "no se pudo guardar" en
+  // cada click sin entender por qué.
+  useEffect(() => {
+    const id = axios.interceptors.response.use(
+      (res) => res,
+      (error) => {
+        if (error?.response?.data?.code === "TURNO_VENCIDO") {
+          setRolInfo({ rol: null, permisos: [], motivo: "TURNO_VENCIDO" });
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => axios.interceptors.response.eject(id);
+  }, []);
 
   const appendAuditEvent = (evt) => {
     if (!evt) return;
@@ -2383,6 +2489,76 @@ function AdminPanel() {
     }
   };
 
+  // ── Voluntarios (turnos de staff) ──────────────────────────────────
+  const fetchStaff = useCallback(async () => {
+    setStaffLoading(true);
+    try {
+      const res = await axios.get("/api/admin/staff");
+      setStaffTurnos(Array.isArray(res.data?.turnos) ? res.data.turnos : []);
+    } catch {
+      setStaffOk(false);
+      setStaffMsg("No se pudo cargar la lista de voluntarios.");
+    } finally {
+      setStaffLoading(false);
+    }
+  }, []);
+
+  const openStaffModal = () => {
+    setStaffMsg("");
+    setStaffOk(true);
+    setStaffTurnos([]);
+    setStaffEmail("");
+    setStaffName("");
+    setShowStaffModal(true);
+    fetchStaff();
+  };
+
+  const otorgarTurno = async () => {
+    const email = staffEmail.trim().toLowerCase();
+    if (!email) {
+      setStaffOk(false);
+      setStaffMsg("Escribí el email del voluntario.");
+      return;
+    }
+
+    setBusy(true);
+    setStaffMsg("");
+    setStaffOk(true);
+    try {
+      const res = await axios.post("/api/admin/staff", { email, name: staffName.trim() });
+      setStaffOk(true);
+      setStaffMsg(res.data?.message || "Turno otorgado.");
+      setStaffEmail("");
+      setStaffName("");
+      appendAuditEvent(res.data?.auditEvent);
+      await fetchStaff();
+    } catch (e) {
+      setStaffOk(false);
+      setStaffMsg(e?.response?.data?.message || "No se pudo otorgar el turno.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revocarTurno = async (turno) => {
+    if (!window.confirm(`¿Cortarle el turno a ${turno.email}? Pierde el acceso de inmediato.`)) return;
+
+    setBusy(true);
+    setStaffMsg("");
+    setStaffOk(true);
+    try {
+      const res = await axios.post("/api/admin/staff/revocar", { id: turno._id });
+      setStaffMsg(res.data?.message || "Turno revocado.");
+      appendAuditEvent(res.data?.auditEvent);
+      await fetchStaff();
+    } catch (e) {
+      setStaffOk(false);
+      setStaffMsg(e?.response?.data?.message || "No se pudo revocar el turno.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openNewUser = () => {
     setUiError("");
     setShowNewUserModal(true);
@@ -2646,7 +2822,16 @@ function AdminPanel() {
 
   const currentMoonDay = moonDays[moonSelectedDay];
 
-  if (status === "loading" || (!session && status !== "authenticated")) {
+  // El texto y la acción se deciden en lib/gateAdmin.js (puro y testeado):
+  // esta pantalla es la única que no se puede probar logueado en local.
+  const gate = estadoGate({ status, session, rolInfo, rolError });
+  const accionGate = {
+    [ACCION_LOGIN]: { label: "Iniciar sesión", onClick: () => signIn("google") },
+    [ACCION_REINTENTAR]: { label: "Reintentar", onClick: () => router.reload() },
+    [ACCION_INICIO]: { label: "Ir al inicio", onClick: () => router.push("/") },
+  }[gate?.accion];
+
+  if (gate) {
     return (
       <PageShell>
         <GlobalStyle />
@@ -2655,7 +2840,17 @@ function AdminPanel() {
             <Title>Panel de Administración</Title>
           </Header>
           <div style={{ padding: spacing.xl, textAlign: "center", color: palette.textLight }}>
-            Cargando sesión...
+            <div style={{ marginBottom: spacing.lg }}>{gate.texto}</div>
+            {accionGate && (
+              <Button onClick={accionGate.onClick}>{accionGate.label}</Button>
+            )}
+            {session && (
+              <div style={{ marginTop: spacing.md }}>
+                <Button $variant="secondary" $small onClick={() => signOut({ callbackUrl: "/" })}>
+                  Cerrar sesión
+                </Button>
+              </div>
+            )}
           </div>
         </Container>
       </PageShell>
@@ -2671,6 +2866,17 @@ function AdminPanel() {
           <Subtitle>Gestión de usuarios, créditos y reservas</Subtitle>
         </Header>
 
+        {/* El voluntario tiene que ver la hora a la que se le cae el turno.
+            Si no, lo descubre con un error en mitad de un cobro. */}
+        {esVoluntario && (
+          <TurnoBanner>
+            <span>🕐 {etiquetaTurno(rolInfo?.vence)}</span>
+            <span style={{ opacity: 0.8 }}>
+              Podés cobrar y hacer check-in. Los datos personales y la gestión quedan para un admin.
+            </span>
+          </TurnoBanner>
+        )}
+
         <TopBar>
           <SearchInput
             value={query}
@@ -2681,33 +2887,50 @@ function AdminPanel() {
             <Button $variant="secondary" onClick={fetchUsers}>
               ↻ Recargar
             </Button>
-            <Button $variant="secondary" onClick={togglePrivacyMode} title={privacyMode ? "Mostrar datos sensibles" : "Ocultar datos sensibles"}>
-              {privacyMode
-                ? <EyeOff size={14} style={{ verticalAlign: "-2px" }} />
-                : <Eye size={14} style={{ verticalAlign: "-2px" }} />} Privacidad
-            </Button>
-            <Button onClick={exportExcel} $variant="secondary">
-              📥 Exportar Excel
-            </Button>
-            <Button onClick={() => importFileRef.current?.click()} $variant="secondary" disabled={importBusy}>
-              📤 {importBusy ? "Leyendo..." : "Importar Excel"}
-            </Button>
-            <input
-              ref={importFileRef}
-              type="file"
-              accept=".xlsx"
-              style={{ display: "none" }}
-              onChange={handleImportFile}
-            />
+            {/* El modo privacidad enmascara en pantalla. Al voluntario no le
+                sirve: el dato sensible ya no viene en la respuesta. */}
+            {verSensible && (
+              <Button $variant="secondary" onClick={togglePrivacyMode} title={privacyMode ? "Mostrar datos sensibles" : "Ocultar datos sensibles"}>
+                {privacyMode
+                  ? <EyeOff size={14} style={{ verticalAlign: "-2px" }} />
+                  : <Eye size={14} style={{ verticalAlign: "-2px" }} />} Privacidad
+              </Button>
+            )}
+            {can(PERMISOS.EXPORTAR) && (
+              <Button onClick={exportExcel} $variant="secondary">
+                📥 Exportar Excel
+              </Button>
+            )}
+            {can(PERMISOS.IMPORTAR) && (
+              <>
+                <Button onClick={() => importFileRef.current?.click()} $variant="secondary" disabled={importBusy}>
+                  📤 {importBusy ? "Leyendo..." : "Importar Excel"}
+                </Button>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".xlsx"
+                  style={{ display: "none" }}
+                  onChange={handleImportFile}
+                />
+              </>
+            )}
             <Button onClick={() => fetchCheckinsByDate(new Date().toISOString().slice(0, 10))} $variant="secondary">
               📅 Ver check-ins de hoy
             </Button>
             <Button onClick={openAttendanceModal}>
               📊 Asistencia
             </Button>
-            <Button onClick={openNewUser}>
-              + Nuevo miembro
-            </Button>
+            {can(PERMISOS.CREAR_USUARIO) && (
+              <Button onClick={openNewUser}>
+                + Nuevo miembro
+              </Button>
+            )}
+            {can(PERMISOS.GESTIONAR_STAFF) && (
+              <Button $variant="secondary" onClick={openStaffModal}>
+                🧑‍🤝‍🧑 Voluntarios
+              </Button>
+            )}
             <Button $variant="secondary" onClick={() => signOut()}>
               Cerrar sesión
             </Button>
@@ -2717,7 +2940,7 @@ function AdminPanel() {
         {/* DASHBOARD COLLAPSIBLE */}
         <DashboardHeader onClick={() => setDashboardExpanded(!dashboardExpanded)}>
           <DashboardTitle>
-            <span>📈 Dashboard de ingresos</span>
+            <span>{can(PERMISOS.VER_INGRESOS) ? "📈 Dashboard de ingresos" : "📈 Dashboard de asistencia"}</span>
             <Chevron $expanded={dashboardExpanded}>▼</Chevron>
           </DashboardTitle>
           <div style={{ display: "flex", gap: spacing.sm }} onClick={(e) => e.stopPropagation()}>
@@ -2732,13 +2955,15 @@ function AdminPanel() {
             <KPICard>
               <KPIValue>{kpiData.ticketeraCheckins}</KPIValue>
               <KPILabel>Check-ins (tiquetera)</KPILabel>
-              <KPISub>× $15,000 c/u</KPISub>
+              {can(PERMISOS.VER_INGRESOS) && <KPISub>× $15,000 c/u</KPISub>}
             </KPICard>
-            <KPICard>
-              <KPIValue $color={palette.success}>${kpiData.estimatedRevenue.toLocaleString()}</KPIValue>
-              <KPILabel>Ingreso estimado</KPILabel>
-              <KPISub>Solo tiquetera</KPISub>
-            </KPICard>
+            {can(PERMISOS.VER_INGRESOS) && (
+              <KPICard>
+                <KPIValue $color={palette.success}>${kpiData.estimatedRevenue.toLocaleString()}</KPIValue>
+                <KPILabel>Ingreso estimado</KPILabel>
+                <KPISub>Solo tiquetera</KPISub>
+              </KPICard>
+            )}
             <KPICard>
               <KPIValue>{kpiData.mensualidadCheckins}</KPIValue>
               <KPILabel>Check-ins (mensualidad)</KPILabel>
@@ -2877,9 +3102,11 @@ function AdminPanel() {
                         </Badge>
                       </CardHeader>
                       <CardInfo>
-                        <div>📞 {maskPhone(user.phone) || "—"}</div>
+                        {verSensible && <div>📞 {maskPhone(user.phone) || "—"}</div>}
                         <div>📅 Registro: {user.createdAt ? formatDate(user.createdAt) : "—"}</div>
-                        <div>📋 {user.documentType || ""} {maskDocument(user.documentNumber) || ""}</div>
+                        {verSensible && (
+                          <div>📋 {user.documentType || ""} {maskDocument(user.documentNumber) || ""}</div>
+                        )}
                       </CardInfo>
                       <AccessInfo
                         user={user}
@@ -2888,6 +3115,7 @@ function AdminPanel() {
                         onEditTiquetera={openTiqueteraDates}
                         onEditMensualidad={openMensualidadDates}
                         busy={busy}
+                        can={can}
                       />
                       <div style={{ marginTop: spacing.sm }}>
                         <MobileActionMenu
@@ -2901,6 +3129,7 @@ function AdminPanel() {
                           onDelete={handleDeleteUser}
                           onEditVisit={handleEditVisit}
                           busy={busy}
+                          can={can}
                         />
                       </div>
                     </Card>
@@ -2918,7 +3147,7 @@ function AdminPanel() {
                         <Th onClick={() => handleSort("email")}>
                           Email {getSortIcon("email")}
                         </Th>
-                        <Th>Contacto</Th>
+                        {verSensible && <Th>Contacto</Th>}
                         <Th onClick={() => handleSort("credits")}>
                           Acceso {getSortIcon("credits")}
                         </Th>
@@ -2942,10 +3171,15 @@ function AdminPanel() {
                           <Td>
                             <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{maskEmail(user.email)}</div>
                           </Td>
-                          <Td>
-                            <div>{maskPhone(user.phone) || "—"}</div>
-                            <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{user.documentType || ""} {maskDocument(user.documentNumber) || ""}</div>
-                          </Td>
+                          {/* La columna entera se va: para el voluntario
+                              estos campos ni siquiera vienen en la respuesta,
+                              así que quedaría una columna de guiones. */}
+                          {verSensible && (
+                            <Td>
+                              <div>{maskPhone(user.phone) || "—"}</div>
+                              <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>{user.documentType || ""} {maskDocument(user.documentNumber) || ""}</div>
+                            </Td>
+                          )}
                           <Td>
                             <AccessInfo
                               user={user}
@@ -2954,6 +3188,7 @@ function AdminPanel() {
                               onEditTiquetera={openTiqueteraDates}
                               onEditMensualidad={openMensualidadDates}
                               busy={busy}
+                              can={can}
                             />
                           </Td>
                           <Td>
@@ -2963,12 +3198,16 @@ function AdminPanel() {
                             {user.createdAt ? formatDate(user.createdAt) : "—"}
                           </Td>
                           <Td>
-                            {user?.waiverStatus === "signed" ? (
+                            {user?.waiverStatus !== "signed" ? (
+                              <Badge $danger>No firmado</Badge>
+                            ) : verSensible ? (
                               <Button $variant="secondary" $small as="a" href={`/api/admin/waiver/pdf?email=${encodeURIComponent(user.email)}`} target="_blank">
                                 Ver PDF
                               </Button>
                             ) : (
-                              <Badge $danger>No firmado</Badge>
+                              // El PDF trae documento, contacto de emergencia y
+                              // la firma. Al voluntario le basta saber que está.
+                              <Badge $success>Firmado</Badge>
                             )}
                           </Td>
                           <Td>
@@ -2983,6 +3222,7 @@ function AdminPanel() {
                               onDelete={handleDeleteUser}
                               onEditVisit={handleEditVisit}
                               busy={busy}
+                              can={can}
                             />
                           </Td>
                         </Tr>
@@ -3038,7 +3278,7 @@ function AdminPanel() {
             )}
           </div>
 
-          <AuditFeed events={auditEvents} loading={auditLoading} />
+          {can(PERMISOS.VER_AUDITORIA) && <AuditFeed events={auditEvents} loading={auditLoading} />}
         </div>
       </Container>
 
@@ -3233,14 +3473,18 @@ function AdminPanel() {
                           : "⚠️ Este socio no tiene cortesía disponible."}
                       </ErrorBox>
                       <p style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
-                        Se renueva sola al renovar la mensualidad o cargar créditos. Si ya
-                        compró y no aparece, se la puedes dar a mano.
+                        Se renueva sola al renovar la mensualidad o cargar créditos.
+                        {can(PERMISOS.CORTESIA_CORREGIR)
+                          ? " Si ya compró y no aparece, se la puedes dar a mano."
+                          : " Si ya compró y no aparece, pedile a un admin que se la dé a mano."}
                       </p>
                       {uiError && <ErrorBox>{uiError}</ErrorBox>}
                       <ActionButtons>
-                        <Button onClick={() => setCortesiaManual("otorgar")} disabled={busy}>
-                          {busy ? "Guardando..." : "Otorgar cortesía"}
-                        </Button>
+                        {can(PERMISOS.CORTESIA_CORREGIR) && (
+                          <Button onClick={() => setCortesiaManual("otorgar")} disabled={busy}>
+                            {busy ? "Guardando..." : "Otorgar cortesía"}
+                          </Button>
+                        )}
                         <Button $variant="secondary" onClick={closeCortesia} disabled={busy}>Cancelar</Button>
                       </ActionButtons>
                     </>
@@ -3281,11 +3525,13 @@ function AdminPanel() {
                       </ActionButtons>
                       {/* Escape hatch: cortesía otorgada por error (ajuste de
                           créditos que era corrección, socio equivocado, etc.) */}
-                      <div style={{ marginTop: spacing.md, textAlign: "center" }}>
-                        <Button $variant="secondary" $small onClick={() => setCortesiaManual("quitar")} disabled={busy}>
-                          {busy ? "Quitando..." : "Quitar esta cortesía"}
-                        </Button>
-                      </div>
+                      {can(PERMISOS.CORTESIA_CORREGIR) && (
+                        <div style={{ marginTop: spacing.md, textAlign: "center" }}>
+                          <Button $variant="secondary" $small onClick={() => setCortesiaManual("quitar")} disabled={busy}>
+                            {busy ? "Quitando..." : "Quitar esta cortesía"}
+                          </Button>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>
@@ -3351,6 +3597,92 @@ function AdminPanel() {
               <Button onClick={submitRenovar} disabled={busy}>{busy ? "Renovando..." : "Confirmar"}</Button>
               <Button $variant="secondary" onClick={() => setShowRenovarModal(false)} disabled={busy}>Cancelar</Button>
             </ActionButtons>
+          </ModalContent>
+        </Modal>
+
+        {/* Voluntarios: otorgar y cortar turnos de mostrador (solo admin) */}
+        <Overlay $show={showStaffModal} onClick={() => !busy && setShowStaffModal(false)} />
+        <Modal $show={showStaffModal}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>🧑‍🤝‍🧑 Voluntarios</ModalTitle>
+            </ModalHeader>
+
+            <p style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
+              El turno vence solo al final del día (11:59 pm). No hay que acordarse de
+              quitarlo. Puede hacer check-in, vender tiqueteras y renovar mensualidades;
+              no ve datos personales, ni la auditoría, ni puede borrar o exportar.
+            </p>
+
+            <Input
+              type="email"
+              placeholder="Email de Google del voluntario"
+              value={staffEmail}
+              onChange={(e) => setStaffEmail(e.target.value)}
+            />
+            <Input
+              placeholder="Nombre (opcional, para reconocerlo en la lista)"
+              value={staffName}
+              onChange={(e) => setStaffName(e.target.value)}
+            />
+            {staffMsg && (staffOk ? <SuccessBox>{staffMsg}</SuccessBox> : <ErrorBox>{staffMsg}</ErrorBox>)}
+            <ActionButtons>
+              <Button onClick={otorgarTurno} disabled={busy}>
+                {busy ? "Guardando..." : "Dar turno de hoy"}
+              </Button>
+              <Button $variant="secondary" onClick={() => setShowStaffModal(false)} disabled={busy}>
+                Cerrar
+              </Button>
+            </ActionButtons>
+
+            <div style={{ marginTop: spacing.lg }}>
+              <div style={{ fontWeight: 600, marginBottom: spacing.sm }}>Turnos recientes</div>
+              {staffLoading ? (
+                <div style={{ color: palette.textLight, fontSize: fontSize.sm }}>Cargando...</div>
+              ) : staffTurnos.length === 0 ? (
+                <div style={{ color: palette.textLight, fontSize: fontSize.sm }}>
+                  Todavía no le has dado turno a nadie.
+                </div>
+              ) : (
+                staffTurnos.map((t) => (
+                  <div
+                    key={t._id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: spacing.sm,
+                      padding: `${spacing.sm} 0`,
+                      borderBottom: `1px solid ${palette.border}`,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, overflowWrap: "anywhere" }}>
+                        {t.name || t.email}
+                      </div>
+                      <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>
+                        {t.name ? `${t.email} · ` : ""}
+                        {formatDateTime(t.vence)}
+                        {t.otorgadoPor ? ` · lo dio ${t.otorgadoPor}` : ""}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: spacing.xs, alignItems: "center" }}>
+                      <Badge
+                        $success={t.estado === "vigente"}
+                        $danger={t.estado === "revocado"}
+                      >
+                        {t.estado}
+                      </Badge>
+                      {t.estado === "vigente" && (
+                        <Button $variant="danger" $small onClick={() => revocarTurno(t)} disabled={busy}>
+                          Cortar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </ModalContent>
         </Modal>
 
@@ -3548,7 +3880,7 @@ function AdminPanel() {
                         <span style={{ fontSize: fontSize.sm, color: palette.textLight }}>{formatDateTime(ts)}</span>
                       </div>
                       <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: spacing.xs }}>
-                        {v.createdBy === "admin" ? "Registrado por admin" : "Auto-registro"}
+                        {v.createdBy === "user" ? "Auto-registro" : v.createdBy === "staff" ? "Registrado por voluntario" : "Registrado por admin"}
                         {v.esCortesia && ` · 🎟️ cortesía de ${v.cortesiaHostName || "un socio"}`}
                       </div>
                       <div style={{ marginTop: spacing.xs }}>

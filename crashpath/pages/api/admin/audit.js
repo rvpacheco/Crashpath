@@ -1,10 +1,10 @@
 import dbConnect from "../../../lib/mongodb";
 import AuditLog from "../../../models/AuditLog";
-import { isAdminRequest } from '../auth/[...nextauth]';
+import { requireAuth, PERMISOS } from '../../../lib/authz';
 
 export default async function handler(req, res) {
   try {
-    await isAdminRequest(req, res);
+    await requireAuth(req, res, PERMISOS.VER_AUDITORIA);
     await dbConnect();
 
     const limit = Math.min(Number(req.query.limit || 40), 200);
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     const events = await AuditLog.find(filter).sort({ ts: -1 }).limit(limit).lean();
     res.status(200).json({ events });
   } catch (e) {
-    // isAdminRequest responde 401 y DESPUÉS lanza. Sin el guardia, este catch
+    // requireAuth responde 401/403 y DESPUÉS lanza. Sin el guardia, este catch
     // escribe encima de una respuesta ya cerrada: al cliente igual le llega el
     // 401, pero Next registra un 500 que nunca existió y ese ruido tapa los
     // 500 de verdad en los logs. Mismo patrón que /api/admin/users.
