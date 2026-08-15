@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   CORTESIAS_POR_CICLO,
   accesoEndDate,
+  clasificarCheckin,
   esElegibleParaCortesia,
   estadoCortesia,
   labelCortesia,
@@ -195,6 +196,43 @@ describe("esElegibleParaCortesia", () => {
   it("los invitados y los usuarios sin modalidad quedan fuera", () => {
     expect(esElegibleParaCortesia({ userType: "walkin", accessType: null }, HOY)).toBe(false);
     expect(esElegibleParaCortesia({}, HOY)).toBe(false);
+  });
+});
+
+/**
+ * El panel multiplica los check-ins de tiquetera por $15.000 para estimar el
+ * ingreso. Si un invitado gratis cae en ese cubo, el número miente. Estos
+ * tests fijan esa frontera.
+ */
+describe("clasificarCheckin", () => {
+  const socioTiquetera = { accessType: "ticketera", credits: 5 };
+  const socioMensualidad = { accessType: "mensualidad" };
+  const invitado = { userType: "walkin", accessType: null };
+
+  it("la visita de cortesía es cortesía, no tiquetera", () => {
+    expect(clasificarCheckin(invitado, { esCortesia: true })).toBe("cortesia");
+  });
+
+  it("manda la visita, no la modalidad: un socio que entra de invitado no paga", () => {
+    // Un socio puede venir de invitado de otro en vez de gastar su crédito.
+    expect(clasificarCheckin(socioTiquetera, { esCortesia: true })).toBe("cortesia");
+    expect(clasificarCheckin(socioMensualidad, { esCortesia: true })).toBe("cortesia");
+  });
+
+  it("el socio de tiquetera en su visita normal sí cuenta como ingreso", () => {
+    expect(clasificarCheckin(socioTiquetera, { esCortesia: false })).toBe("ticketera");
+    expect(clasificarCheckin(socioTiquetera, {})).toBe("ticketera");
+  });
+
+  it("el de mensualidad va a su propio cubo", () => {
+    expect(clasificarCheckin(socioMensualidad, {})).toBe("mensualidad");
+  });
+
+  it("sin modalidad y sin cortesía no se le inventa ingreso", () => {
+    // El bug original: un `else` lo mandaba a tiquetera y sumaba $15.000.
+    expect(clasificarCheckin(invitado, {})).toBe("otro");
+    expect(clasificarCheckin({}, {})).toBe("otro");
+    expect(clasificarCheckin(null, null)).toBe("otro");
   });
 });
 

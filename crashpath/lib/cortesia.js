@@ -81,6 +81,24 @@ export function esElegibleParaCortesia(user, now = new Date()) {
   return false; // invitados y usuarios sin modalidad
 }
 
+/**
+ * A qué cubo va un check-in para los KPIs del panel.
+ *
+ * Se decide por la VISITA antes que por la modalidad del usuario, y ese orden
+ * es el punto: un `else` que asuma "si no es mensualidad, es tiquetera" mete
+ * al invitado de cortesía —que no tiene modalidad— en el cubo que multiplica
+ * por $15.000, y el panel reporta ingreso que nadie pagó.
+ *
+ * "otro" son los que no generan ingreso ni son cortesía: walk-ins viejos e
+ * importados a medias, sin modalidad asignada. Cuentan como asistencia.
+ */
+export function clasificarCheckin(user, visit) {
+  if (visit?.esCortesia) return "cortesia";
+  if (user?.accessType === "mensualidad") return "mensualidad";
+  if (user?.accessType === "ticketera") return "ticketera";
+  return "otro";
+}
+
 /** Etiqueta corta para el badge del panel. */
 export function labelCortesia(user, now = new Date()) {
   const st = estadoCortesia(user, now);

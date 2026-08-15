@@ -8,7 +8,7 @@ import styled, { createGlobalStyle } from "styled-components";
 import { Eye, EyeOff } from "lucide-react";
 import { getWaiverSnapshot, waiverToParagraphs } from "@/lib/waiver";
 import { addMonthsToDay, mensualidadDayHint, todayBogotaDay } from "@/lib/dates";
-import { estadoCortesia } from "@/lib/cortesia";
+import { clasificarCheckin, estadoCortesia } from "@/lib/cortesia";
 import { PrivacyProvider, usePrivacy } from "@/components/PrivacyContext";
 
 // ============================================
@@ -1761,6 +1761,7 @@ function AdminPanel() {
     let totalCheckins = 0;
     let totalMensualidadCheckins = 0;
     let totalTicketeraCheckins = 0;
+    let totalCortesiaCheckins = 0;
     let uniqueUsers = new Set();
     let mensualidadUsers = new Set();
     let ticketeraUsers = new Set();
@@ -1783,12 +1784,23 @@ function AdminPanel() {
           if (visitDate >= periodStart && visitDate <= periodEnd) {
             totalCheckins++;
             uniqueUsers.add(user._id);
-            if (user.accessType === "mensualidad") {
-              totalMensualidadCheckins++;
-              mensualidadUsers.add(user._id);
-            } else {
-              totalTicketeraCheckins++;
-              ticketeraUsers.add(user._id);
+            // La regla vive en lib/cortesia.js (y está testeada): el invitado
+            // de cortesía NO puede caer en el cubo de tiquetera, que es el que
+            // multiplica por $15.000.
+            switch (clasificarCheckin(user, visit)) {
+              case "cortesia":
+                totalCortesiaCheckins++;
+                break;
+              case "mensualidad":
+                totalMensualidadCheckins++;
+                mensualidadUsers.add(user._id);
+                break;
+              case "ticketera":
+                totalTicketeraCheckins++;
+                ticketeraUsers.add(user._id);
+                break;
+              default:
+                break; // sin modalidad: cuenta como asistencia, no como plata
             }
           }
           if (visitDate >= previousPeriodStartDate && visitDate <= previousPeriodEnd) {
@@ -1808,6 +1820,7 @@ function AdminPanel() {
       uniqueUsers: uniqueUsers.size,
       mensualidadCheckins: totalMensualidadCheckins,
       ticketeraCheckins: totalTicketeraCheckins,
+      cortesiaCheckins: totalCortesiaCheckins,
       mensualidadUsers: mensualidadUsers.size,
       ticketeraUsers: ticketeraUsers.size,
       estimatedRevenue,
@@ -2730,6 +2743,11 @@ function AdminPanel() {
               <KPIValue>{kpiData.mensualidadCheckins}</KPIValue>
               <KPILabel>Check-ins (mensualidad)</KPILabel>
               <KPISub>{kpiData.mensualidadUsers} usuarios activos</KPISub>
+            </KPICard>
+            <KPICard>
+              <KPIValue>{kpiData.cortesiaCheckins}</KPIValue>
+              <KPILabel>Invitados (cortesía)</KPILabel>
+              <KPISub>Entradas gratis, no suman ingreso</KPISub>
             </KPICard>
             <KPICard>
               <KPIValue>{kpiData.totalCheckins}</KPIValue>
