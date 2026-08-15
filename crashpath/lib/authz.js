@@ -13,6 +13,7 @@ import dbConnect from "./mongodb";
 import StaffGrant from "../models/StaffGrant";
 import { esAdminEmail, normalizarEmail } from "./roles";
 import { ROL_ADMIN, ROL_STAFF, PERMISOS, puede, permisosDe } from "./permisos";
+import { turnoVigente } from "./staff";
 
 /**
  * Quién es quien manda el request. Devuelve siempre un objeto con `rol`:
@@ -35,42 +36,27 @@ export async function resolverActor(req) {
   }
 
   await dbConnect();
+  // El más reciente por vencimiento: si le otorgaron el turno dos veces hoy,
+  // manda el que vence más tarde. Se trae aunque esté vencido para poder
+  // distinguir "nunca fue voluntario" de "su turno ya terminó".
+  const grant = await StaffGrant.findOne({ email }).sort({ vence: -1 }).lean();
 
-  // Se pregunta por un turno VIGENTE, no por "el último". Todos los turnos de
-  // un mismo día vencen en el mismo milisegundo (fin del día en Bogotá), así
-  // que ordenar por `vence` empata y Mongo desempata como quiere: revocarle el
-  // turno a alguien y volver a otorgárselo el mismo día —el caso normal de una
-  // confusión en el mostrador— dejaba dos documentos idénticos en fecha y el
-  // guardia podía leer el revocado, negándole el acceso a un voluntario que sí
-  // tenía turno. Filtrando por vigencia el empate deja de importar.
-  const ahora = new Date();
-  const vigente = await StaffGrant.findOne({
-    email,
-    revocadoEn: null, // en Mongo también matchea los documentos sin el campo
-    vence: { $gte: ahora },
-  }).lean();
-
-  if (vigente) {
-    return {
-      email,
-      name: name || vigente.name || null,
-      sub,
-      rol: ROL_STAFF,
-      vence: vigente.vence,
-      motivo: null,
-    };
-  }
-
-  // Sin turno vigente. Se busca el último solo para poder decir "tu turno
-  // terminó" en vez de un "no autorizado" seco; acá el orden ya no decide
-  // acceso, solo el mensaje.
-  const ultimo = await StaffGrant.findOne({ email }).sort({ vence: -1, otorgadoEn: -1 }).lean();
-
-  if (!ultimo) {
+  if (!grant) {
     return { email, name, sub, rol: null, motivo: "SIN_ROL" };
   }
 
-  return { email, name, sub, rol: null, motivo: "TURNO_VENCIDO", vence: ultimo.vence };
+  if (!turnoVigente(grant)) {
+    return { email, name, sub, rol: null, motivo: "TURNO_VENCIDO", vence: grant.vence };
+  }
+
+  return {
+    email,
+    name: name || grant.name || null,
+    sub,
+    rol: ROL_STAFF,
+    vence: grant.vence,
+    motivo: null,
+  };
 }
 
 /**

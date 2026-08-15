@@ -1138,7 +1138,7 @@ function CortesiaBadge({ user }) {
   return null;
 }
 
-function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMensualidad, busy, can = () => false }) {
+function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMensualidad, busy, can }) {
   // Invitado que entró con la cortesía de un socio: no tiene modalidad propia.
   // Sin este caso se mostraría como "Tiquetera · 0 créditos", que no es cierto.
   if (user.userType === "walkin" && !user.accessType) {
@@ -1206,7 +1206,7 @@ function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMe
   );
 }
 
-function ActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy, can = () => false }) {
+function ActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy, can }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
   
@@ -1272,7 +1272,7 @@ function ActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCred
 }
 
 // Componente de acciones móvil
-function MobileActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy, can = () => false }) {
+function MobileActionMenu({ user, onCheckin, onCortesia, onMoon, onViewProfile, onCredits, onHistory, onDelete, onEditVisit, busy, can }) {
   const { maskName } = usePrivacy();
   const [open, setOpen] = useState(false);
   
@@ -1422,7 +1422,6 @@ function AdminPanel() {
   const [staffEmail, setStaffEmail] = useState("");
   const [staffName, setStaffName] = useState("");
   const [staffMsg, setStaffMsg] = useState("");
-  const [staffOk, setStaffOk] = useState(true);
 
   // Esconder un botón es comodidad, no seguridad: el endpoint vuelve a
   // preguntar por su cuenta (lib/authz.js).
@@ -2496,7 +2495,6 @@ function AdminPanel() {
       const res = await axios.get("/api/admin/staff");
       setStaffTurnos(Array.isArray(res.data?.turnos) ? res.data.turnos : []);
     } catch {
-      setStaffOk(false);
       setStaffMsg("No se pudo cargar la lista de voluntarios.");
     } finally {
       setStaffLoading(false);
@@ -2505,8 +2503,6 @@ function AdminPanel() {
 
   const openStaffModal = () => {
     setStaffMsg("");
-    setStaffOk(true);
-    setStaffTurnos([]);
     setStaffEmail("");
     setStaffName("");
     setShowStaffModal(true);
@@ -2515,25 +2511,18 @@ function AdminPanel() {
 
   const otorgarTurno = async () => {
     const email = staffEmail.trim().toLowerCase();
-    if (!email) {
-      setStaffOk(false);
-      setStaffMsg("Escribí el email del voluntario.");
-      return;
-    }
+    if (!email) return setStaffMsg("Escribí el email del voluntario.");
 
     setBusy(true);
     setStaffMsg("");
-    setStaffOk(true);
     try {
       const res = await axios.post("/api/admin/staff", { email, name: staffName.trim() });
-      setStaffOk(true);
       setStaffMsg(res.data?.message || "Turno otorgado.");
       setStaffEmail("");
       setStaffName("");
       appendAuditEvent(res.data?.auditEvent);
       await fetchStaff();
     } catch (e) {
-      setStaffOk(false);
       setStaffMsg(e?.response?.data?.message || "No se pudo otorgar el turno.");
     } finally {
       setBusy(false);
@@ -2545,14 +2534,12 @@ function AdminPanel() {
 
     setBusy(true);
     setStaffMsg("");
-    setStaffOk(true);
     try {
       const res = await axios.post("/api/admin/staff/revocar", { id: turno._id });
       setStaffMsg(res.data?.message || "Turno revocado.");
       appendAuditEvent(res.data?.auditEvent);
       await fetchStaff();
     } catch (e) {
-      setStaffOk(false);
       setStaffMsg(e?.response?.data?.message || "No se pudo revocar el turno.");
     } finally {
       setBusy(false);
@@ -3625,7 +3612,7 @@ function AdminPanel() {
               value={staffName}
               onChange={(e) => setStaffName(e.target.value)}
             />
-            {staffMsg && (staffOk ? <SuccessBox>{staffMsg}</SuccessBox> : <ErrorBox>{staffMsg}</ErrorBox>)}
+            {staffMsg && <SuccessBox>{staffMsg}</SuccessBox>}
             <ActionButtons>
               <Button onClick={otorgarTurno} disabled={busy}>
                 {busy ? "Guardando..." : "Dar turno de hoy"}

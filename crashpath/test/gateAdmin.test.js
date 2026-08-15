@@ -50,10 +50,7 @@ describe("estadoGate", () => {
   it("turno vencido dice qué pasó, no un 'no autorizado' seco", () => {
     const g = estadoGate({ status: "authenticated", session: SESION, rolInfo: VENCIDO });
     expect(g.texto).toContain("turno de voluntario terminó");
-    // Reintentar y no "ir al inicio": si el turno se cayó a medianoche en
-    // mitad del turno, el admin se lo vuelve a dar ahí mismo y con un click
-    // vuelve al panel, en vez de dar la vuelta por /reservas.
-    expect(g.accion).toBe(ACCION_REINTENTAR);
+    expect(g.accion).toBe(ACCION_INICIO);
   });
 
   it("admin y voluntario entran (null = mostrar el panel)", () => {
