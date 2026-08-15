@@ -9,7 +9,7 @@ import dbConnect from "../../../../lib/mongodb";
 import StaffGrant from "../../../../models/StaffGrant";
 import { requireAuth, PERMISOS } from "../../../../lib/authz";
 import { esAdminEmail, normalizarEmail } from "../../../../lib/roles";
-import { finDelTurno, turnoVigente, estadoTurno } from "../../../../lib/staff";
+import { finDelTurno, estadoTurno } from "../../../../lib/staff";
 import { logAudit } from "../../../../lib/audit";
 
 // Cuánta historia devuelve el GET. Alcanza para responder "¿quién estuvo en el
@@ -59,10 +59,10 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     const email = normalizarEmail(req.body?.email);
-    const name = String(req.body?.name || "").trim();
-    const nota = String(req.body?.nota || "").trim();
+    const name = String(req.body?.name || "").trim().slice(0, 120);
+    const nota = String(req.body?.nota || "").trim().slice(0, 300);
 
-    if (!email || !EMAIL_RE.test(email)) {
+    if (email.length > 254 || !EMAIL_RE.test(email)) {
       return res.status(400).json({ message: "Email inválido", code: "EMAIL_INVALIDO" });
     }
 
@@ -78,8 +78,15 @@ export default async function handler(req, res) {
     try {
       // Si ya tiene turno hoy, no se duplica: se devuelve el que hay. Dos
       // admins dándole acceso al mismo voluntario es lo normal en un sábado.
-      const existente = await StaffGrant.findOne({ email }).sort({ vence: -1 });
-      if (existente && turnoVigente(existente)) {
+      // Se pregunta por vigencia y no por "el último" por lo mismo que en
+      // lib/authz.js: todos los turnos del día vencen en el mismo instante y
+      // ordenar por fecha empata.
+      const existente = await StaffGrant.findOne({
+        email,
+        revocadoEn: null,
+        vence: { $gte: new Date() },
+      });
+      if (existente) {
         return res.status(200).json({
           message: "Ese voluntario ya tenía turno hoy.",
           code: "YA_TENIA_TURNO",

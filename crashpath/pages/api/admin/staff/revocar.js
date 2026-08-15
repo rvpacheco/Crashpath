@@ -9,7 +9,6 @@ import dbConnect from "../../../../lib/mongodb";
 import StaffGrant from "../../../../models/StaffGrant";
 import { requireAuth, PERMISOS } from "../../../../lib/authz";
 import { normalizarEmail } from "../../../../lib/roles";
-import { turnoVigente } from "../../../../lib/staff";
 import { logAudit } from "../../../../lib/audit";
 
 export default async function handler(req, res) {
@@ -37,44 +36,50 @@ export default async function handler(req, res) {
   try {
     await dbConnect();
 
-    const grant = id
-      ? await StaffGrant.findById(id)
-      : await StaffGrant.findOne({ email }).sort({ vence: -1 });
-
-    if (!grant) {
-      return res.status(404).json({ message: "Ese voluntario no tiene turnos", code: "NO_ENCONTRADO" });
+    // Se resuelve a QUIÉN se le revoca; después se cortan TODOS sus turnos
+    // vigentes, no solo el que se clickeó. Si dos admins le dieron turno a la
+    // misma persona (un sábado ocupado es exactamente eso), revocar uno solo
+    // dejaba el otro vivo: el panel decía "revocado" y la persona seguía
+    // entrando.
+    const referencia = id ? await StaffGrant.findById(id).lean() : null;
+    if (id && !referencia) {
+      return res.status(404).json({ message: "Ese turno no existe", code: "NO_ENCONTRADO" });
     }
 
-    // Idempotente: revocar dos veces no vuelve a escribir la fecha ni ensucia
-    // la auditoría con un evento que no pasó.
-    if (!turnoVigente(grant)) {
+    const objetivo = referencia?.email || email;
+    const ahora = new Date();
+
+    const resultado = await StaffGrant.updateMany(
+      { email: objetivo, revocadoEn: null, vence: { $gte: ahora } },
+      { $set: { revocadoEn: ahora, revocadoPor: { email: actor.email, name: actor.name } } }
+    );
+
+    // Idempotente: revocar dos veces no reescribe la fecha ni ensucia la
+    // auditoría con un evento que no pasó.
+    if (resultado.modifiedCount === 0) {
+      const existeAlguno = referencia || (await StaffGrant.exists({ email: objetivo }));
+      if (!existeAlguno) {
+        return res.status(404).json({ message: "Ese voluntario no tiene turnos", code: "NO_ENCONTRADO" });
+      }
       return res.status(200).json({
-        message: grant.revocadoEn ? "Ese turno ya estaba revocado." : "Ese turno ya había vencido.",
+        message: "Ese turno ya estaba revocado o vencido.",
         code: "SIN_EFECTO",
-        turno: { _id: String(grant._id), email: grant.email, vence: grant.vence },
+        email: objetivo,
       });
     }
-
-    grant.revocadoEn = new Date();
-    grant.revocadoPor = { email: actor.email, name: actor.name };
-    await grant.save();
 
     const auditEvent = await logAudit({
       action: "STAFF_REVOKE",
       actor,
-      user: { email: grant.email, name: grant.name || undefined },
-      summary: `Turno de voluntario revocado a ${grant.email}`,
-      meta: { email: grant.email, vencíaEn: grant.vence },
+      user: { email: objetivo, name: referencia?.name || undefined },
+      summary: `Turno de voluntario revocado a ${objetivo}`,
+      meta: { email: objetivo, turnosCortados: resultado.modifiedCount },
     });
 
     return res.status(200).json({
       message: "Turno revocado. El acceso se corta de inmediato.",
-      turno: {
-        _id: String(grant._id),
-        email: grant.email,
-        vence: grant.vence,
-        revocadoEn: grant.revocadoEn,
-      },
+      email: objetivo,
+      turnosCortados: resultado.modifiedCount,
       auditEvent,
     });
   } catch (e) {

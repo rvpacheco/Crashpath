@@ -198,7 +198,7 @@ export default async function handler(req, res) {
         ...(guest.waiverMeta || {}),
         ip: meta.ip || "",
         userAgent: meta.userAgent || "",
-        signedBy: "admin",
+        signedBy: actor.rol,
         adminEmail: actor?.email || "",
       };
     }
@@ -254,7 +254,7 @@ export default async function handler(req, res) {
       const visitDoc = {
         date: now,
         status: "checked_in",
-        createdBy: "admin",
+        createdBy: actor.rol,
         checkedInAt: now,
         esCortesia: true,
         cortesiaHostId: host._id,
@@ -264,7 +264,7 @@ export default async function handler(req, res) {
           {
             ts: now,
             action: "CHECKIN",
-            actor: "admin",
+            actor: actor.rol,
             actorEmail: actor?.email || null,
             actorName: actor?.name || null,
             meta: { ...meta, esCortesia: true, hostId: String(host._id) },
@@ -305,6 +305,15 @@ export default async function handler(req, res) {
       // arrastra el historial de usos, con el documento de invitados viejos.
       const { verSensible } = opcionesRecorte(actor);
 
+      // El registro de auditoría SÍ guarda el documento del invitado (es el
+      // rastro legal y solo lo leen los admins), pero el mismo evento vuelve
+      // en esta respuesta para que el panel lo pinte al instante. Recortar
+      // `guest` y `cortesia` no alcanzaba: el dato se colaba por acá.
+      const auditVisible =
+        verSensible || !auditEvent
+          ? auditEvent
+          : { ...auditEvent, meta: { ...(auditEvent.meta || {}), guestDocument: undefined } };
+
       return res.status(200).json({
         message: "Cortesía registrada: el invitado quedó con check-in.",
         guest: {
@@ -318,7 +327,7 @@ export default async function handler(req, res) {
         },
         visit,
         cortesia: recortarCortesia(consumed.cortesia, { verSensible }),
-        auditEvent,
+        auditEvent: auditVisible,
       });
     } catch (err) {
       // Si falla el check-in, la cortesía no se puede quedar gastada.

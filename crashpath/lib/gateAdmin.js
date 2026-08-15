@@ -50,7 +50,10 @@ export function estadoGate({ status, session, rolInfo, rolError } = {}) {
         rolInfo.motivo === "TURNO_VENCIDO"
           ? "Tu turno de voluntario terminó. Pedile a un admin que te lo otorgue de nuevo."
           : "Tu cuenta no tiene acceso al panel.",
-      accion: ACCION_INICIO,
+      // Con el turno recién vencido lo más probable es que el admin se lo
+      // vuelva a dar ahí mismo: reintentar es un click, ir al inicio lo manda
+      // a /reservas a dar la vuelta.
+      accion: rolInfo.motivo === "TURNO_VENCIDO" ? ACCION_REINTENTAR : ACCION_INICIO,
     };
   }
 

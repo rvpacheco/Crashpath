@@ -3,6 +3,7 @@ import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { requireAuth, PERMISOS, opcionesRecorte } from "../../../../lib/authz";
 import { recortarUsuario } from "../../../../lib/redact";
+import { logAudit } from "../../../../lib/audit";
 
 const WAIVER_TEXT_V1 = `
 CRASHPATH – CONSENTIMIENTO INFORMADO, ASUNCIÓN DE RIESGO Y EXONERACIÓN DE RESPONSABILIDAD (v1)
@@ -105,10 +106,23 @@ export default async function handler(req, res) {
     };
 
     await user.save();
+
+    // No quedaba registrado: se firmaba un documento legal y no había forma de
+    // saber después quién lo tomó en el mostrador. Importa más ahora que un
+    // voluntario también puede hacerlo.
+    const auditEvent = await logAudit({
+      action: "WAIVER_SIGN",
+      actor,
+      user,
+      summary: `Waiver firmado en el mostrador (${version}, ${method})`,
+      meta: { version, method },
+    });
+
     // Devolvía el documento entero, firma y datos médicos incluidos.
     return res.status(200).json({
       message: "Waiver signed (admin)",
       user: recortarUsuario(user, opcionesRecorte(actor)),
+      auditEvent,
     });
   } catch (error) {
     console.error("admin waiver sign error:", error);
