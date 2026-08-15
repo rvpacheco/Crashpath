@@ -22,7 +22,7 @@
 import ExcelJS from "exceljs";
 import dbConnect from "../../../lib/mongodb";
 import User from "../../../models/User";
-import { requireAuth, PERMISOS } from "../../../lib/authz";
+import { isAdminRequest } from "../auth/[...nextauth]";
 import { logAudit } from "../../../lib/audit";
 import { normalizeName, cellText, toDate, toInt, tokenMatch } from "../../../lib/importExcel";
 
@@ -317,7 +317,7 @@ export default async function handler(req, res) {
 
   let actor;
   try {
-    actor = await requireAuth(req, res, PERMISOS.IMPORTAR);
+    actor = await isAdminRequest(req, res);
   } catch {
     return;
   }

@@ -1,16 +1,15 @@
 // pages/api/admin/checkins.js
-import { requireAuth, PERMISOS } from "@/lib/authz";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../auth/[...nextauth]";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 import { dayRangeBogota } from "@/lib/dates";
 
 export default async function handler(req, res) {
-  try {
-    await requireAuth(req, res, PERMISOS.CHECKIN);
-  } catch {
-    return;
+  const session = await getServerSession(req, res, authOptions);
+  if (!session?.isAdmin) {
+    return res.status(401).json({ message: "No autorizado" });
   }
-
   
   if (req.method !== "GET") {
     return res.status(405).json({ message: "Método no permitido" });

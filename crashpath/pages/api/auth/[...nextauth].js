@@ -2,7 +2,19 @@
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import axios from 'axios';
-import { esAdminEmail } from '../../../lib/roles';
+import { getToken } from "next-auth/jwt";
+
+const adminEmails = [
+  "santistebanfabi@gmail.com",
+  "jeevanobando97@gmail.com",
+  "mattucm01@gmail.com",
+  "mattucm@hotmail.com",
+  "rvpacheco17@gmail.com",
+  "jdba.94@gmail.com",
+  "miguelvarbla@gmail.com",
+  "dmp702@gmail.com",
+  "miguelcomposi@gmail.com"
+].map((e) => e.trim().toLowerCase());
 
 async function refreshAccessToken(token) {
   try {
@@ -55,10 +67,7 @@ export const authOptions = {
           accessTokenExpires: Date.now() + (Number(account.expires_in || 3600) * 1000),
           refreshToken: account.refresh_token ?? token.refreshToken,
           user: { name: user.name, email },
-          // Pista para la UI pública (ej. el redirect de /reservas), NO para
-          // autorizar: queda congelada hasta el próximo login. Los endpoints
-          // resuelven el rol por request con lib/authz.js.
-          isAdmin: esAdminEmail(email),
+          isAdmin: adminEmails.includes(email),
         };
       }
 
@@ -80,6 +89,22 @@ export const authOptions = {
 
 export default NextAuth(authOptions);
 
-// El guardia vive en lib/authz.js (requireAuth). Antes había un isAdminRequest
-// acá y otros dos mecanismos sueltos; se unificaron para que el rol se resuelva
-// por request y no desde el JWT.
+export async function isAdminRequest(req, res) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+
+  const email = String(token?.user?.email || token?.email || "")
+    .trim()
+    .toLowerCase();
+
+  if (!email || !adminEmails.includes(email)) {
+    res.status(401).json({ message: "No autorizado" });
+    throw new Error("Not authorized");
+  }
+
+  // Devuelve datos del admin para usarlos como `actor` en auditoría.
+  return {
+    email,
+    name: token?.user?.name || token?.name || null,
+    sub: token?.sub || null,
+  };
+}

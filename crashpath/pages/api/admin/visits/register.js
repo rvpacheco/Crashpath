@@ -1,10 +1,11 @@
 // pages/api/admin/visits/register.js
-import { requireAuth, PERMISOS, opcionesRecorte } from "../../../../lib/authz";
-import { recortarUsuario } from "../../../../lib/redact";
+import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { logAudit } from "../../../../lib/audit";
 import { dayRangeBogota } from "../../../../lib/dates";
+
+const secret = process.env.NEXTAUTH_SECRET;
 
 function isProfileComplete(u) {
   const dt = String(u?.documentType || "").trim();
@@ -26,12 +27,9 @@ function isMensualidadActiva(m) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
 
-  let actor;
-  try {
-    actor = await requireAuth(req, res, PERMISOS.CHECKIN);
-  } catch {
-    return;
-  }
+  const token = await getToken({ req, secret });
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
+  if (!token?.isAdmin) return res.status(403).json({ message: "Forbidden" });
 
   const userId = String(req.body?.userId || "").trim();
   if (!userId) return res.status(400).json({ message: "Missing userId" });
@@ -101,8 +99,8 @@ export default async function handler(req, res) {
     user.visits.push({
       date: now,
       status: "registered",
-      createdBy: actor.rol,
-      notes: actor.rol === "staff" ? "Registrada por voluntario" : "Registrada por admin",
+      createdBy: "admin",
+      notes: "Registrada por admin",
     });
 
     if (user.accessType === "ticketera") {
@@ -116,7 +114,7 @@ export default async function handler(req, res) {
 
     const auditEvent = await logAudit({
       action: "VISIT_REGISTER",
-      actor,
+      actor: { email: token?.email, name: token?.name, id: token?.sub },
       user,
       summary: `Visita registrada (${user.accessType})${user.accessType === "ticketera" ? ` -1 crédito, quedan ${user.credits ?? 0}` : ""}`,
       meta: { accessType: user.accessType, credits: user.credits ?? 0 },
@@ -129,7 +127,7 @@ export default async function handler(req, res) {
           : "Visit registered (admin) - mensualidad",
       credits: user.credits ?? 0,
       accessType: user.accessType,
-      user: recortarUsuario(user, opcionesRecorte(actor)),
+      user,
       auditEvent,
     });
   } catch (err) {

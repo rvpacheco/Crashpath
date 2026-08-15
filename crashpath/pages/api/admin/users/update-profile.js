@@ -1,5 +1,5 @@
 // pages/api/admin/users/update-profile.js
-import { requireAuth, PERMISOS } from "../../../../lib/authz";
+import { isAdminRequest } from "../../auth/[...nextauth]";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { logAudit } from "../../../../lib/audit";
@@ -12,10 +12,7 @@ export default async function handler(req, res) {
 
   let actor;
   try {
-    // Solo admin: el formulario de perfil escribe documento, teléfono y
-    // contacto de emergencia de un tercero. Quien no puede leerlos tampoco
-    // puede sobrescribirlos.
-    actor = await requireAuth(req, res, PERMISOS.EDITAR_PERFIL);
+    actor = await isAdminRequest(req, res);
   } catch {
     return;
   }

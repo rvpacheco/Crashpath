@@ -5,7 +5,7 @@
 import ExcelJS from "exceljs";
 import dbConnect from "../../../lib/mongodb";
 import User from "../../../models/User";
-import { requireAuth, PERMISOS } from "../../../lib/authz";
+import { isAdminRequest } from "../auth/[...nextauth]";
 
 const DATE_FMT = "dd/mm/yyyy";
 
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    await requireAuth(req, res, PERMISOS.EXPORTAR);
+    await isAdminRequest(req, res);
   } catch {
     return;
   }

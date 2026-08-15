@@ -19,8 +19,7 @@
 import mongoose from "mongoose";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
-import { requireAuth, PERMISOS, opcionesRecorte } from "../../../../lib/authz";
-import { recortarCortesia } from "../../../../lib/redact";
+import { isAdminRequest } from "../../auth/[...nextauth]";
 import { logAudit } from "../../../../lib/audit";
 import { dayRangeBogota } from "../../../../lib/dates";
 import { estadoCortesia } from "../../../../lib/cortesia";
@@ -56,7 +55,7 @@ export default async function handler(req, res) {
 
   let actor;
   try {
-    actor = await requireAuth(req, res, PERMISOS.CORTESIA_USAR);
+    actor = await isAdminRequest(req, res);
   } catch {
     return;
   }
@@ -298,26 +297,18 @@ export default async function handler(req, res) {
         },
       });
 
-      // El documento del invitado vuelve solo para quien puede ver datos
-      // sensibles. Ojo: no alcanza con que el voluntario lo acabe de teclear
-      // —si el invitado ya existía, `fill` no pisa lo que había, así que lo
-      // que sale de acá es el dato guardado, no el que escribió. Y `cortesia`
-      // arrastra el historial de usos, con el documento de invitados viejos.
-      const { verSensible } = opcionesRecorte(actor);
-
       return res.status(200).json({
         message: "Cortesía registrada: el invitado quedó con check-in.",
         guest: {
           _id: guest._id,
           name: guest.name,
           email: guest.email,
-          ...(verSensible
-            ? { documentType: guest.documentType, documentNumber: guest.documentNumber }
-            : {}),
+          documentType: guest.documentType,
+          documentNumber: guest.documentNumber,
           isNew: guestIsNew,
         },
         visit,
-        cortesia: recortarCortesia(consumed.cortesia, { verSensible }),
+        cortesia: consumed.cortesia,
         auditEvent,
       });
     } catch (err) {

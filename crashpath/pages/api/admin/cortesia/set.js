@@ -9,7 +9,7 @@
 //  - devolverle la cortesía a alguien que no alcanzó a usarla.
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
-import { requireAuth, PERMISOS } from "../../../../lib/authz";
+import { isAdminRequest } from "../../auth/[...nextauth]";
 import { logAudit } from "../../../../lib/audit";
 import { accesoEndDate, otorgarCortesia, quitarCortesia } from "../../../../lib/cortesia";
 
@@ -20,9 +20,7 @@ export default async function handler(req, res) {
 
   let actor;
   try {
-    // Solo admin: dar una cortesía por fuera del ciclo de compra es regalar
-    // una entrada. Usarla en un check-in sí es del turno (ver usar.js).
-    actor = await requireAuth(req, res, PERMISOS.CORTESIA_CORREGIR);
+    actor = await isAdminRequest(req, res);
   } catch {
     return;
   }

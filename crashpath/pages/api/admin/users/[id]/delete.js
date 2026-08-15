@@ -1,4 +1,5 @@
-import { requireAuth, PERMISOS } from "@/lib/authz";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../../../auth/[...nextauth]";
 import dbConnect from "@/lib/mongodb";
 import mongoose from "mongoose";
 import User from "@/models/User";
@@ -6,12 +7,10 @@ import MoonReservation from "@/models/MoonReservation";
 import { logAudit } from "@/lib/audit";
 
 export default async function handler(req, res) {
-  // Solo admin: borrar es irreversible y se lleva las visitas y el waiver.
-  let actor;
-  try {
-    actor = await requireAuth(req, res, PERMISOS.BORRAR_USUARIO);
-  } catch {
-    return;
+  const session = await getServerSession(req, res, authOptions);
+
+  if (!session || !session.isAdmin) {
+    return res.status(401).json({ message: "No autorizado" });
   }
 
   if (req.method !== "DELETE") {
@@ -43,7 +42,7 @@ export default async function handler(req, res) {
 
     const auditEvent = await logAudit({
       action: "USER_DELETE",
-      actor,
+      actor: { email: session.user?.email, name: session.user?.name },
       user: userToDelete,
       summary: `Usuario eliminado: ${userToDelete.name || userToDelete.email}`,
     });

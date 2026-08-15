@@ -1,16 +1,15 @@
-import { requireAuth, PERMISOS } from "../../../../../lib/authz";
+import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../../lib/mongodb";
 import User from "../../../../../models/User";
+
+const secret = process.env.NEXTAUTH_SECRET;
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ message: "Method not allowed" });
 
-  // Solo proyecta name/email/visits: nada sensible sale de acá.
-  try {
-    await requireAuth(req, res, PERMISOS.VER_SOCIOS);
-  } catch {
-    return;
-  }
+  const token = await getToken({ req, secret });
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
+  if (!token.isAdmin) return res.status(403).json({ message: "Admin only" });
 
   const { id } = req.query;
   const limit = Math.min(parseInt(req.query.limit || "60", 10), 200);

@@ -1,7 +1,6 @@
 import dbConnect from '../../../lib/mongodb';
 import User from '../../../models/User';
-import { requireAuth, PERMISOS, opcionesRecorte } from '../../../lib/authz';
-import { recortarCortesia } from '../../../lib/redact';
+import { isAdminRequest } from '../auth/[...nextauth]';
 import { logAudit } from '../../../lib/audit';
 import { otorgarCortesia } from '../../../lib/cortesia';
 
@@ -10,11 +9,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  // Cobrar es del turno: el voluntario vende tiqueteras (requireAuth responde
-  // 401/403 y lanza si no puede).
+  // Solo admin (isAdminRequest responde 401 y lanza si no autorizado)
   let actor;
   try {
-    actor = await requireAuth(req, res, PERMISOS.COBRAR);
+    actor = await isAdminRequest(req, res);
   } catch {
     return;
   }
@@ -79,7 +77,7 @@ export default async function handler(req, res) {
     res.status(200).json({
       message: 'Créditos ajustados con éxito',
       credits: user.credits,
-      cortesia: recortarCortesia(user.cortesia, opcionesRecorte(actor)),
+      cortesia: user.cortesia,
       auditEvent,
     });
   } catch (error) {

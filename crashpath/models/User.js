@@ -17,12 +17,9 @@ const VisitEventSchema = new mongoose.Schema(
       required: true,
     },
 
-    // "staff" es el voluntario de turno (ver lib/authz.js). Va aparte de
-    // "admin" para que el historial diga quién atendió, no solo que fue
-    // "alguien del mostrador".
     actor: {
       type: String,
-      enum: ["user", "admin", "staff"],
+      enum: ["user", "admin"],
       default: "admin",
     },
 
@@ -48,7 +45,7 @@ const VisitSchema = new mongoose.Schema(
 
     createdBy: {
       type: String,
-      enum: ["user", "admin", "staff"],
+      enum: ["user", "admin"],
       default: "user",
     },
 
@@ -82,9 +79,7 @@ const MensualidadSchema = new mongoose.Schema(
     renewals: [
       {
         renewedAt: { type: Date, default: Date.now },
-        // Sin "staff" acá, la renovación cobrada por un voluntario reventaba
-        // la validación de Mongoose al guardar.
-        renewedBy: { type: String, enum: ["admin", "staff"], default: "admin" },
+        renewedBy: { type: String, enum: ["admin"], default: "admin" },
         adminEmail: { type: String },
         newEndDate: { type: Date },
       },

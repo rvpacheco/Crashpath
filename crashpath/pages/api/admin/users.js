@@ -1,7 +1,6 @@
 import dbConnect from '../../../lib/mongodb';
 import User from '../../../models/User';
-import { requireAuth, PERMISOS, opcionesRecorte } from '../../../lib/authz';
-import { proyeccionSinSensibles } from '../../../lib/redact';
+import { isAdminRequest } from '../auth/[...nextauth]';
 
 // Los KPIs y la asistencia del panel solo miran hoy/semana/mes (+ el período
 // anterior para comparar), así que con ~3 meses de visitas alcanza. Sin este
@@ -10,21 +9,10 @@ const VISITS_DAYS = 92;
 
 export default async function handler(req, res) {
   try {
-    const actor = await requireAuth(req, res, PERMISOS.VER_SOCIOS);
+    await isAdminRequest(req, res);
     await dbConnect();
 
     const since = new Date(Date.now() - VISITS_DAYS * 86400000);
-
-    // El voluntario ve la lista para atender, no la ficha completa. El recorte
-    // va en el $project y no en la UI: enmascarar en pantalla deja el dato en
-    // la respuesta y se ve abriendo el inspector.
-    const { verSensible } = opcionesRecorte(actor);
-    const camposPesados = {
-      waiverTextSnapshot: 0,
-      waiverSignatureUrl: 0,
-      waiverSignatureText: 0,
-      'visits.events': 0,
-    };
 
     // Lista liviana: visitas recientes y sin los campos pesados del waiver
     // (texto snapshot y firma en base64). El detalle completo de un usuario
@@ -42,7 +30,12 @@ export default async function handler(req, res) {
         },
       },
       {
-        $project: verSensible ? camposPesados : proyeccionSinSensibles(camposPesados),
+        $project: {
+          waiverTextSnapshot: 0,
+          waiverSignatureUrl: 0,
+          waiverSignatureText: 0,
+          'visits.events': 0,
+        },
       },
     ]);
 

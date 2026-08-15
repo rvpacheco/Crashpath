@@ -1,8 +1,7 @@
 // pages/api/admin/waiver/sign.js
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
-import { requireAuth, PERMISOS, opcionesRecorte } from "../../../../lib/authz";
-import { recortarUsuario } from "../../../../lib/redact";
+import { isAdminRequest } from "../../auth/[...nextauth]";
 
 const WAIVER_TEXT_V1 = `
 CRASHPATH – CONSENTIMIENTO INFORMADO, ASUNCIÓN DE RIESGO Y EXONERACIÓN DE RESPONSABILIDAD (v1)
@@ -47,12 +46,7 @@ function getClientIp(req) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
 
-  let actor;
-  try {
-    actor = await requireAuth(req, res, PERMISOS.WAIVER_FIRMAR);
-  } catch {
-    return;
-  }
+  await isAdminRequest(req, res);
   await dbConnect();
 
   try {
@@ -99,17 +93,11 @@ export default async function handler(req, res) {
       ...(user.waiverMeta || {}),
       ip,
       userAgent,
-      signedBy: actor.rol,
-      // Quedaba vacío: la firma decía "la tomó el mostrador" sin decir quién.
-      adminEmail: actor.email,
+      signedBy: "admin",
     };
 
     await user.save();
-    // Devolvía el documento entero, firma y datos médicos incluidos.
-    return res.status(200).json({
-      message: "Waiver signed (admin)",
-      user: recortarUsuario(user, opcionesRecorte(actor)),
-    });
+    return res.status(200).json({ message: "Waiver signed (admin)", user });
   } catch (error) {
     console.error("admin waiver sign error:", error);
     return res.status(500).json({ message: "Failed to sign waiver (admin)" });

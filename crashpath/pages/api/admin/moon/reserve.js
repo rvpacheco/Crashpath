@@ -1,8 +1,10 @@
-import { requireAuth, PERMISOS } from "../../../../lib/authz";
+import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import MoonReservation from "../../../../models/MoonReservation";
 import User from "../../../../models/User";
 import { logAudit } from "../../../../lib/audit";
+
+const secret = process.env.NEXTAUTH_SECRET;
 
 const OPEN_HOUR = 16;
 const CLOSE_HOUR = 22;
@@ -24,12 +26,9 @@ function getReqMeta(req) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
 
-  let actor;
-  try {
-    actor = await requireAuth(req, res, PERMISOS.MOON);
-  } catch {
-    return;
-  }
+  const token = await getToken({ req, secret });
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
+  if (!token.isAdmin) return res.status(403).json({ message: "Admin only" });
 
   const { userId, userEmail, userName, date, startHour } = req.body || {};
 
@@ -106,7 +105,7 @@ export default async function handler(req, res) {
     const dateStr = requestedDay.toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
     const auditEvent = await logAudit({
       action: "MOON_RESERVE",
-      actor,
+      actor: { email: token?.email, name: token?.name, id: token?.sub },
       user: { _id: resolvedUserId, email: resolvedEmail, name: resolvedName },
       summary: `Reserva moon creada: ${dateStr} ${String(hour).padStart(2, "0")}:00`,
       meta: { reservationId: String(reservation._id), date: dateStr, startHour: hour },

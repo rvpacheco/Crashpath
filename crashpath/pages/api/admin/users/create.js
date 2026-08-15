@@ -1,8 +1,9 @@
-import { requireAuth, PERMISOS, opcionesRecorte } from "../../../../lib/authz";
-import { recortarUsuario } from "../../../../lib/redact";
+import { getToken } from "next-auth/jwt";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { logAudit } from "../../../../lib/audit";
+
+const secret = process.env.NEXTAUTH_SECRET;
 
 function makeWalkInEmail() {
   const rand = Math.random().toString(36).slice(2, 10);
@@ -12,15 +13,11 @@ function makeWalkInEmail() {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
 
-  // El voluntario atiende walk-ins, así que crea usuarios. Ojo con la
-  // asimetría: acá ESCRIBE documento y contacto de emergencia de alguien que
-  // tiene enfrente, pero no puede leer los de nadie más (ver lib/redact.js).
-  let actor;
-  try {
-    actor = await requireAuth(req, res, PERMISOS.CREAR_USUARIO);
-  } catch {
-    return;
-  }
+  const token = await getToken({ req, secret });
+  if (!token) return res.status(401).json({ message: "Not authenticated" });
+
+  const isAdmin = !!(token?.isAdmin ?? token?.user?.isAdmin);
+  if (!isAdmin) return res.status(403).json({ message: "Forbidden" });
 
   const body = req.body || {};
 
@@ -83,8 +80,8 @@ export default async function handler(req, res) {
         renewals: [
           {
             renewedAt: now,
-            renewedBy: actor.rol,
-            adminEmail: actor.email ?? "desconocido",
+            renewedBy: "admin",
+            adminEmail: token?.email ?? "desconocido",
             newEndDate: endDate,
           },
         ],
@@ -112,17 +109,13 @@ export default async function handler(req, res) {
 
     const auditEvent = await logAudit({
       action: "USER_CREATE",
-      actor,
+      actor: { email: token?.email, name: token?.name, id: token?.sub },
       user,
       summary: `Usuario creado: ${user.name} (${resolvedAccessType})`,
       meta: { accessType: resolvedAccessType, esMinor },
     });
 
-    return res.status(200).json({
-      message: "User created",
-      user: recortarUsuario(user, opcionesRecorte(actor)),
-      auditEvent,
-    });
+    return res.status(200).json({ message: "User created", user, auditEvent });
   } catch (error) {
     console.error("admin users create error:", error);
 
