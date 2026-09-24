@@ -13,6 +13,9 @@ import { cors, verificar, emailPermitido, urlBase } from "../../lib/mcpAuth";
 import { registrarHerramientas } from "../../lib/mcpHerramientas";
 
 function noAutorizado(req, res, descripcion) {
+  // Solo el motivo y la forma del header, nunca el token.
+  const auth = String(req.headers.authorization || "");
+  console.warn(`[mcp] 401 ${descripcion} · header=${auth ? `${auth.split(" ")[0]} (${auth.length} chars)` : "ausente"}`);
   res.setHeader(
     "WWW-Authenticate",
     `Bearer resource_metadata="${urlBase(req)}/.well-known/oauth-protected-resource", error="invalid_token", error_description="${descripcion}"`
@@ -25,7 +28,9 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(204).end();
 
   const auth = String(req.headers.authorization || "");
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  // El esquema no distingue mayúsculas (RFC 7235): hay clientes que mandan "bearer".
+  const m = auth.match(/^bearer\s+(.+)$/i);
+  const token = m ? m[1].trim() : "";
   if (!token) return noAutorizado(req, res, "Falta el token");
 
   const claims = verificar(token, "access");
