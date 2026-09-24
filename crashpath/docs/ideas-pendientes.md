@@ -24,6 +24,20 @@ programan las herramientas.
      nunca se descuadren.
    - Si hay dos personas con nombres parecidos, preguntar en vez de adivinar.
 
+**Estado: implementado (fases 1 y 2).** Servidor remoto en `/api/mcp`
+(`lib/mcpHerramientas.js`), OAuth en `/api/oauth/*` (`lib/mcpAuth.js`) y la
+lógica compartida con el panel en `lib/operaciones.js`.
+
+Para activarlo:
+
+1. En Vercel: `MCP_ALLOWED_EMAILS=<email del dueño>` (tiene que ser admin en
+   `lib/roles.js`). Opcional: `MCP_JWT_SECRET` propio (si no, se deriva de
+   `NEXTAUTH_SECRET`); cambiarlo invalida todos los tokens.
+2. Deploy.
+3. En claude.ai → Configuración → Conectores → Agregar conector personalizado
+   → URL `https://<dominio>/api/mcp`. Pide login con Google y un botón de
+   "Autorizar". Queda disponible también en la app del celular.
+
 **Criterio de "vigente"** (el mismo que se usó para el conteo del 23/09/2026):
 
 - Mensualidad: `mensualidad.endDate >= hoy`.

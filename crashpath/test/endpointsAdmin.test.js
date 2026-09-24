@@ -169,7 +169,15 @@ describe("los endpoints que devuelven datos del socio los recortan", () => {
     "mensualidad/renovar.js",
   ];
 
+  // Los que delegan en lib/operaciones.js (compartido con el MCP) recortan
+  // allá, así que vale importar eso siempre que operaciones recorte.
+  const operaciones = fs.readFileSync(path.join(process.cwd(), "lib", "operaciones.js"), "utf8");
+
+  it("lib/operaciones.js importa el recorte", () => {
+    expect(operaciones).toMatch(/from ["']\.\/redact["']/);
+  });
+
   it.each(DEVUELVEN_SOCIO)("%s importa el recorte", (rel) => {
-    expect(leer(rel)).toMatch(/from ["'].*lib\/redact["']/);
+    expect(leer(rel)).toMatch(/from ["'].*lib\/(redact|operaciones)["']/);
   });
 });
