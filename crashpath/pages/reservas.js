@@ -207,6 +207,29 @@ const Badge = styled.span`
   font-weight: 600;
 `;
 
+const TurnoBox = styled.div`
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-align: left;
+  display: grid;
+  gap: 6px;
+  border: 1px solid #F0C36D;
+  background: #FFF7E6;
+  color: #7A5200;
+`;
+
+const TurnoTexto = styled.div`
+  font-size: 14px;
+  font-weight: 700;
+`;
+
+const TurnoLink = styled.a`
+  font-size: 14px;
+  font-weight: 700;
+  color: #7A5200;
+  text-decoration: underline;
+`;
+
 const PlanBox = styled.div`
   border-radius: 12px;
   padding: 14px;
@@ -719,6 +742,11 @@ export default function Reservas() {
     }
   }
 
+  // Turno de voluntario. Al admin se lo manda derecho al panel, pero al
+  // voluntario NO: puede ser socio y venir a ver sus propias reservas, así que
+  // se le ofrece la entrada en vez de secuestrarle la página.
+  const [turnoStaff, setTurnoStaff] = useState(false);
+
   useEffect(() => {
     if (!session) return;
 
@@ -726,6 +754,13 @@ export default function Reservas() {
       router.push("/admin");
       return;
     }
+
+    // No sale de la sesión a propósito: el turno se otorga y se revoca sin
+    // volver a loguearse, así que hay que preguntarlo por request.
+    axios
+      .get("/api/me/rol")
+      .then((r) => setTurnoStaff(r.data?.rol === "staff"))
+      .catch(() => setTurnoStaff(false));
 
     refreshUser({ autoOpenGates: true });
   }, [session, router]);
@@ -1054,6 +1089,13 @@ export default function Reservas() {
           <WelcomeRow>
             Bienvenid@, <BrushName>{session.user?.name}</BrushName>
           </WelcomeRow>
+
+          {turnoStaff && (
+            <TurnoBox>
+              <TurnoTexto>🕐 Tenés turno de voluntario activo hoy.</TurnoTexto>
+              <TurnoLink href="/admin">Ir al panel del mostrador →</TurnoLink>
+            </TurnoBox>
+          )}
 
           {loaded && (
             <PlanBox $warn={plan.warn}>
