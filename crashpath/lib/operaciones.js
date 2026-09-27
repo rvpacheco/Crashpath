@@ -10,11 +10,13 @@
 // `origen` (opcional, ej. "mcp") queda en meta del AuditLog para poder leer
 // después desde dónde se hizo cada cosa.
 
+import mongoose from "mongoose";
 import User from "../models/User";
 import { opcionesRecorte } from "./authz";
-import { recortarCortesia } from "./redact";
+import { recortarCortesia, recortarUsuario } from "./redact";
 import { logAudit } from "./audit";
-import { otorgarCortesia } from "./cortesia";
+import { otorgarCortesia, estadoCortesia } from "./cortesia";
+import { normalizeName } from "./importExcel";
 
 const conOrigen = (meta, origen) => (origen ? { ...meta, origen } : meta);
 
@@ -394,4 +396,358 @@ export async function ajustarCreditos({ userId, delta, actor, origen }) {
       auditEvent,
     },
   };
+}
+
+/* -------------------- CANCELAR VISITA -------------------- */
+
+/**
+ * Marca una visita como cancelada. Por defecto NO devuelve el crédito; con
+ * `refund` suma 1. Idempotente: cancelar dos veces no hace nada la segunda.
+ */
+export async function cancelarVisita({ userId, visitId, notes = "", refund = false, actor, origen }) {
+  if (!userId || !visitId) {
+    return { status: 400, body: { message: "Missing userId or visitId" } };
+  }
+
+  const user = await User.findById(userId);
+  if (!user) return { status: 404, body: { message: "User not found" } };
+
+  const visit = user.visits?.id(visitId);
+  if (!visit) return { status: 404, body: { message: "Visit not found" } };
+
+  // si ya está cancelada, idempotente
+  if (String(visit.status).toLowerCase() === "cancelled") {
+    return {
+      status: 200,
+      body: {
+        message: "Visit already cancelled",
+        code: "ALREADY_CANCELLED",
+        user: recortarUsuario(user, opcionesRecorte(actor)),
+      },
+    };
+  }
+
+  visit.status = "cancelled";
+  if (notes) visit.notes = notes;
+  if (refund) user.credits = (user.credits ?? 0) + 1;
+
+  await user.save();
+
+  const auditEvent = await logAudit({
+    action: "VISIT_CANCEL",
+    actor,
+    user,
+    summary: `Visita cancelada${refund ? " + crédito reembolsado" : ""}`,
+    meta: conOrigen({ visitId, refund, credits: user.credits }, origen),
+  });
+
+  return {
+    status: 200,
+    body: {
+      message: refund ? "Visit cancelled + refunded" : "Visit cancelled",
+      credits: user.credits,
+      user: recortarUsuario(user, opcionesRecorte(actor)),
+      auditEvent,
+    },
+  };
+}
+
+/* -------------------- USAR CORTESÍA -------------------- */
+
+const DOC_TYPES = ["CC", "CE", "TI", "PP", "NIT", "OTRO"];
+
+const clean = (v) => String(v ?? "").trim();
+
+/** Email placeholder: el invitado no necesita cuenta de Google para entrar.
+ *  Mismo formato que los creados por el import de Excel; editable después
+ *  desde el perfil si el invitado se vuelve socio. */
+function makeGuestEmail(nombre) {
+  const slug =
+    normalizeName(nombre).replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 24) ||
+    "invitado";
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `invitado_${slug}_${rand}@crashpath.local`;
+}
+
+/**
+ * El socio (anfitrión) gasta su cortesía para meter a un invitado. El
+ * invitado NO queda como un "+1" dentro de la visita del socio: se crea (o se
+ * reutiliza) como usuario propio walk-in, firma su waiver y le queda su
+ * propia visita con check-in.
+ *
+ * @param {Object} p
+ * @param {string} p.hostId
+ * @param {string} [p.guestUserId] - si el invitado ya existe en el panel
+ * @param {Object} [p.guest]       - datos crudos del invitado nuevo
+ * @param {Object} [p.waiver]      - solo obligatorio si el invitado no lo tiene firmado
+ * @param {Object} p.actor
+ * @param {Object} [p.meta]        - { ip, userAgent } del request
+ * @param {string} [p.origen]
+ */
+export async function usarCortesia({ hostId, guestUserId, guest: g = {}, waiver: w = {}, actor, meta = {}, origen }) {
+  hostId = clean(hostId);
+  if (!hostId) return { status: 400, body: { message: "Falta hostId" } };
+
+  const guestName = clean(g.name);
+  const guestDocType = clean(g.documentType).toUpperCase() || "CC";
+  const guestDocNumber = clean(g.documentNumber);
+  const guestPhone = clean(g.phone);
+  const guestEps = clean(g.epsName);
+  const guestEcName = clean(g.emergencyContactName);
+  const guestEcPhone = clean(g.emergencyContactPhone);
+  const guestEmail = clean(g.email).toLowerCase();
+  const guestEsMinor = g.esMinor === true || g.esMinor === "true";
+  guestUserId = clean(guestUserId);
+
+  if (!guestUserId) {
+    if (!guestName) return { status: 400, body: { message: "El nombre del invitado es obligatorio" } };
+    if (!DOC_TYPES.includes(guestDocType)) {
+      return { status: 400, body: { message: "Tipo de documento inválido" } };
+    }
+    if (!guestDocNumber) return { status: 400, body: { message: "El documento del invitado es obligatorio" } };
+    if (!guestPhone) return { status: 400, body: { message: "El teléfono del invitado es obligatorio" } };
+    if (!guestEcName || !guestEcPhone) {
+      return { status: 400, body: { message: "El contacto de emergencia del invitado es obligatorio" } };
+    }
+  }
+
+  const now = new Date();
+  const { start: startOfDay, end: endOfDay } = dayRangeBogota();
+
+  /* ── 1. El anfitrión y su cortesía ────────────────────────────────── */
+  const host = await User.findById(hostId);
+  if (!host) return { status: 404, body: { message: "Anfitrión no encontrado" } };
+
+  const st = estadoCortesia(host, now);
+  if (!st.disponible) {
+    return {
+      status: 409,
+      body: {
+        message: st.vencida
+          ? "La cortesía venció con su tiquetera/mensualidad."
+          : "Este usuario no tiene cortesía disponible.",
+        code: st.vencida ? "CORTESIA_VENCIDA" : "CORTESIA_NO_DISPONIBLE",
+      },
+    };
+  }
+
+  /* ── 2. El invitado: reutilizar si ya existe, si no crearlo ───────── */
+  let guest = null;
+  if (guestUserId) {
+    guest = await User.findById(guestUserId);
+    if (!guest) return { status: 404, body: { message: "Invitado no encontrado" } };
+  } else {
+    // Buscar por documento / email / teléfono antes de crear: `phone` y
+    // `email` son únicos y un duplicado reventaría el save con E11000.
+    const or = [];
+    if (guestDocNumber) or.push({ documentType: guestDocType, documentNumber: guestDocNumber });
+    if (guestEmail) or.push({ email: guestEmail });
+    if (guestPhone) or.push({ phone: guestPhone });
+    guest = or.length ? await User.findOne({ $or: or }) : null;
+  }
+
+  if (String(guest?._id || "") === String(host._id)) {
+    return { status: 400, body: { message: "El invitado no puede ser el mismo socio.", code: "GUEST_IS_HOST" } };
+  }
+
+  let guestIsNew = false;
+  if (!guest) {
+    guest = new User({
+      name: guestName,
+      email: guestEmail || makeGuestEmail(guestName),
+      userType: "walkin",
+      // Sin accessType: el invitado no es de tiquetera ni de mensualidad, y
+      // así no ensucia los KPIs ni el filtro "sin créditos".
+      accessType: null,
+      credits: 0,
+      waiverStatus: "pending",
+    });
+    guestIsNew = true;
+  }
+
+  // Datos del invitado: solo se COMPLETA lo que falte. El match es por
+  // documento/teléfono y puede caer sobre un socio ya registrado (alguien
+  // que hoy viene de invitado en vez de gastar su crédito); lo que teclee el
+  // admin en el mostrador no debe pisarle la ficha.
+  const fill = (campo, valor) => {
+    if (!valor) return;
+    if (guestIsNew || !String(guest[campo] || "").trim()) guest[campo] = valor;
+  };
+
+  fill("name", guestName);
+  if (guestDocNumber && (guestIsNew || !String(guest.documentNumber || "").trim())) {
+    guest.documentType = guestDocType;
+    guest.documentNumber = guestDocNumber;
+  }
+  fill("phone", guestPhone);
+  fill("epsName", guestEps);
+  fill("emergencyContactName", guestEcName);
+  fill("emergencyContactPhone", guestEcPhone);
+  if (guestEsMinor) guest.esMinor = true;
+
+  /* ── 3. Waiver del invitado ───────────────────────────────────────── */
+  const signatureUrl = clean(w.signatureImageUrl || w.signatureUrl || w.signatureDataUrl);
+  const signatureText = clean(w.signatureText);
+  const waiverTextSnapshot = clean(w.waiverTextSnapshot);
+  const waiverVersion = clean(w.version) || "v1";
+
+  if (guest.waiverStatus !== "signed") {
+    if (!waiverTextSnapshot) {
+      return { status: 400, body: { message: "Falta el texto del waiver del invitado", code: "WAIVER_REQUIRED" } };
+    }
+    if (!signatureUrl && !signatureText) {
+      return {
+        status: 400,
+        body: { message: "El invitado debe firmar el waiver antes de entrar", code: "SIGNATURE_REQUIRED" },
+      };
+    }
+
+    guest.waiverStatus = "signed";
+    guest.waiverSignedAt = now;
+    guest.waiverVersion = waiverVersion;
+    guest.waiverMethod = "signature";
+    guest.waiverTextSnapshot = waiverTextSnapshot;
+    if (signatureUrl) guest.waiverSignatureUrl = signatureUrl;
+    if (signatureText) guest.waiverSignatureText = signatureText;
+    guest.waiverMeta = {
+      ...(guest.waiverMeta || {}),
+      ip: meta.ip || "",
+      userAgent: meta.userAgent || "",
+      signedBy: actor.rol,
+      adminEmail: actor?.email || "",
+    };
+  }
+
+  /* ── 4. ¿El invitado ya entró hoy? ────────────────────────────────── */
+  // Se valida ANTES de gastar la cortesía: si ya entró, no se cobra nada.
+  const yaEntroHoy = (guest.visits || []).some((v) => {
+    const d = v?.date ? new Date(v.date) : null;
+    if (!d || Number.isNaN(d.getTime())) return false;
+    return d >= startOfDay && d <= endOfDay && v.status !== "cancelled";
+  });
+  if (yaEntroHoy) {
+    return { status: 409, body: { message: "Ese invitado ya tiene una visita hoy.", code: "VISIT_ALREADY_EXISTS" } };
+  }
+
+  /* ── 5. Gastar la cortesía (atómico) ──────────────────────────────── */
+  // El $gte:1 en el filtro es el candado: si dos admins la usan a la vez,
+  // solo uno matchea y el otro recibe 409.
+  const usoId = new mongoose.Types.ObjectId();
+  const consumed = await User.findOneAndUpdate(
+    { _id: host._id, "cortesia.disponibles": { $gte: 1 } },
+    {
+      $inc: { "cortesia.disponibles": -1 },
+      $push: {
+        "cortesia.usos": {
+          _id: usoId,
+          ts: now,
+          guestUserId: guest._id,
+          guestName: guest.name,
+          guestDocument: guest.documentNumber || "",
+          adminEmail: actor?.email || "",
+        },
+      },
+    },
+    { new: true }
+  );
+
+  if (!consumed) {
+    return { status: 409, body: { message: "La cortesía ya fue usada.", code: "CORTESIA_NO_DISPONIBLE" } };
+  }
+
+  /* ── 6. Guardar al invitado con su visita y su check-in ───────────── */
+  // Va DESPUÉS de gastar la cortesía y con rollback: si el guardado falla
+  // (ej. teléfono duplicado), la cortesía no se puede quedar gastada — y si
+  // fallara al revés, quedaría un invitado creado que nunca entró.
+  try {
+    const visitDoc = {
+      date: now,
+      status: "checked_in",
+      createdBy: actor.rol,
+      checkedInAt: now,
+      esCortesia: true,
+      cortesiaHostId: host._id,
+      cortesiaHostName: host.name,
+      notes: `Cortesía de ${host.name}`,
+      events: [
+        {
+          ts: now,
+          action: "CHECKIN",
+          actor: actor.rol,
+          actorEmail: actor?.email || null,
+          actorName: actor?.name || null,
+          meta: conOrigen({ ...meta, esCortesia: true, hostId: String(host._id) }, origen),
+        },
+      ],
+    };
+
+    guest.visits.push(visitDoc);
+    await guest.save();
+
+    const visit = guest.visits[guest.visits.length - 1];
+    if (visit?._id) {
+      await User.updateOne(
+        { _id: host._id, "cortesia.usos._id": usoId },
+        { $set: { "cortesia.usos.$.visitId": visit._id } }
+      );
+    }
+
+    const auditEvent = await logAudit({
+      action: "CORTESIA_USADA",
+      actor,
+      user: host,
+      summary: `Cortesía usada: entró ${guest.name}${guestIsNew ? " (invitado nuevo)" : ""}`,
+      meta: conOrigen(
+        {
+          guestId: String(guest._id),
+          guestName: guest.name,
+          guestDocument: guest.documentNumber || "",
+          guestIsNew,
+          visitId: visit?._id ? String(visit._id) : null,
+          cortesiasRestantes: consumed.cortesia?.disponibles ?? 0,
+        },
+        origen
+      ),
+    });
+
+    // El documento del invitado vuelve solo para quien puede ver datos
+    // sensibles. Ojo: no alcanza con que el voluntario lo acabe de teclear
+    // —si el invitado ya existía, `fill` no pisa lo que había, así que lo
+    // que sale de acá es el dato guardado, no el que escribió. Y `cortesia`
+    // arrastra el historial de usos, con el documento de invitados viejos.
+    const { verSensible } = opcionesRecorte(actor);
+
+    // El registro de auditoría SÍ guarda el documento del invitado (es el
+    // rastro legal y solo lo leen los admins), pero el mismo evento vuelve
+    // en esta respuesta para que el panel lo pinte al instante. Recortar
+    // `guest` y `cortesia` no alcanzaba: el dato se colaba por acá.
+    const auditVisible =
+      verSensible || !auditEvent
+        ? auditEvent
+        : { ...auditEvent, meta: { ...(auditEvent.meta || {}), guestDocument: undefined } };
+
+    return {
+      status: 200,
+      body: {
+        message: "Cortesía registrada: el invitado quedó con check-in.",
+        guest: {
+          _id: guest._id,
+          name: guest.name,
+          email: guest.email,
+          ...(verSensible ? { documentType: guest.documentType, documentNumber: guest.documentNumber } : {}),
+          isNew: guestIsNew,
+        },
+        visit,
+        cortesia: recortarCortesia(consumed.cortesia, { verSensible }),
+        auditEvent: auditVisible,
+      },
+    };
+  } catch (err) {
+    // Si falla el check-in, la cortesía no se puede quedar gastada.
+    await User.updateOne(
+      { _id: host._id, "cortesia.usos._id": usoId },
+      { $inc: { "cortesia.disponibles": 1 }, $pull: { "cortesia.usos": { _id: usoId } } }
+    ).catch(() => {});
+    throw err;
+  }
 }

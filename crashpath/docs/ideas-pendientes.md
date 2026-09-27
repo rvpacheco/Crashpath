@@ -24,7 +24,13 @@ programan las herramientas.
      nunca se descuadren.
    - Si hay dos personas con nombres parecidos, preguntar en vez de adivinar.
 
-**Estado: implementado (fases 1 y 2).** Servidor remoto en `/api/mcp`
+3. **Fase 3: operación del día y retención**
+   - Check-ins del día, inactivos (vigentes que no vienen), vencidos recientes
+     sin renovar, historial (AuditLog), resumen de un periodo y datos por limpiar.
+   - Deshacer check-in de hoy (devuelve el crédito) y usar cortesía con un
+     invitado que ya existe y tiene waiver firmado.
+
+**Estado: implementado (fases 1, 2 y 3).** Servidor remoto en `/api/mcp`
 (`lib/mcpHerramientas.js`), OAuth en `/api/oauth/*` (`lib/mcpAuth.js`) y la
 lógica compartida con el panel en `lib/operaciones.js`.
 

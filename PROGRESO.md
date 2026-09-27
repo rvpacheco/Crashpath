@@ -81,6 +81,11 @@ Rodolfo pase fotos, dirección y la decisión del precio) → admin 2.
   confirmó que conecta y funciona desde el celular; no consta que haya probado un check-in,
   una renovación o una carga. Hacerla con un socio de confianza y revisar la entrada en
   AuditLog (`meta.origen: "mcp"`).
+- **Herramientas nuevas del 26/09/2026 sin probar contra la base real** (solo tests con
+  datos simulados): `checkins_del_dia`, `inactivos`, `vencidos_recientes`, `historial`,
+  `resumen_periodo`, `datos_pendientes`, `deshacer_checkin`, `usar_cortesia`. Para
+  compartirlas, `visits/cancel` y `cortesia/usar` pasaron a `lib/operaciones.js`: probar
+  cancelar una visita y usar una cortesía desde el panel después del deploy.
 - El admin no muestra el origen `mcp` en el feed a propósito: Rodolfo no quiere que el resto
   del staff sepa del MCP por ahora. No agregar la etiqueta "vía Claude" sin preguntarle.
 
@@ -109,8 +114,8 @@ Rodolfo pase fotos, dirección y la decisión del precio) → admin 2.
   pisa a `.env`. Si el local se comporta raro, revisar que no haya quedado uno.
 - `NEXTAUTH_URL` de producción es `https://www.crashpath.lat`; las URLs del OAuth del MCP
   salen de ahí.
-- La lógica de check-in, renovar mensualidad y ajustar créditos vive en
-  `crashpath/lib/operaciones.js` y la comparten el panel y el MCP. Cambiarla ahí, no en los
+- La lógica de check-in, renovar mensualidad, ajustar créditos, cancelar visita y usar
+  cortesía vive en `crashpath/lib/operaciones.js` y la comparten el panel y el MCP. Cambiarla ahí, no en los
   endpoints.
 - En Chrome (Claude in Chrome), `resize_window` no achicó la ventana: para ver el celular
   usar DevTools en modo dispositivo o probar en un teléfono.
