@@ -3,7 +3,7 @@
 // Lectura: buscar, estado, vigentes, por vencer, check-ins del día, inactivos,
 // vencidos recientes, historial (AuditLog), resumen de un periodo, datos por limpiar.
 // Escritura: check-in, deshacer check-in, renovar mensualidad, cargar
-// tiquetera, usar cortesía. Corren la MISMA
+// tiquetera, usar cortesía, editar datos del socio. Corren la MISMA
 // lógica que el panel (lib/operaciones.js) y quedan en AuditLog con origen
 // "mcp". Cada una tiene dos pasos: sin `confirmar` solo muestra qué va a pasar;
 // con `confirmar: true` lo hace.
@@ -26,6 +26,7 @@ import {
   usarCortesia,
   canAccessOrFail,
   calcularNuevoVencimiento,
+  actualizarPerfil,
 } from "./operaciones";
 
 const ORIGEN = "mcp";
@@ -95,6 +96,18 @@ const confirmar = z
     "Sin esto (o en false) solo devuelve una vista previa y no cambia nada. " +
       "Poné true SOLO después de mostrarle la vista previa al usuario y que confirme explícitamente."
   );
+
+// Los nombres de actualizarPerfil (los del modelo) a los que ve Claude.
+const CAMPO_LEGIBLE = {
+  name: "nombre",
+  email: "email",
+  phone: "telefono",
+  documentType: "tipoDocumento",
+  documentNumber: "numeroDocumento",
+  epsName: "eps",
+  emergencyContactName: "contactoEmergenciaNombre",
+  emergencyContactPhone: "contactoEmergenciaTelefono",
+};
 
 const AVISO_PREVIA =
   "VISTA PREVIA: no se cambió nada. Mostrale esto al usuario y pedile confirmación; si confirma, llamá de nuevo con confirmar=true.";
@@ -775,6 +788,58 @@ export function registrarHerramientas(server, actor) {
       const { status, body } = await usarCortesia({ hostId: String(host._id), guestUserId: String(guest._id), actor, origen: ORIGEN });
       if (status >= 400) return error(body.message || "No se pudo usar la cortesía.");
       return texto({ hecho: "Cortesía usada: el invitado quedó con check-in.", socio: host.name, invitado: guest.name });
+    }
+  );
+
+  server.registerTool(
+    "editar_usuario",
+    {
+      title: "Editar datos de un socio",
+      description:
+        "Corrige los datos de contacto e identificación de un socio: nombre, email, teléfono, documento, EPS y contacto " +
+        "de emergencia. Mandá solo los campos que cambian; los que no mandes quedan igual (esto no borra datos). " +
+        "Poner el email real a un socio importado (@crashpath.local) lo conecta con su login de Google. " +
+        "Primero llamá sin confirmar para ver la vista previa.",
+      inputSchema: {
+        userId: idUsuario,
+        nombre: z.string().min(1).optional().describe("Nombre completo"),
+        email: z.string().optional().describe("Email (el de Google si va a entrar con su cuenta)"),
+        telefono: z.string().optional(),
+        tipoDocumento: z.enum(["CC", "CE", "TI", "PP", "NIT", "OTRO"]).optional(),
+        numeroDocumento: z.string().optional(),
+        eps: z.string().optional(),
+        contactoEmergenciaNombre: z.string().optional(),
+        contactoEmergenciaTelefono: z.string().optional(),
+        confirmar,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ userId, confirmar: ok, ...campos }) => {
+      if (!mongoose.isValidObjectId(userId)) return error("Usuario no encontrado.");
+
+      const datos = {
+        name: campos.nombre,
+        email: campos.email,
+        phone: campos.telefono,
+        documentType: campos.tipoDocumento,
+        documentNumber: campos.numeroDocumento,
+        epsName: campos.eps,
+        emergencyContactName: campos.contactoEmergenciaNombre,
+        emergencyContactPhone: campos.contactoEmergenciaTelefono,
+      };
+
+      const { status, body } = await actualizarPerfil({ userId, datos, actor, origen: ORIGEN, simular: !ok });
+      if (status >= 400) return error(body.message || "No se pudo editar el socio.");
+
+      const cambios = Object.fromEntries(
+        Object.entries(body.cambios).map(([k, { antes, despues }]) => [CAMPO_LEGIBLE[k], { antes, despues }])
+      );
+      if (!Object.keys(cambios).length) {
+        return texto({ nota: "Nada que cambiar: los datos que mandaste son iguales a los que ya tiene.", socio: body.user.name });
+      }
+
+      if (!ok) return texto({ aviso: AVISO_PREVIA, socio: body.user.name, cambios });
+      return texto({ hecho: "Datos actualizados.", socio: body.user.name, cambios });
     }
   );
 }

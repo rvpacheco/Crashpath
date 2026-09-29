@@ -84,6 +84,13 @@ const h = vi.hoisted(() => {
     },
     cancelarVisita: vi.fn(async () => ({ status: 200, body: { credits: 4 } })),
     usarCortesia: vi.fn(async () => ({ status: 200, body: {} })),
+    actualizarPerfil: vi.fn(async ({ datos }) => ({
+      status: 200,
+      body: {
+        user: { name: "Beto Mensual" },
+        cambios: datos.phone ? { phone: { antes: "3001112233", despues: datos.phone } } : {},
+      },
+    })),
   };
 });
 
@@ -92,6 +99,7 @@ vi.mock("../models/AuditLog", () => ({ default: h.AuditLog }));
 vi.mock("../lib/operaciones", () => ({
   cancelarVisita: h.cancelarVisita,
   usarCortesia: h.usarCortesia,
+  actualizarPerfil: h.actualizarPerfil,
   calcularNuevoVencimiento: () => new Date(),
   canAccessOrFail: () => ({ ok: true }),
 }));
@@ -213,5 +221,42 @@ describe("usar_cortesia", () => {
     expect(h.usarCortesia).toHaveBeenCalledWith(
       expect.objectContaining({ hostId: "aaaaaaaaaaaaaaaaaaaaaaaa", guestUserId: "cccccccccccccccccccccccc", origen: "mcp" })
     );
+  });
+});
+
+describe("editar_usuario", () => {
+  const beto = "bbbbbbbbbbbbbbbbbbbbbbbb";
+
+  it("sin confirmar simula y muestra antes → después con nombres legibles", async () => {
+    h.actualizarPerfil.mockClear();
+    const r = await llamar("editar_usuario", { userId: beto, telefono: "3009998877" });
+    expect(r.aviso).toMatch(/VISTA PREVIA/);
+    expect(r.cambios).toEqual({ telefono: { antes: "3001112233", despues: "3009998877" } });
+    expect(h.actualizarPerfil).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: beto, simular: true, origen: "mcp", datos: expect.objectContaining({ phone: "3009998877" }) })
+    );
+  });
+
+  it("con confirmar guarda de verdad", async () => {
+    h.actualizarPerfil.mockClear();
+    const r = await llamar("editar_usuario", { userId: beto, telefono: "3009998877", confirmar: true });
+    expect(r.hecho).toBe("Datos actualizados.");
+    expect(h.actualizarPerfil).toHaveBeenCalledWith(expect.objectContaining({ simular: false }));
+  });
+
+  it("avisa si no hay nada que cambiar", async () => {
+    const r = await llamar("editar_usuario", { userId: beto, nombre: "Beto Mensual" });
+    expect(r.nota).toMatch(/Nada que cambiar/);
+  });
+
+  it("pasa el error de la operación (ej. email repetido)", async () => {
+    h.actualizarPerfil.mockResolvedValueOnce({ status: 409, body: { message: "Ese email ya está en uso por otra cuenta." } });
+    expect((await llamar("editar_usuario", { userId: beto, email: "otro@x.co" })).error).toMatch(/ya está en uso/);
+  });
+
+  it("rechaza un userId que no es ObjectId sin tocar la base", async () => {
+    h.actualizarPerfil.mockClear();
+    expect((await llamar("editar_usuario", { userId: "juan" })).error).toMatch(/no encontrado/);
+    expect(h.actualizarPerfil).not.toHaveBeenCalled();
   });
 });

@@ -751,3 +751,88 @@ export async function usarCortesia({ hostId, guestUserId, guest: g = {}, waiver:
     throw err;
   }
 }
+
+/* -------------------- EDITAR PERFIL -------------------- */
+
+/** Campos del perfil que se pueden editar (el formulario del panel y el MCP). */
+export const CAMPOS_PERFIL = [
+  "name",
+  "email",
+  "phone",
+  "documentType",
+  "documentNumber",
+  "epsName",
+  "emergencyContactName",
+  "emergencyContactPhone",
+];
+
+/**
+ * Actualiza los datos de contacto/identificación de un socio. Un campo vacío
+ * o ausente NO borra lo que había: se deja como estaba.
+ *
+ * Con `simular` valida y calcula el antes → después sin guardar nada (la
+ * vista previa del MCP), así la vista previa ya avisa de un email o teléfono
+ * repetido en vez de fallar recién al confirmar.
+ */
+export async function actualizarPerfil({ userId, datos = {}, actor, origen, simular = false }) {
+  if (!userId || !mongoose.isValidObjectId(userId)) {
+    return { status: 400, body: { message: "Missing userId" } };
+  }
+
+  const nuevos = {};
+  for (const k of CAMPOS_PERFIL) {
+    let v = clean(datos[k]);
+    if (k === "email") v = v.toLowerCase();
+    if (k === "documentType") v = v.toUpperCase();
+    if (v) nuevos[k] = v;
+  }
+
+  if (nuevos.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nuevos.email)) {
+    return { status: 400, body: { message: "Email inválido." } };
+  }
+  if (nuevos.documentType && !DOC_TYPES.includes(nuevos.documentType)) {
+    return { status: 400, body: { message: "Tipo de documento inválido." } };
+  }
+
+  const user = await User.findById(userId);
+  if (!user) return { status: 404, body: { message: "Usuario no encontrado." } };
+
+  // Solo lo que de verdad cambia: así el audit no dice "cambió el email"
+  // cuando se reenvió el mismo.
+  const cambios = {};
+  for (const [k, v] of Object.entries(nuevos)) {
+    if ((user[k] ?? "") !== v) cambios[k] = { antes: user[k] ?? null, despues: v };
+  }
+
+  // Email: importante para usuarios importados/walk-in con placeholder
+  // @crashpath.local — al ponerles su email real de Google, el login los
+  // conecta con esta misma cuenta (login busca por email).
+  if (cambios.email && (await User.exists({ email: cambios.email.despues, _id: { $ne: user._id } }))) {
+    return { status: 409, body: { message: "Ese email ya está en uso por otra cuenta.", code: "EMAIL_IN_USE" } };
+  }
+  // El teléfono es único en el schema: sin esto el save revienta con E11000.
+  if (cambios.phone && (await User.exists({ phone: cambios.phone.despues, _id: { $ne: user._id } }))) {
+    return { status: 409, body: { message: "Ese teléfono ya está en uso por otra cuenta.", code: "PHONE_IN_USE" } };
+  }
+
+  if (simular) return { status: 200, body: { cambios, user } };
+
+  if (!Object.keys(cambios).length) {
+    return { status: 200, body: { message: "No había nada que cambiar.", code: "SIN_CAMBIOS", cambios, user } };
+  }
+
+  for (const [k, { despues }] of Object.entries(cambios)) user[k] = despues;
+  await user.save();
+
+  // Solo los nombres de los campos, no los valores: el feed lo lee todo el
+  // panel y acá hay documento y teléfonos.
+  const auditEvent = await logAudit({
+    action: "UPDATE_PROFILE",
+    actor,
+    user,
+    summary: `Perfil actualizado: ${user.name}`,
+    meta: conOrigen({ fields: Object.keys(cambios) }, origen),
+  });
+
+  return { status: 200, body: { message: "Perfil actualizado correctamente.", cambios, user, auditEvent } };
+}
