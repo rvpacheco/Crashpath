@@ -19,6 +19,7 @@ export const ADMIN_EMAILS = [
   "miguelvarbla@gmail.com",
   "dmp702@gmail.com",
   "miguelcomposi@gmail.com",
+  "hexon.lizcano@gmail.com",
 ].map((e) => e.trim().toLowerCase());
 
 /** Normaliza un email para comparar (los emails se guardan en minúscula). */
