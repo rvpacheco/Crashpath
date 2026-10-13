@@ -13,6 +13,8 @@ import { PERMISOS } from "@/lib/permisos";
 import { etiquetaTurno } from "@/lib/staff";
 import { estadoGate, ACCION_LOGIN, ACCION_REINTENTAR, ACCION_INICIO } from "@/lib/gateAdmin";
 import { PrivacyProvider, usePrivacy } from "@/components/PrivacyContext";
+import { InventarioModal, VentaRapida } from "@/components/Inventario";
+import { buscarProductos } from "@/lib/inventario";
 
 // ============================================
 // SISTEMA DE DISEÑO MINIMALISTA
@@ -1424,6 +1426,10 @@ function AdminPanel() {
   const [staffMsg, setStaffMsg] = useState("");
   const [staffOk, setStaffOk] = useState(true);
 
+  // Inventario del mostrador (magnesio, cepillos). El estado vive en
+  // components/Inventario.jsx; acá solo se abre.
+  const [showInventario, setShowInventario] = useState(false);
+
   // Esconder un botón es comodidad, no seguridad: el endpoint vuelve a
   // preguntar por su cuenta (lib/authz.js).
   const can = useCallback(
@@ -1688,6 +1694,8 @@ function AdminPanel() {
     );
     return () => axios.interceptors.response.eject(id);
   }, []);
+
+  const productosBuscados = useMemo(() => buscarProductos(query), [query]);
 
   const appendAuditEvent = (evt) => {
     if (!evt) return;
@@ -2921,6 +2929,11 @@ function AdminPanel() {
             <Button onClick={openAttendanceModal}>
               📊 Asistencia
             </Button>
+            {can(PERMISOS.COBRAR) && (
+              <Button $variant="secondary" onClick={() => setShowInventario(true)}>
+                📦 Inventario
+              </Button>
+            )}
             {can(PERMISOS.CREAR_USUARIO) && (
               <Button onClick={openNewUser}>
                 + Nuevo miembro
@@ -3072,6 +3085,16 @@ function AdminPanel() {
         </FiltersBar>
 
         {uiError && <div style={{ padding: `0 ${spacing.xl}` }}><ErrorBox>{uiError}</ErrorBox></div>}
+
+        {/* Buscar "magnesio" o "cepillo" ofrece registrar la venta ahí mismo */}
+        {can(PERMISOS.COBRAR) && productosBuscados.length > 0 && (
+          <VentaRapida
+            key={productosBuscados.map((p) => p.clave).join(",")}
+            productos={productosBuscados}
+            onAuditEvent={appendAuditEvent}
+            onVerInventario={() => setShowInventario(true)}
+          />
+        )}
 
         <div style={{ display: "flex", flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -3599,6 +3622,13 @@ function AdminPanel() {
             </ActionButtons>
           </ModalContent>
         </Modal>
+
+        <InventarioModal
+          open={showInventario}
+          onClose={() => setShowInventario(false)}
+          puedeGestionar={can(PERMISOS.INVENTARIO_GESTIONAR)}
+          onAuditEvent={appendAuditEvent}
+        />
 
         {/* Voluntarios: otorgar y cortar turnos de mostrador (solo admin) */}
         <Overlay $show={showStaffModal} onClick={() => !busy && setShowStaffModal(false)} />
