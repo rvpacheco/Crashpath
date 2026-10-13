@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import styled from "styled-components";
-import { PRODUCTOS, TIPOS, productoPorClave } from "@/lib/inventario";
+import { PRODUCTOS, TIPOS, productoPorClave, formatoPesos } from "@/lib/inventario";
 
 const c = {
   text: "#1A1A1A",
@@ -189,7 +189,9 @@ function fechaCorta(d) {
 }
 
 function textoMovimiento(m) {
-  if (m.tipo === TIPOS.VENTA) return `Venta de ${nombreCantidad(m.producto, m.cantidad)}`;
+  if (m.tipo === TIPOS.VENTA) {
+    return `Venta de ${nombreCantidad(m.producto, m.cantidad)}${m.total != null ? ` · ${formatoPesos(m.total)}` : ""}`;
+  }
   if (m.tipo === TIPOS.ENTRADA) return `Llegaron ${nombreCantidad(m.producto, m.cantidad)}`;
   const p = productoPorClave(m.producto);
   return `Ajuste de ${p?.plural || m.producto}: quedan ${m.conteo} (${m.delta > 0 ? "+" : ""}${m.delta})`;
@@ -369,7 +371,7 @@ export function InventarioModal({ open, onClose, puedeGestionar, onAuditEvent })
               return (
                 <StockCard key={p.clave}>
                   <Small>
-                    {p.emoji} {p.nombre}
+                    {p.emoji} {p.nombre} · {formatoPesos(p.precio)}
                   </Small>
                   <StockNum $bajo={n <= STOCK_BAJO}>{n}</StockNum>
                   <Small>{n <= STOCK_BAJO ? "quedan pocos, hay que pedir" : "en stock"}</Small>
@@ -437,7 +439,7 @@ export function VentaRapida({ productos, onAuditEvent, onVerInventario }) {
                   {p.emoji} {p.nombre}
                 </strong>{" "}
                 <Small as="span">
-                  · {n == null ? "…" : `quedan ${n}`}
+                  · {formatoPesos(p.precio)} · {n == null ? "…" : `quedan ${n}`}
                 </Small>
               </div>
             </Row>

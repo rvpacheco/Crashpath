@@ -36,6 +36,7 @@ function plano(m) {
     cantidad: m.cantidad,
     delta: m.delta,
     conteo: m.conteo ?? null,
+    total: m.total ?? null,
     por: m.por?.name || m.por?.email || null,
     porEmail: m.por?.email || null,
     nota: m.nota || null,
@@ -82,6 +83,9 @@ export default async function handler(req, res) {
       const v = validarMovimiento(req.body || {}, stock[producto] ?? 0);
       if (!v.ok) return res.status(400).json({ message: v.message, code: v.code });
 
+      const prod = productoPorClave(producto);
+      const esVenta = tipo === TIPOS.VENTA;
+
       const mov = await MovimientoInventario.create({
         ts: new Date(),
         producto,
@@ -89,12 +93,13 @@ export default async function handler(req, res) {
         cantidad: v.cantidad,
         delta: v.delta,
         conteo: tipo === TIPOS.AJUSTE ? Number(req.body.conteo) : undefined,
+        precioUnitario: esVenta ? prod.precio : undefined,
+        total: esVenta ? prod.precio * v.cantidad : undefined,
         por: { email: actor.email, name: actor.name, rol: actor.rol },
         nota: nota || undefined,
       });
 
       const nuevoStock = { ...stock, [producto]: (stock[producto] ?? 0) + v.delta };
-      const prod = productoPorClave(producto);
       const resumen = resumenMovimiento(mov);
 
       const auditEvent = await logAudit({
@@ -107,6 +112,7 @@ export default async function handler(req, res) {
           tipo,
           cantidad: v.cantidad,
           delta: v.delta,
+          total: mov.total,
           stockAntes: stock[producto] ?? 0,
           stockDespues: nuevoStock[producto],
           nota: nota || undefined,
