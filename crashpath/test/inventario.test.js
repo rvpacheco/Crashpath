@@ -4,6 +4,8 @@ import {
   stockDesdeMovimientos,
   validarMovimiento,
   resumenMovimiento,
+  formatoPesos,
+  productoPorClave,
   MAX_CANTIDAD,
 } from "../lib/inventario.js";
 
@@ -125,6 +127,20 @@ describe("resumenMovimiento", () => {
   it("el ajuste muestra con cuánto quedó y la diferencia con signo", () => {
     expect(resumenMovimiento({ tipo: "ajuste", producto: "cepillo", delta: -2, conteo: 5 })).toBe(
       "Ajuste de conteo de cepillos: quedan 5 (-2)"
+    );
+  });
+});
+
+describe("precios", () => {
+  it("cubo a $15.000 y cepillo a $37.000", () => {
+    expect(productoPorClave("magnesio").precio).toBe(15000);
+    expect(productoPorClave("cepillo").precio).toBe(37000);
+  });
+
+  it("la venta muestra el total cobrado", () => {
+    expect(formatoPesos(30000)).toMatch(/^\$30.000$/);
+    expect(resumenMovimiento({ tipo: "venta", producto: "magnesio", cantidad: 2, total: 30000 })).toMatch(
+      /^Vendió 2 cubos de magnesio \(\$30.000\)$/
     );
   });
 });

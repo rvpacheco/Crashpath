@@ -16,6 +16,11 @@ const MovimientoInventarioSchema = new Schema(
     delta: { type: Number, required: true },    // con signo, lo que mueve el stock
     conteo: { type: Number },                   // solo en ajuste: lo que había en físico
 
+    // Solo en venta. Se guarda el precio del momento: si mañana sube, las
+    // ventas viejas siguen sumando lo que realmente se cobró.
+    precioUnitario: { type: Number },
+    total: { type: Number },
+
     // Quién lo registró. En una venta, quién vendió.
     por: {
       email: { type: String },

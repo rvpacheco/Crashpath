@@ -14,6 +14,7 @@ export const PRODUCTOS = [
     nombre: "Cubo de magnesio",
     plural: "cubos de magnesio",
     emoji: "🧱",
+    precio: 15000, // COP por unidad
     // Lo que alguien escribiría en la barra de búsqueda para encontrarlo.
     alias: ["magnesio", "cubo", "cubos", "tiza", "chalk"],
   },
@@ -22,6 +23,7 @@ export const PRODUCTOS = [
     nombre: "Cepillo",
     plural: "cepillos",
     emoji: "🪥",
+    precio: 37000,
     alias: ["cepillo", "cepillos", "brush"],
   },
 ];
@@ -35,6 +37,11 @@ export const TIPOS = {
 // Tope por movimiento. No limita el negocio: un pedido de 500 cubos se carga
 // en dos veces. Evita que un "100" tipeado como "1000" descuadre todo.
 export const MAX_CANTIDAD = 500;
+
+/** $15.000 */
+export function formatoPesos(n) {
+  return `$${Math.round(Number(n) || 0).toLocaleString("es-CO")}`;
+}
 
 export function productoPorClave(clave) {
   return PRODUCTOS.find((p) => p.clave === clave) || null;
@@ -125,10 +132,12 @@ export function validarMovimiento({ tipo, producto, cantidad, conteo } = {}, sto
 }
 
 /** Texto para la auditoría y la lista de movimientos. */
-export function resumenMovimiento({ tipo, producto, cantidad, delta, conteo }) {
+export function resumenMovimiento({ tipo, producto, cantidad, delta, conteo, total }) {
   const prod = productoPorClave(producto);
   const nombre = (n) => (n === 1 ? prod?.nombre.toLowerCase() : prod?.plural) || producto;
-  if (tipo === TIPOS.VENTA) return `Vendió ${cantidad} ${nombre(cantidad)}`;
+  if (tipo === TIPOS.VENTA) {
+    return `Vendió ${cantidad} ${nombre(cantidad)}${total != null ? ` (${formatoPesos(total)})` : ""}`;
+  }
   if (tipo === TIPOS.ENTRADA) return `Llegaron ${cantidad} ${nombre(cantidad)}`;
   const signo = delta > 0 ? `+${delta}` : String(delta);
   return `Ajuste de conteo de ${prod?.plural || producto}: quedan ${conteo} (${signo})`;
