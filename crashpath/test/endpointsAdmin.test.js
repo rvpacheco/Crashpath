@@ -19,6 +19,9 @@ const ESPERADO = {
   "checkins.js": PERMISOS.CHECKIN,
   "export-xlsx.js": PERMISOS.EXPORTAR,
   "import-xlsx.js": PERMISOS.IMPORTAR,
+  // Vender es cobrar. Llegadas y ajustes los frena el propio endpoint con
+  // INVENTARIO_GESTIONAR, que el voluntario no tiene (test/permisos.test.js).
+  "inventario/index.js": PERMISOS.COBRAR,
   "users.js": PERMISOS.VER_SOCIOS,
   "cortesia/set.js": PERMISOS.CORTESIA_CORREGIR,
   "cortesia/usar.js": PERMISOS.CORTESIA_USAR,
@@ -117,6 +120,7 @@ describe("qué endpoints alcanza un voluntario", () => {
         "adjust-credits.js",
         "checkins.js",
         "cortesia/usar.js",
+        "inventario/index.js",
         "mensualidad/renovar.js",
         "moon/cancel.js",
         "moon/reservations.js",

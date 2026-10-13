@@ -26,6 +26,7 @@ export const PERMISOS = {
   IMPORTAR: "importar",
   BORRAR_USUARIO: "borrar_usuario",
   GESTIONAR_STAFF: "gestionar_staff",   // otorgar y revocar turnos de voluntario
+  INVENTARIO_GESTIONAR: "inventario_gestionar", // cargar mercancía y ajustar conteos (vender es COBRAR)
 };
 
 export const ROL_ADMIN = "admin";

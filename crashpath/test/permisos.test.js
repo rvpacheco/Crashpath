@@ -58,6 +58,7 @@ describe("qué puede el voluntario", () => {
     PERMISOS.IMPORTAR,
     PERMISOS.BORRAR_USUARIO,
     PERMISOS.GESTIONAR_STAFF,
+    PERMISOS.INVENTARIO_GESTIONAR,
   ];
 
   it.each(PUEDE)("puede %s", (permiso) => {
