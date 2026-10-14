@@ -19,6 +19,7 @@ const MovimientoInventarioSchema = new Schema(
     // Solo en venta. Se guarda el precio del momento: si mañana sube, las
     // ventas viejas siguen sumando lo que realmente se cobró.
     precioUnitario: { type: Number },
+    tarifa: { type: String, enum: ["normal", "socio"] },
     total: { type: Number },
 
     // Quién lo registró. En una venta, quién vendió.

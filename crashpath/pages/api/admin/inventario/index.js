@@ -12,6 +12,7 @@ import {
   PRODUCTOS,
   TIPOS,
   productoPorClave,
+  precioDeVenta,
   validarMovimiento,
   resumenMovimiento,
 } from "../../../../lib/inventario";
@@ -37,6 +38,7 @@ function plano(m) {
     delta: m.delta,
     conteo: m.conteo ?? null,
     total: m.total ?? null,
+    tarifa: m.tarifa || null,
     por: m.por?.name || m.por?.email || null,
     porEmail: m.por?.email || null,
     nota: m.nota || null,
@@ -86,6 +88,12 @@ export default async function handler(req, res) {
       const prod = productoPorClave(producto);
       const esVenta = tipo === TIPOS.VENTA;
 
+      let precio;
+      if (esVenta) {
+        precio = precioDeVenta({ producto, tarifa: req.body?.tarifa, nota });
+        if (!precio.ok) return res.status(400).json({ message: precio.message, code: precio.code });
+      }
+
       const mov = await MovimientoInventario.create({
         ts: new Date(),
         producto,
@@ -93,8 +101,9 @@ export default async function handler(req, res) {
         cantidad: v.cantidad,
         delta: v.delta,
         conteo: tipo === TIPOS.AJUSTE ? Number(req.body.conteo) : undefined,
-        precioUnitario: esVenta ? prod.precio : undefined,
-        total: esVenta ? prod.precio * v.cantidad : undefined,
+        precioUnitario: esVenta ? precio.precio : undefined,
+        tarifa: esVenta ? precio.tarifa : undefined,
+        total: esVenta ? precio.precio * v.cantidad : undefined,
         por: { email: actor.email, name: actor.name, rol: actor.rol },
         nota: nota || undefined,
       });
@@ -113,6 +122,7 @@ export default async function handler(req, res) {
           cantidad: v.cantidad,
           delta: v.delta,
           total: mov.total,
+          tarifa: mov.tarifa,
           stockAntes: stock[producto] ?? 0,
           stockDespues: nuevoStock[producto],
           nota: nota || undefined,

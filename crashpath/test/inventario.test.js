@@ -6,6 +6,7 @@ import {
   resumenMovimiento,
   formatoPesos,
   productoPorClave,
+  precioDeVenta,
   MAX_CANTIDAD,
 } from "../lib/inventario.js";
 
@@ -142,5 +143,33 @@ describe("precios", () => {
     expect(resumenMovimiento({ tipo: "venta", producto: "magnesio", cantidad: 2, total: 30000 })).toMatch(
       /^Vendió 2 cubos de magnesio \(\$30.000\)$/
     );
+  });
+});
+
+describe("precioDeVenta", () => {
+  it("sin tarifa cobra el precio normal", () => {
+    expect(precioDeVenta({ producto: "magnesio" })).toEqual({ ok: true, tarifa: "normal", precio: 15000 });
+  });
+
+  it("el socio paga $5.000 el cubo, diciendo quién se lo llevó", () => {
+    expect(precioDeVenta({ producto: "magnesio", tarifa: "socio", nota: "Jevan" })).toEqual({
+      ok: true,
+      tarifa: "socio",
+      precio: 5000,
+    });
+  });
+
+  it("precio de socio sin nombre no pasa", () => {
+    expect(precioDeVenta({ producto: "magnesio", tarifa: "socio", nota: "  " }).code).toBe("FALTA_QUIEN");
+  });
+
+  it("el cepillo no tiene precio de socio", () => {
+    expect(precioDeVenta({ producto: "cepillo", tarifa: "socio", nota: "Jevan" }).code).toBe("SIN_PRECIO_SOCIO");
+  });
+
+  it("el resumen dice que fue precio socio y para quién", () => {
+    expect(
+      resumenMovimiento({ tipo: "venta", producto: "magnesio", cantidad: 1, total: 5000, tarifa: "socio", nota: "Jevan" })
+    ).toMatch(/^Vendió 1 cubo de magnesio \(\$5.000, precio socio para Jevan\)$/);
   });
 });
