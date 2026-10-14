@@ -15,6 +15,9 @@ export const PRODUCTOS = [
     plural: "cubos de magnesio",
     emoji: "🧱",
     precio: 15000, // COP por unidad
+    // Lo que paga un socio del muro. Producto sin precioSocio = no hay tarifa
+    // de socio para él.
+    precioSocio: 5000,
     // Lo que alguien escribiría en la barra de búsqueda para encontrarlo.
     alias: ["magnesio", "cubo", "cubos", "tiza", "chalk"],
   },
@@ -131,12 +134,38 @@ export function validarMovimiento({ tipo, producto, cantidad, conteo } = {}, sto
   return { ok: true, delta: tipo === TIPOS.VENTA ? -n : n, cantidad: n };
 }
 
+export const TARIFAS = { NORMAL: "normal", SOCIO: "socio" };
+
+/**
+ * Precio de una venta según la tarifa. La de socio exige decir quién se lo
+ * llevó: sin el nombre, un cubo a $5.000 no se puede distinguir de uno mal
+ * cobrado.
+ *
+ * @returns {{ok: true, tarifa: string, precio: number} | {ok: false, code: string, message: string}}
+ */
+export function precioDeVenta({ producto, tarifa, nota } = {}) {
+  const prod = productoPorClave(producto);
+  if (!prod) return { ok: false, code: "PRODUCTO_INVALIDO", message: "Producto desconocido." };
+
+  if (!tarifa || tarifa === TARIFAS.NORMAL) return { ok: true, tarifa: TARIFAS.NORMAL, precio: prod.precio };
+
+  if (tarifa !== TARIFAS.SOCIO) return { ok: false, code: "TARIFA_INVALIDA", message: "Tarifa inválida." };
+  if (prod.precioSocio == null) {
+    return { ok: false, code: "SIN_PRECIO_SOCIO", message: `${prod.nombre} no tiene precio de socio.` };
+  }
+  if (!String(nota || "").trim()) {
+    return { ok: false, code: "FALTA_QUIEN", message: "Con precio de socio hay que escribir quién se lo llevó." };
+  }
+  return { ok: true, tarifa: TARIFAS.SOCIO, precio: prod.precioSocio };
+}
+
 /** Texto para la auditoría y la lista de movimientos. */
-export function resumenMovimiento({ tipo, producto, cantidad, delta, conteo, total }) {
+export function resumenMovimiento({ tipo, producto, cantidad, delta, conteo, total, tarifa, nota }) {
   const prod = productoPorClave(producto);
   const nombre = (n) => (n === 1 ? prod?.nombre.toLowerCase() : prod?.plural) || producto;
   if (tipo === TIPOS.VENTA) {
-    return `Vendió ${cantidad} ${nombre(cantidad)}${total != null ? ` (${formatoPesos(total)})` : ""}`;
+    const socio = tarifa === TARIFAS.SOCIO ? `, precio socio${nota ? ` para ${nota}` : ""}` : "";
+    return `Vendió ${cantidad} ${nombre(cantidad)}${total != null ? ` (${formatoPesos(total)}${socio})` : ""}`;
   }
   if (tipo === TIPOS.ENTRADA) return `Llegaron ${cantidad} ${nombre(cantidad)}`;
   const signo = delta > 0 ? `+${delta}` : String(delta);

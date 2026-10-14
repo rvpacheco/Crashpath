@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import styled from "styled-components";
-import { PRODUCTOS, TIPOS, productoPorClave, formatoPesos } from "@/lib/inventario";
+import { PRODUCTOS, TIPOS, TARIFAS, productoPorClave, formatoPesos } from "@/lib/inventario";
 
 const c = {
   text: "#1A1A1A",
@@ -190,7 +190,9 @@ function fechaCorta(d) {
 
 function textoMovimiento(m) {
   if (m.tipo === TIPOS.VENTA) {
-    return `Venta de ${nombreCantidad(m.producto, m.cantidad)}${m.total != null ? ` · ${formatoPesos(m.total)}` : ""}`;
+    return `Venta de ${nombreCantidad(m.producto, m.cantidad)}${m.total != null ? ` · ${formatoPesos(m.total)}` : ""}${
+      m.tarifa === TARIFAS.SOCIO ? " (socio)" : ""
+    }`;
   }
   if (m.tipo === TIPOS.ENTRADA) return `Llegaron ${nombreCantidad(m.producto, m.cantidad)}`;
   const p = productoPorClave(m.producto);
@@ -257,27 +259,62 @@ function useRegistrar(aplicar, onAuditEvent) {
 
 /** Cantidad + botón "Vender". Quién vende lo pone el servidor desde la sesión. */
 function Vender({ clave, disponible, busy, onVender }) {
+  const prod = productoPorClave(clave);
   const [cant, setCant] = useState(1);
+  const [socio, setSocio] = useState(false);
+  const [nota, setNota] = useState("");
+  const faltaQuien = socio && !nota.trim();
+  const precio = socio ? prod?.precioSocio : prod?.precio;
+
   return (
-    <Row style={{ marginTop: 10 }}>
-      <NumInput
-        type="number"
-        min={1}
-        value={cant}
-        onChange={(e) => setCant(e.target.value)}
-        aria-label="Cantidad"
-      />
-      <Btn
-        $success
-        disabled={busy || disponible <= 0}
-        onClick={async () => {
-          const ok = await onVender({ tipo: TIPOS.VENTA, producto: clave, cantidad: Number(cant) });
-          if (ok) setCant(1);
-        }}
-      >
-        {busy ? "Guardando..." : "Registrar venta"}
-      </Btn>
-    </Row>
+    <div style={{ marginTop: 10 }}>
+      {prod?.precioSocio != null && (
+        <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 14, marginBottom: 6, cursor: "pointer" }}>
+          <input type="checkbox" checked={socio} onChange={(e) => setSocio(e.target.checked)} />
+          Precio socio
+        </label>
+      )}
+      <Row>
+        <NumInput
+          type="number"
+          min={1}
+          value={cant}
+          onChange={(e) => setCant(e.target.value)}
+          aria-label="Cantidad"
+        />
+        <TextInput
+          placeholder={socio ? "¿Quién se lo lleva? (obligatorio)" : "Nota (opcional)"}
+          value={nota}
+          onChange={(e) => setNota(e.target.value)}
+          style={faltaQuien ? { borderColor: c.warning } : undefined}
+        />
+      </Row>
+      <Row style={{ marginTop: 6 }}>
+        <Btn
+          $success
+          disabled={busy || disponible <= 0 || faltaQuien}
+          onClick={async () => {
+            const ok = await onVender({
+              tipo: TIPOS.VENTA,
+              producto: clave,
+              cantidad: Number(cant),
+              tarifa: socio ? TARIFAS.SOCIO : TARIFAS.NORMAL,
+              nota: nota.trim(),
+            });
+            if (ok) {
+              setCant(1);
+              setSocio(false);
+              setNota("");
+            }
+          }}
+        >
+          {busy ? "Guardando..." : "Registrar venta"}
+        </Btn>
+        {Number(cant) > 0 && precio != null && (
+          <Small as="span">Total: {formatoPesos(precio * Number(cant))}</Small>
+        )}
+      </Row>
+    </div>
   );
 }
 
