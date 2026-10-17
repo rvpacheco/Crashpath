@@ -366,6 +366,9 @@ const Section = styled.section`
   position: relative;
   z-index: 1;
   padding: 60px 14px;
+  /* El menú es fijo (75px en celular): sin esto, al tocar un enlace del menú el
+     título de la sección queda tapado por la barra. */
+  scroll-margin-top: 40px;
 
   @media (min-width: 900px) {
     padding: 80px 18px;
@@ -585,9 +588,22 @@ const Footer = styled.footer`
     "Liberation Mono", monospace;
 `;
 
+const FooterLinks = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 6px;
+  margin-top: 4px;
+`;
+
 const FooterLink = styled.a`
   color: ${(p) => p.$t.accent};
   font-weight: 700;
+  /* Zona táctil de 44px: como texto suelto medía 14px y era fácil fallar. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 8px;
 
   &:hover {
     text-decoration: underline;
@@ -947,26 +963,25 @@ export default function CrashPathLanding() {
 
       <Footer $t={t}>
         © {new Date().getFullYear()} CrashPath · Bucaramanga · Gimnasio de
-        Escalada y Entrenamiento ·{" "}
-        <FooterLink
-          as="a"
-          href={INSTAGRAM_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          $t={t}
-        >
-          IG @crash_path
-        </FooterLink>{" "}
-        ·{" "}
-        <FooterLink
-          as="a"
-          href={WHATSAPP_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          $t={t}
-        >
-          WhatsApp +57 320 8608016
-        </FooterLink>
+        Escalada y Entrenamiento
+        <FooterLinks>
+          <FooterLink
+            href={INSTAGRAM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            $t={t}
+          >
+            IG @crash_path
+          </FooterLink>
+          <FooterLink
+            href={WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            $t={t}
+          >
+            WhatsApp +57 320 8608016
+          </FooterLink>
+        </FooterLinks>
       </Footer>
     </Page>
   );
