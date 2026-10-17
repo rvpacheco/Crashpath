@@ -192,10 +192,15 @@ const Hero = styled.section`
 const HeroBg = styled.div`
   position: absolute;
   inset: 0;
-  background-image: url(${(p) => p.$src});
+  background-image: url(${(p) => p.$desktop});
   background-size: cover;
   background-position: center 35%;
   filter: contrast(1.05) saturate(1.05);
+
+  /* Versión ya recortada en vertical: el celular no baja la foto de escritorio. */
+  @media (max-width: 600px) {
+    background-image: url(${(p) => p.$mobile});
+  }
 `;
 
 const HeroShade = styled.div`
@@ -589,8 +594,11 @@ const FooterLink = styled.a`
   }
 `;
 
-/** Replace these with your real images in /public */
-const heroImage = "/landing/hero-2.jpg";
+// Dos versiones del hero en WebP (120 KB y 185 KB). El JPG original pesaba
+// 1,27 MB y llevaba el LCP en móvil a 10 s. El corte de 600px debe ser el
+// mismo en el CSS de HeroBg y en la precarga de abajo.
+const heroImageMobile = "/landing/hero-2-movil.webp";
+const heroImageDesktop = "/landing/hero-2-escritorio.webp";
 
 const WHATSAPP_URL = "https://wa.me/573208608016";
 const INSTAGRAM_URL = "https://www.instagram.com/crash_path/";
@@ -623,7 +631,8 @@ export default function CrashPathLanding() {
       <Head>
         {/* Precarga del hero (LCP): la imagen va vía CSS-in-JS y el navegador
             la descubre tarde; este hint la baja antes. */}
-        <link rel="preload" as="image" href={heroImage} fetchpriority="high" />
+        <link rel="preload" as="image" href={heroImageMobile} media="(max-width: 600px)" fetchpriority="high" />
+        <link rel="preload" as="image" href={heroImageDesktop} media="(min-width: 601px)" fetchpriority="high" />
       </Head>
       <GlobalStyle $t={t} />
 
@@ -692,7 +701,7 @@ export default function CrashPathLanding() {
 
       {/* HERO */}
       <Hero id="home">
-        <HeroBg $src={heroImage} />
+        <HeroBg $mobile={heroImageMobile} $desktop={heroImageDesktop} />
         <HeroShade $t={t} />
 
         <HeroContent>
