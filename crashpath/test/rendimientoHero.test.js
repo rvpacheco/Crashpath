@@ -7,7 +7,7 @@ const KB = 1024;
 // Lighthouse en móvil midió LCP de 10 s: el hero era un JPG de 1,27 MB
 // (5616x3744 px). Estas pruebas evitan volver a servir una foto así.
 describe("hero del landing", () => {
-  const landing = readFileSync(aqui("pages/index.js"), "utf8");
+  const landing = readFileSync(aqui("components/Landing.js"), "utf8");
 
   it("no usa el JPG original de 1,3 MB", () => {
     expect(landing).not.toContain("hero-2.jpg");

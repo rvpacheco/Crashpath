@@ -29,7 +29,7 @@ export default class MyDocument extends Document {
 
   render() {
     return (
-      <Html lang="es">
+      <Html lang={this.props.__NEXT_DATA__.page === '/en' ? 'en' : 'es'}>
         <Head>
           {/* Google Fonts vía <link> (sin next/font) */}
           <link

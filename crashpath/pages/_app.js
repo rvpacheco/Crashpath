@@ -49,10 +49,10 @@ export default function App({ Component, pageProps: { session, ...pageProps } })
         <meta name="author" content="CrashPath" />
         <meta name="theme-color" content="#E5E5D1" />
 
-        {/* Open Graph: solo lo que no cambia entre páginas */}
+        {/* Open Graph: solo lo que no cambia entre páginas. El idioma de la
+            página (es_CO o en_US) lo pone Seo. */}
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="CrashPath" />
-        <meta property="og:locale" content="es_CO" />
 
         {/* Iconos */}
         <link rel="icon" href="/favicon.ico" />

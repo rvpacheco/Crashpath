@@ -29,11 +29,12 @@ describe("robots.txt", () => {
 });
 
 describe("sitemap.xml", () => {
-  it("lista solo la home, con www", () => {
+  it("lista solo las páginas indexables (/ y /en), con www", () => {
     expect(existsSync(new URL("../public/sitemap.xml", import.meta.url))).toBe(true);
     const xml = leer("public/sitemap.xml");
     expect([...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1])).toEqual([
       "https://www.crashpath.lat/",
+      "https://www.crashpath.lat/en",
     ]);
   });
 });

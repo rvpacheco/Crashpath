@@ -12,13 +12,14 @@
  *  - Si abres sábados/domingos, agrega ese bloque en openingHoursSpecification.
  *  - og-image.jpg debe existir en /public (1200x630).
  */
-export default function LocalBusinessJsonLd() {
+export default function LocalBusinessJsonLd({ description }) {
   const data = {
     '@context': 'https://schema.org',
     '@type': 'SportsActivityLocation',
     '@id': 'https://www.crashpath.lat/#business',
     name: 'CrashPath',
     description:
+      description ||
       'Gimnasio de escalada en Bucaramanga enfocado en entrenamiento real: rocódromo, boulder y MoonBoard.',
     url: 'https://www.crashpath.lat',
     telephone: '+573208608016',
