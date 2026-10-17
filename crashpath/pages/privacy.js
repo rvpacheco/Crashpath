@@ -1,10 +1,13 @@
 // pages/privacy.js
 
 import React from 'react';
+import Seo from '../components/Seo';
 
 const Privacy = () => {
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+      {/* noindex: la página tiene que seguir pública (Google la pide), pero no debe competir con la home en los resultados */}
+      <Seo title="Política de privacidad" path="/privacy" noindex />
       <h1>Política de Privacidad</h1>
       <p>Última actualización: Octubre 2024</p>
 
