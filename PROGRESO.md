@@ -19,6 +19,7 @@ cd crashpath && npx vitest run                       # tests
 git log --oneline origin/main..origin/taller         # qué hay en taller sin pasar a main
 vercel ls crashpath | head                           # último deploy y si es Production
 curl -s -o /dev/null -w "%{http_code}\n" -X POST https://www.crashpath.lat/api/mcp   # 401 = MCP vivo
+git log --oneline origin/taller..taller              # commits locales sin push
 ```
 
 La base contra la que se trabaja: **`.env` apunta a la base de PRODUCCIÓN** (no hay base de
@@ -26,54 +27,52 @@ desarrollo). Ver Trampas.
 
 ## Abierto
 
-En orden de urgencia. Sale de la revisión del landing y el admin del 24/09/2026 (vista en
-vivo en escritorio con la sesión de Rodolfo, más lectura del código).
+En orden de urgencia.
+
+### Sin desplegar
+
+- **Landing: menú legible al bajar y botón de WhatsApp legible** (commit
+  `fix(landing): menú legible...` en `taller`, sin push). Al pasar el hero el menú toma
+  fondo claro y texto oscuro; "CrashPath" del menú pasa a "Nosotros"; el logo queda
+  centrado en celular; el botón de WhatsApp de "Cómo entrenas hoy" usa el estilo de fondo
+  claro. Verificado con Chromium sin ventana a 1440, 900 y 390px (capturas antes y después).
+  **Falta**: verlo en un teléfono real, subir a GitHub y pasar a `main` cuando Rodolfo lo
+  diga. Comprobar después en vivo buscando "Nosotros" en el menú.
 
 ### Landing (`crashpath/pages/index.js`)
 
-1. **El menú fijo desaparece al hacer scroll.** Es transparente con texto blanco: sobre el
-   fondo beige no se lee y queda montado sobre las tarjetas. Además el link "CrashPath" del
-   menú se pisa con el logo del centro. Darle fondo al pasar el hero, o no dejarlo fijo.
-2. **Botón "WHATSAPP (MAÑANAS)" ilegible** en la sección "Cómo entrenas hoy": texto blanco
-   sobre gris claro (`HeroBtn $kind="ghost"` fuera del hero).
-3. **"Cómo entrenas hoy" queda a media página**: la columna derecha del `AboutGrid` está
+Sale de la revisión del 24/09/2026. Los puntos 1–2 de esa lista ya están en `taller`.
+
+1. **"Cómo entrenas hoy" queda a media página**: la columna derecha del `AboutGrid` está
    vacía porque el `VideoBox` está comentado. Poner video/foto o dejar la tarjeta a todo el
    ancho.
-4. **La foto del hero es de roca afuera**, pero el titular dice "Gimnasio de Escalada": no se
-   ve ni la MoonBoard ni la placa. Faltan fotos reales del gym. **Lo tiene que dar Rodolfo.**
-5. **Precio de ticketera = precio de mensualidad.** La página los muestra iguales, y la
-   ticketera (8 visitas en 60 días) parece peor negocio que la mensualidad (ilimitado un mes).
-   **Pendiente que Rodolfo confirme** si es a propósito (y entonces explicarlo en el copy) o
-   si hay que cambiar el precio.
-6. **Falta dirección y mapa.** Solo dice "Bucaramanga". **Rodolfo tiene que dar la dirección.**
-7. Copy "Ya no trabajamos por horas" le habla a clientes viejos; confunde al nuevo.
-8. "REGISTRAR VISITA" en todos lados sin decir qué es (¿reservar? ¿pagar? ¿cuenta?). Mejor un
-   CTA tipo "Quiero ir" con los pasos.
-9. Menores: el patrón de petroglifos del fondo compite con el texto (bajar opacidad); textos
-   de 12–13px chicos para celular; no hay FAQ (qué llevar, si hay que saber escalar,
-   alquiler de zapatos).
-10. **La vista de celular no se revisó en vivo** (la ventana de Chrome no se dejó
-    redimensionar). Revisarla antes de tocar el layout.
+2. **La foto del hero es de roca afuera**, pero el titular dice "Gimnasio de Escalada": no se
+   ve ni la MoonBoard ni la placa. **Rodolfo tiene que pasar fotos reales del gym.**
+3. **Precio de ticketera = precio de mensualidad** en la página, y la ticketera (8 visitas
+   en 60 días) parece peor negocio que la mensualidad. **Rodolfo tiene que decir** si es a
+   propósito (y explicarlo en el copy) o si cambia el precio.
+4. **Falta dirección y mapa.** Solo dice "Bucaramanga". **Rodolfo tiene que dar la dirección.**
+5. Copy "Ya no trabajamos por horas" le habla a clientes viejos; confunde al nuevo.
+6. "REGISTRAR VISITA" en todos lados sin decir qué es. Mejor un CTA tipo "Quiero ir".
+7. Menores: los links del menú se ven pálidos sobre la parte clara de la foto (ya pasaba
+   antes); el patrón de petroglifos compite con el texto; textos de 12–13px chicos para
+   celular; no hay FAQ (qué llevar, si hay que saber escalar, alquiler de zapatos).
 
 ### Admin (`crashpath/pages/admin.js`)
 
-1. **Se congela al cargar los usuarios**: Chrome dejó de responder un rato mientras cargaba
-   la tabla. Causa probable: todo el panel es un solo componente gigante con muchísimos
-   `useState`, así que cada cambio re-renderiza la tabla entera. Partir en componentes
-   (tabla, fila, modales, dashboard) y memoizar filas.
-   Tamaño: `wc -l crashpath/pages/admin.js` · `grep -c useState crashpath/pages/admin.js`.
-2. **Filas altísimas**: la columna "Acceso" apila créditos, vence, cortesía, fechas y
-   "Cambiar"; caben pocos socios por pantalla. Fila compacta + detalle en panel lateral.
-3. El contenido no usa el ancho de la pantalla y la "Actividad reciente" le quita espacio a
-   la tabla.
-4. La barra superior tiene demasiados botones con el mismo peso. Destacar "Asistencia" y
-   "+ Nuevo miembro"; mandar Exportar/Importar/Voluntarios a un menú "Más".
-5. Datos: duplicados de importación (`import_*@crashpath.local`) junto a la cuenta real, y
+Rodolfo decidió no tocar el admin por ahora (24/09/2026).
+
+1. **Filas altísimas**: la columna "Acceso" apila créditos, vence, cortesía, fechas y
+   "Cambiar"; caben dos socios por pantalla. Fila compacta + detalle aparte. Es la mejora
+   del admin que más se nota en el día a día.
+2. **La primera carga tarda varios segundos** por arranque en frío: sesión → rol → usuarios
+   van en cadena y cada una en frío tarda 1–2 s; en caliente, cientos de ms. Pedir rol y
+   usuarios a la vez ahorraría una vuelta, no el arranque. Beneficio chico.
+3. La barra superior tiene demasiados botones con el mismo peso; "Actividad reciente" le
+   quita ancho a la tabla.
+4. Datos: duplicados de importación (`import_*@crashpath.local`) junto a la cuenta real, y
    muchos usuarios "sin créditos" ensuciando la vista diaria. Ver
    `crashpath/docs/ideas-pendientes.md` §3.
-
-**Orden propuesto**: landing 1–2 (rápidos) → admin 1 (congelamiento) → landing 4–6 (cuando
-Rodolfo pase fotos, dirección y la decisión del precio) → admin 2.
 
 ### MCP
 
@@ -117,8 +116,14 @@ Rodolfo pase fotos, dirección y la decisión del precio) → admin 2.
 - La lógica de check-in, renovar mensualidad, ajustar créditos, cancelar visita y usar
   cortesía vive en `crashpath/lib/operaciones.js` y la comparten el panel y el MCP. Cambiarla ahí, no en los
   endpoints.
-- En Chrome (Claude in Chrome), `resize_window` no achicó la ventana: para ver el celular
-  usar DevTools en modo dispositivo o probar en un teléfono.
+- **Claude in Chrome no sirve para medir rendimiento ni para probar scroll.** La pestaña
+  que controla queda `document.visibilityState === "hidden"`: Chrome no la dibuja, así que
+  `requestAnimationFrame` e `IntersectionObserver` no avisan, los temporizadores se estiran
+  a 1 s y las capturas salen atrasadas. Parece que la página se congela y no es así. Para
+  eso, Chromium sin ventana con Playwright (`playwright-core` en el scratchpad, con
+  `executablePath: '/usr/bin/chromium'`), contra `npm run dev`. `resize_window` tampoco
+  achica la ventana: para anchos, `viewport` de Playwright.
+- Con el dev server corriendo, `npm run build` pelea por la carpeta `.next`: apagarlo antes.
 
 ## Probado y descartado
 
@@ -128,6 +133,12 @@ Rodolfo pase fotos, dirección y la decisión del precio) → admin 2.
 - **Esperar a que Vercel despliegue solo después del push a `main`.** Tras 12 minutos no
   había deploy. *Lección*: no dar por hecho el deploy automático; verificar con
   `vercel ls` y desplegar a mano si no aparece.
+- **Partir `admin.js` en componentes para arreglar un "congelamiento".** Medido el
+  24/09/2026 en producción con la sesión de Rodolfo: ninguna tarea bloquea el navegador más
+  de ~85 ms, ni con 100 filas por página ni escribiendo en el buscador. El congelamiento de
+  la revisión anterior salió de Chrome controlado por Claude (ver Trampas), no del panel.
+  *Lección*: medir antes de refactorizar; un síntoma visto a través de la herramienta de
+  automatización no es un síntoma del usuario.
 
 ## Montar una máquina nueva
 

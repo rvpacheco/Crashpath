@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import styled, { createGlobalStyle } from "styled-components";
@@ -52,7 +52,11 @@ const Header = styled.header`
   left: 0;
   right: 0;
   z-index: 50;
-  pointer-events: none;
+  pointer-events: ${(p) => (p.$solid ? "auto" : "none")};
+  background: ${(p) => (p.$solid ? `${p.$t.bg}eb` : "transparent")};
+  border-bottom: 1px solid ${(p) => (p.$solid ? p.$t.border : "transparent")};
+  backdrop-filter: ${(p) => (p.$solid ? "blur(10px)" : "none")};
+  transition: background 200ms ease, border-color 200ms ease;
 `;
 
 const HeaderInner = styled.div`
@@ -82,19 +86,22 @@ const NavLink = styled.a`
     "Liberation Mono", monospace;
   font-size: 12px;
   letter-spacing: 0.02em;
-  color: ${(p) => p.$t.heroMuted};
+  color: ${(p) => (p.$solid ? p.$t.muted : p.$t.heroMuted)};
   padding: 8px 10px;
   border-radius: 999px;
   border: 1px solid transparent;
+  transition: color 200ms ease;
 
   &:hover {
-    color: ${(p) => p.$t.heroText};
-    border-color: rgba(255, 255, 255, 0.25);
-    background: rgba(0, 0, 0, 0.18);
+    color: ${(p) => (p.$solid ? p.$t.text : p.$t.heroText)};
+    border-color: ${(p) =>
+      p.$solid ? p.$t.border : "rgba(255, 255, 255, 0.25)"};
+    background: ${(p) => (p.$solid ? p.$t.panel : "rgba(0, 0, 0, 0.18)")};
   }
 `;
 
 const CenterLogo = styled.div`
+  grid-column: 2;
   pointer-events: auto;
   display: grid;
   place-items: center;
@@ -105,8 +112,9 @@ const LogoMark = styled.div`
   font-weight: 950;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: ${(p) => p.$t.heroText};
+  color: ${(p) => (p.$solid ? p.$t.text : p.$t.heroText)};
   font-size: 12px;
+  transition: color 200ms ease;
 `;
 
 const MenuButton = styled.button`
@@ -120,9 +128,10 @@ const MenuButton = styled.button`
   height: 42px;
   border-radius: 12px;
   cursor: pointer;
-  color: ${(p) => p.$t.heroText};
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(10, 10, 10, 0.28);
+  color: ${(p) => (p.$solid ? p.$t.text : p.$t.heroText)};
+  border: 1px solid
+    ${(p) => (p.$solid ? p.$t.border : "rgba(255, 255, 255, 0.22)")};
+  background: ${(p) => (p.$solid ? p.$t.panel : "rgba(10, 10, 10, 0.28)")};
   backdrop-filter: blur(10px);
 
   &:focus-visible {
@@ -588,6 +597,20 @@ const INSTAGRAM_URL = "https://www.instagram.com/crash_path/";
 
 export default function CrashPathLanding() {
   const [menuOpen, setMenuOpen] = useState(false);
+  // El menú es transparente con texto blanco, pensado para ir sobre la foto.
+  // Cuando el hero sale de la pantalla le damos fondo claro y texto oscuro.
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const hero = document.getElementById("home");
+    if (!hero || typeof IntersectionObserver === "undefined") return;
+    const obs = new IntersectionObserver(
+      ([entry]) => setScrolled(!entry.isIntersecting),
+      { rootMargin: "-72px 0px 0px 0px" }
+    );
+    obs.observe(hero);
+    return () => obs.disconnect();
+  }, []);
 
   return (
     <Page $t={t}>
@@ -604,30 +627,31 @@ export default function CrashPathLanding() {
       </Head>
       <GlobalStyle $t={t} />
 
-      {/* Fixed transparent header */}
-      <Header>
+      {/* Header fijo: transparente sobre el hero, con fondo al bajar */}
+      <Header $t={t} $solid={scrolled}>
         <HeaderInner>
           <NavLeft>
             <Link href="#home" passHref legacyBehavior>
-              <NavLink $t={t}>Home</NavLink>
+              <NavLink $t={t} $solid={scrolled}>Home</NavLink>
             </Link>
             <Link href="#services" passHref legacyBehavior>
-              <NavLink $t={t}>Servicios</NavLink>
+              <NavLink $t={t} $solid={scrolled}>Servicios</NavLink>
             </Link>
             <Link href="#precios" passHref legacyBehavior>
-              <NavLink $t={t}>Precios</NavLink>
+              <NavLink $t={t} $solid={scrolled}>Precios</NavLink>
             </Link>
             <Link href="#about" passHref legacyBehavior>
-              <NavLink $t={t}>CrashPath</NavLink>
+              <NavLink $t={t} $solid={scrolled}>Nosotros</NavLink>
             </Link>
           </NavLeft>
 
           <CenterLogo>
-            <LogoMark $t={t}>CRASHPATH</LogoMark>
+            <LogoMark $t={t} $solid={scrolled}>CRASHPATH</LogoMark>
           </CenterLogo>
 
           <MenuButton
             $t={t}
+            $solid={scrolled}
             type="button"
             aria-label="Abrir menú"
             aria-expanded={menuOpen}
@@ -659,7 +683,7 @@ export default function CrashPathLanding() {
                 <MobileLink $t={t} onClick={() => setMenuOpen(false)}>Precios</MobileLink>
               </Link>
               <Link href="#about" passHref legacyBehavior>
-                <MobileLink $t={t} onClick={() => setMenuOpen(false)}>CrashPath</MobileLink>
+                <MobileLink $t={t} onClick={() => setMenuOpen(false)}>Nosotros</MobileLink>
               </Link>
             </MobileMenu>
           )}
@@ -874,10 +898,12 @@ export default function CrashPathLanding() {
               </Bullets>
 
               <HeroActions style={{ marginTop: 14 }}>
-                <HeroBtn href="/reservas" $t={t} $kind="primary">
+                {/* ServiceCTA y no HeroBtn: el ghost de HeroBtn es texto blanco
+                    para ir sobre la foto y en esta tarjeta clara no se lee. */}
+                <ServiceCTA href="/reservas" $t={t} $kind="primary">
                   REGISTRAR VISITA
-                </HeroBtn>
-                <HeroBtn
+                </ServiceCTA>
+                <ServiceCTA
                   as="a"
                   href={WHATSAPP_URL}
                   target="_blank"
@@ -886,7 +912,7 @@ export default function CrashPathLanding() {
                   $kind="ghost"
                 >
                   WHATSAPP (MAÑANAS)
-                </HeroBtn>
+                </ServiceCTA>
               </HeroActions>
             </AboutCard>
 
