@@ -84,6 +84,12 @@ const h = vi.hoisted(() => {
     },
     cancelarVisita: vi.fn(async () => ({ status: 200, body: { credits: 4 } })),
     usarCortesia: vi.fn(async () => ({ status: 200, body: {} })),
+    turnosVigentes: vi.fn(async () => []),
+    otorgarTurno: vi.fn(async ({ email, name }) => ({
+      status: 201,
+      body: { turno: { email, name, vence: d("2026-09-27T04:59:59.999Z") } },
+    })),
+    revocarTurno: vi.fn(async ({ email }) => ({ status: 200, body: { email, turnosCortados: 1 } })),
     actualizarPerfil: vi.fn(async ({ datos }) => ({
       status: 200,
       body: {
@@ -102,6 +108,13 @@ vi.mock("../lib/operaciones", () => ({
   actualizarPerfil: h.actualizarPerfil,
   calcularNuevoVencimiento: () => new Date(),
   canAccessOrFail: () => ({ ok: true }),
+}));
+
+vi.mock("../lib/turnos", async (original) => ({
+  ...(await original()),
+  turnosVigentes: h.turnosVigentes,
+  otorgarTurno: h.otorgarTurno,
+  revocarTurno: h.revocarTurno,
 }));
 
 import { registrarHerramientas } from "../lib/mcpHerramientas";
@@ -258,5 +271,59 @@ describe("editar_usuario", () => {
     h.actualizarPerfil.mockClear();
     expect((await llamar("editar_usuario", { userId: "juan" })).error).toMatch(/no encontrado/);
     expect(h.actualizarPerfil).not.toHaveBeenCalled();
+  });
+});
+
+describe("turnos de voluntario", () => {
+  const turnoHoy = { email: "vol@gmail.com", name: "Vol", vence: new Date("2026-09-27T04:59:59.999Z") };
+
+  it("otorgar sin confirmar es vista previa con el vencimiento de hoy", async () => {
+    h.otorgarTurno.mockClear();
+    const r = await llamar("otorgar_turno_voluntario", { email: " Vol@Gmail.com " });
+    expect(r.aviso).toMatch(/VISTA PREVIA/);
+    expect(r.email).toBe("vol@gmail.com");
+    expect(r.efecto).toBe("Turno de voluntario hasta hoy 2026-09-26 a las 23:59");
+    expect(h.otorgarTurno).not.toHaveBeenCalled();
+  });
+
+  it("la vista previa avisa si ya tiene turno", async () => {
+    h.turnosVigentes.mockResolvedValueOnce([turnoHoy]);
+    const r = await llamar("otorgar_turno_voluntario", { email: "vol@gmail.com" });
+    expect(r.efecto).toMatch(/Ya tiene turno hoy/);
+  });
+
+  it("con confirmar otorga con origen mcp", async () => {
+    const r = await llamar("otorgar_turno_voluntario", { email: "vol@gmail.com", nombre: "Vol", confirmar: true });
+    expect(r).toMatchObject({ hecho: "Turno otorgado.", email: "vol@gmail.com", vence: "2026-09-26 23:59" });
+    expect(h.otorgarTurno).toHaveBeenCalledWith(expect.objectContaining({ email: "vol@gmail.com", name: "Vol", origen: "mcp" }));
+  });
+
+  it("rechaza emails inválidos y de admins sin tocar la base", async () => {
+    h.otorgarTurno.mockClear();
+    expect((await llamar("otorgar_turno_voluntario", { email: "no-es-email", confirmar: true })).error).toBe("Email inválido");
+    expect((await llamar("otorgar_turno_voluntario", { email: "rvpacheco17@gmail.com", confirmar: true })).error).toMatch(/administrador/);
+    expect(h.otorgarTurno).not.toHaveBeenCalled();
+  });
+
+  it("revocar sin turno vigente es error; con turno muestra la vista previa", async () => {
+    expect((await llamar("revocar_turno_voluntario", { email: "vol@gmail.com" })).error).toMatch(/no tiene turno vigente/);
+    h.turnosVigentes.mockResolvedValueOnce([turnoHoy]);
+    const r = await llamar("revocar_turno_voluntario", { email: "vol@gmail.com" });
+    expect(r.aviso).toMatch(/VISTA PREVIA/);
+    expect(h.revocarTurno).not.toHaveBeenCalled();
+  });
+
+  it("revocar con confirmar corta el turno", async () => {
+    const r = await llamar("revocar_turno_voluntario", { email: "vol@gmail.com", confirmar: true });
+    expect(r).toEqual({ hecho: "Turno revocado.", email: "vol@gmail.com", turnosCortados: 1 });
+    expect(h.revocarTurno).toHaveBeenCalledWith(expect.objectContaining({ email: "vol@gmail.com", origen: "mcp" }));
+  });
+
+  it("turnos_voluntario lista los vigentes en hora de Bogotá", async () => {
+    h.turnosVigentes.mockResolvedValueOnce([turnoHoy]);
+    expect(await llamar("turnos_voluntario")).toEqual({
+      total: 1,
+      turnos: [{ email: "vol@gmail.com", nombre: "Vol", vence: "2026-09-26 23:59" }],
+    });
   });
 });
