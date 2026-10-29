@@ -3,8 +3,9 @@
 // Lectura: buscar, estado, vigentes, por vencer, check-ins del día, inactivos,
 // vencidos recientes, historial (AuditLog), resumen de un periodo, datos por limpiar.
 // Escritura: check-in, deshacer check-in, renovar mensualidad, cargar
-// tiquetera, usar cortesía, editar datos del socio. Corren la MISMA
-// lógica que el panel (lib/operaciones.js) y quedan en AuditLog con origen
+// tiquetera, usar cortesía, editar datos del socio, dar y quitar turnos de
+// voluntario. Corren la MISMA lógica que el panel (lib/operaciones.js,
+// lib/turnos.js) y quedan en AuditLog con origen
 // "mcp". Cada una tiene dos pasos: sin `confirmar` solo muestra qué va a pasar;
 // con `confirmar: true` lo hace.
 //
@@ -28,6 +29,9 @@ import {
   calcularNuevoVencimiento,
   actualizarPerfil,
 } from "./operaciones";
+import { otorgarTurno, revocarTurno, turnosVigentes, validarEmailVoluntario } from "./turnos";
+import { finDelTurno } from "./staff";
+import { normalizarEmail } from "./roles";
 
 const ORIGEN = "mcp";
 
@@ -840,6 +844,95 @@ export function registrarHerramientas(server, actor) {
 
       if (!ok) return texto({ aviso: AVISO_PREVIA, socio: body.user.name, cambios });
       return texto({ hecho: "Datos actualizados.", socio: body.user.name, cambios });
+    }
+  );
+
+  /* ---------------- VOLUNTARIOS ---------------- */
+
+  const turnoLegible = (t) => ({ email: t.email, nombre: t.name || null, vence: `${diaBogota(t.vence)} ${horaBogota(t.vence)}` });
+
+  server.registerTool(
+    "turnos_voluntario",
+    {
+      title: "Voluntarios con turno hoy",
+      description: "Quién tiene turno de voluntario vigente ahora mismo (acceso al mostrador del panel) y hasta cuándo.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      const turnos = await turnosVigentes();
+      return texto({ total: turnos.length, turnos: turnos.map(turnoLegible) });
+    }
+  );
+
+  server.registerTool(
+    "otorgar_turno_voluntario",
+    {
+      title: "Dar turno de voluntario",
+      description:
+        "Le da acceso de mostrador (rol voluntario) a un email por lo que queda del día: vence a las 23:59 de Bogotá, sin " +
+        "excepción. El email tiene que ser con el que la persona entra con Google (no tiene que ser socio). Si ya tenía " +
+        "turno hoy no se duplica. Primero llamá sin confirmar para ver la vista previa.",
+      inputSchema: {
+        email: z.string().min(3).describe("Email de Google del voluntario"),
+        nombre: z.string().optional().describe("Nombre, para leer la lista y la auditoría"),
+        nota: z.string().optional(),
+        confirmar,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ email, nombre, nota, confirmar: ok }) => {
+      const normalizado = normalizarEmail(email);
+      const invalido = validarEmailVoluntario(normalizado);
+      if (invalido) return error(invalido.body.message);
+
+      if (!ok) {
+        const [vigente] = await turnosVigentes(normalizado);
+        return texto({
+          aviso: AVISO_PREVIA,
+          email: normalizado,
+          nombre: nombre || null,
+          efecto: vigente
+            ? `Ya tiene turno hoy hasta las ${horaBogota(vigente.vence)}; no se crea otro`
+            : `Turno de voluntario hasta hoy ${diaBogota(finDelTurno())} a las ${horaBogota(finDelTurno())}`,
+        });
+      }
+
+      const { status, body } = await otorgarTurno({ email: normalizado, name: nombre, nota, actor, origen: ORIGEN });
+      if (status >= 400) return error(body.message || "No se pudo otorgar el turno.");
+      return texto({
+        hecho: body.code === "YA_TENIA_TURNO" ? "Ya tenía turno hoy; no se creó otro." : "Turno otorgado.",
+        ...turnoLegible(body.turno),
+      });
+    }
+  );
+
+  server.registerTool(
+    "revocar_turno_voluntario",
+    {
+      title: "Quitar turno de voluntario",
+      description:
+        "Corta ya el turno de voluntario de un email (todos sus turnos vigentes). El acceso se pierde en su siguiente click. " +
+        "Primero llamá sin confirmar para ver la vista previa.",
+      inputSchema: { email: z.string().min(3).describe("Email del voluntario"), confirmar },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    },
+    async ({ email, confirmar: ok }) => {
+      const normalizado = normalizarEmail(email);
+
+      if (!ok) {
+        const turnos = await turnosVigentes(normalizado);
+        if (!turnos.length) return error(`${normalizado} no tiene turno vigente.`);
+        return texto({ aviso: AVISO_PREVIA, efecto: `Corta ${turnos.length} turno(s) vigente(s)`, turnos: turnos.map(turnoLegible) });
+      }
+
+      const { status, body } = await revocarTurno({ email: normalizado, actor, origen: ORIGEN });
+      if (status >= 400) return error(body.message || "No se pudo revocar el turno.");
+      return texto({
+        hecho: body.code === "SIN_EFECTO" ? "No tenía turno vigente; no se cambió nada." : "Turno revocado.",
+        email: body.email,
+        turnosCortados: body.turnosCortados ?? 0,
+      });
     }
   );
 }
