@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Shoulders"; src: url("../../../.claude/skills/canvas-design/canvas-fonts/BigShoulders-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Shoulders"; src: url("../../../.claude/skills/canvas-design/canvas-fonts/BigShoulders-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "Serif"; src: url("../../../.claude/skills/canvas-design/canvas-fonts/InstrumentSerif-Italic.ttf"); font-style: italic; }
+  @font-face { font-family: "Mono"; src: url("../../../.claude/skills/canvas-design/canvas-fonts/DMMono-Regular.ttf"); }
+
+  :root {
+    --papel: #E7E1D2;
+    --tinta: #2B2620;
+    --gris: #6B6257;
+    --oxido: #9C4F24;
+    --oxido2: #C26A34;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: var(--papel); }
+  .lienzo {
+    position: relative; overflow: hidden;
+    width: 1080px; height: var(--alto);
+    background: var(--papel); color: var(--tinta);
+  }
+  /* grano de papel */
+  .grano { position: absolute; inset: 0; opacity: .32; mix-blend-mode: multiply; pointer-events: none; }
+
+  .mono { font-family: "Mono", monospace; font-size: 22px; letter-spacing: .18em; text-transform: uppercase; color: var(--gris); }
+
+  .cabecera {
+    position: absolute; left: var(--m); right: var(--m); top: var(--arriba);
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 22px; border-bottom: 2px solid var(--tinta);
+  }
+  .cabecera b { font-weight: 400; color: var(--tinta); }
+
+  .fecha {
+    position: absolute; left: var(--m); top: calc(var(--arriba) + 96px);
+    font-family: "Shoulders"; font-weight: 700; line-height: .8; letter-spacing: -.01em;
+    text-transform: uppercase;
+  }
+  .fecha .dia { font-size: var(--t-dia); display: block; }
+  .fecha .estado { font-size: var(--t-estado); color: var(--oxido); display: block; margin-top: 18px; }
+  .fecha .nota { display: block; margin-top: 30px; }
+
+  .ruta { position: absolute; inset: 0; pointer-events: none; }
+
+  .gecko { position: absolute; }
+
+  .chiste {
+    position: absolute; left: var(--m);
+    font-family: "Serif"; font-style: italic; font-size: var(--t-chiste); line-height: 1.02; color: var(--tinta);
+  }
+
+  .salida {
+    position: absolute; left: var(--m); right: var(--m); bottom: var(--abajo);
+    border-top: 2px solid var(--tinta); padding-top: 34px;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 40px;
+  }
+  .salida h2 { font-family: "Shoulders"; font-weight: 700; text-transform: uppercase; font-size: var(--t-cta); line-height: .86; }
+  .salida h2 span { color: var(--oxido); }
+  .salida .mono { margin-bottom: 14px; display: block; }
+  .handle {
+    flex: none; font-family: "Shoulders"; font-weight: 700; font-size: var(--t-handle); letter-spacing: .01em;
+    color: var(--papel); background: var(--tinta); padding: 16px 30px 18px; border-radius: 999px; line-height: 1;
+  }
+
+  /* Historia 1080x1920: deja libres las franjas de la interfaz de Instagram */
+  .story { --alto: 1920px; --m: 96px; --arriba: 230px; --abajo: 330px;
+    --t-dia: 300px; --t-estado: 262px; --g: 460px; --ruta: 150px; --t-chiste: 68px; --t-cta: 96px; --t-handle: 48px; }
+  /* Post 1080x1350 */
+  .post { --alto: 1350px; --m: 80px; --arriba: 78px; --abajo: 80px;
+    --t-dia: 236px; --t-estado: 206px; --g: 330px; --ruta: 120px; --t-chiste: 54px; --t-cta: 80px; --t-handle: 42px; }
+</style>
+</head>
+<body>
+<div class="lienzo" id="lienzo">
+  <svg class="grano" width="100%" height="100%">
+    <filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .17  0 0 0 0 .15  0 0 0 0 .12  0 0 0 .55 0"/></filter>
+    <rect width="100%" height="100%" filter="url(#n)"/>
+  </svg>
+
+  <div class="cabecera mono"><b>Crash Path</b><span>Aviso · 02.11.26</span></div>
+
+  <div class="fecha">
+    <span class="dia">Lunes 2</span>
+    <span class="estado">Cerrado</span>
+    <span class="nota mono">Noviembre — Festivo</span>
+  </div>
+
+  <svg class="ruta" id="ruta"></svg>
+  <img class="gecko" src="assets/gecko_rust.png" alt="">
+
+  <p class="chiste">Hasta el gecko<br>toma festivo.</p>
+
+  <div class="salida">
+    <div>
+      <span class="mono">¿Igual quieres escalar?</span>
+      <h2>Escríbenos<br><span>por DM</span></h2>
+    </div>
+    <div class="handle">@crash_path</div>
+  </div>
+</div>
+
+<script>
+  const f = new URLSearchParams(location.search).get("f") || "story";
+  const lienzo = document.getElementById("lienzo");
+  lienzo.classList.add(f);
+
+  document.fonts.ready.then(() => {
+    const W = 1080, H = lienzo.offsetHeight;
+    const cs = getComputedStyle(lienzo);
+    const px = v => parseFloat(cs.getPropertyValue(v));
+    const m = px("--m"), caja = el => el.getBoundingClientRect();
+    const $ = s => lienzo.querySelector(s);
+
+    // En la historia, fecha y estado ocupan exactamente el ancho útil.
+    if (f === "story") for (const sel of [".dia", ".estado"]) {
+      const el = $(sel); el.style.display = "inline-block";
+      el.style.fontSize = parseFloat(getComputedStyle(el).fontSize) * (W - 2 * m) / caja(el).width + "px";
+      el.style.display = "block";
+    }
+
+    // Gecko a la derecha, centrado en el hueco entre la fecha y la salida, dejando sitio a la ruta.
+    const arriba = caja($(".nota")).bottom, abajo = caja($(".salida")).top;
+    const rl = px("--ruta"), g = Math.min(px("--g"), abajo - arriba - rl - 60);
+    const gy = arriba + (abajo - arriba - rl - g) / 2 + 20, gx = W - m - g;
+    Object.assign($(".gecko").style, { width: g + "px", height: g + "px", left: gx + "px", top: gy + "px" });
+    const chiste = $(".chiste");
+    chiste.style.top = gy + g / 2 - caja(chiste).height / 2 + "px";
+
+    // Línea de reseña: sale de la raya del CTA y sube hasta el gecko, con dos chapas (×).
+    const svg = document.getElementById("ruta");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const a = { x: gx + g / 2, y: gy + g + 10 }, b = { x: gx + g * 0.12, y: abajo - 2 };
+    const NS = "http://www.w3.org/2000/svg";
+    const nuevo = (attrs) => { const e = document.createElementNS(NS, "path"); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; };
+    const ruta = nuevo({ d: `M ${b.x} ${b.y} C ${b.x + 70} ${b.y - rl * .35}, ${a.x - 50} ${a.y + rl * .45}, ${a.x} ${a.y}`,
+      fill: "none", stroke: "#9C4F24", "stroke-width": 3, "stroke-dasharray": "2 12", "stroke-linecap": "round" });
+    const L = ruta.getTotalLength();
+    for (const t of [.36, .72]) {
+      const p = ruta.getPointAtLength(L * t), r = 9;
+      nuevo({ d: `M ${p.x - r} ${p.y - r} L ${p.x + r} ${p.y + r} M ${p.x + r} ${p.y - r} L ${p.x - r} ${p.y + r}`,
+        stroke: "#2B2620", "stroke-width": 3, "stroke-linecap": "round" });
+    }
+    document.body.dataset.listo = "1";
+  });
+</script>
+</body>
+</html>
