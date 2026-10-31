@@ -4,7 +4,7 @@ const path = require("node:path");
 
 const dir = __dirname;
 const formatos = { story: 1920, post: 1350 };
-const versiones = { "": "flyer.html", "-foto": "flyer-foto.html" };
+const versiones = { "": "flyer.html", "-foto": "flyer-foto.html", "-muro": "flyer-muro.html" };
 
 (async () => {
 const browser = await chromium.launch();
