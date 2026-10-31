@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Shoulders"; src: url("../../../.claude/skills/canvas-design/canvas-fonts/BigShoulders-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Serif"; src: url("../../../.claude/skills/canvas-design/canvas-fonts/InstrumentSerif-Italic.ttf"); font-style: italic; }
+  @font-face { font-family: "Mono"; src: url("../../../.claude/skills/canvas-design/canvas-fonts/DMMono-Regular.ttf"); }
+
+  :root { --papel: #E7E1D2; --tinta: #2B2620; --gris: #6B6257; --oxido: #9C4F24; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  .lienzo { position: relative; overflow: hidden; width: 1080px; height: var(--alto); background: var(--papel); color: var(--tinta); }
+  .grano { position: absolute; inset: 0; opacity: .32; mix-blend-mode: multiply; pointer-events: none; z-index: 5; }
+  .mono { font-family: "Mono", monospace; font-size: 22px; letter-spacing: .18em; text-transform: uppercase; color: var(--gris); }
+
+  /* Foto del muro a sangre, como lámina de reseña */
+  .foto { position: absolute; left: 0; top: 0; width: 1080px; height: var(--foto-h); overflow: hidden; background: var(--tinta); }
+  .foto img { width: 100%; height: 100%; object-fit: cover; object-position: 50% var(--foto-y);
+    filter: saturate(.82) sepia(.14) contrast(1.06) brightness(1.04); }
+  .foto::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to bottom, rgba(43,38,32,.7), rgba(43,38,32,0) 32%, rgba(43,38,32,0) 60%, rgba(43,38,32,.85)); }
+  .ruta { position: absolute; left: 0; top: 0; width: 1080px; height: var(--foto-h); z-index: 2; }
+
+  .cabecera { position: absolute; z-index: 3; left: var(--m); right: var(--m); top: var(--arriba);
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 20px; border-bottom: 2px solid var(--papel); color: var(--papel); }
+  .cabecera span { color: var(--papel); opacity: .85; }
+
+  .chiste { position: absolute; z-index: 3; left: var(--m); top: calc(var(--foto-h) - var(--chiste-sub));
+    font-family: "Serif"; font-style: italic; font-size: var(--t-chiste); line-height: 1; color: var(--papel); text-shadow: 0 2px 22px rgba(43,38,32,.75), 0 1px 3px rgba(43,38,32,.6); }
+
+  .sello { position: absolute; z-index: 4; width: var(--g); height: var(--g); right: calc(var(--m) - 14px);
+    top: calc(var(--foto-h) - var(--g) * .8); border-radius: 50%; background: var(--papel); padding: 14px;
+    box-shadow: 0 10px 30px rgba(43,38,32,.25); }
+  .sello img { width: 100%; height: 100%; display: block; }
+
+  .fecha { position: absolute; left: var(--m); top: calc(var(--foto-h) + var(--sep));
+    font-family: "Shoulders"; font-weight: 700; line-height: .8; text-transform: uppercase; }
+  .fecha .dia { font-size: var(--t-dia); display: block; }
+  .fecha .estado { font-size: var(--t-estado); color: var(--oxido); display: block; margin-top: 10px; }
+
+  .salida { position: absolute; left: var(--m); right: var(--m); bottom: var(--abajo);
+    border-top: 2px solid var(--tinta); padding-top: 30px;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 40px; }
+  .salida h2 { font-family: "Shoulders"; font-weight: 700; text-transform: uppercase; font-size: var(--t-cta); line-height: .86; }
+  .salida h2 span { color: var(--oxido); }
+  .salida .mono { margin-bottom: 14px; display: block; }
+  .handle { flex: none; font-family: "Shoulders"; font-weight: 700; font-size: var(--t-handle);
+    color: var(--papel); background: var(--tinta); padding: 16px 30px 18px; border-radius: 999px; line-height: 1; }
+
+  .story { --alto: 1920px; --m: 96px; --arriba: 230px; --abajo: 330px; --foto-h: 860px; --foto-y: 15%;
+    --chiste-sub: 112px; --t-chiste: 60px; --g: 250px; --sep: 84px;
+    --t-dia: 190px; --t-estado: 166px; --t-cta: 84px; --t-handle: 44px; }
+  .post { --alto: 1350px; --m: 80px; --arriba: 70px; --abajo: 72px; --foto-h: 580px; --foto-y: 21.6%;
+    --chiste-sub: 88px; --t-chiste: 48px; --g: 200px; --sep: 76px;
+    --t-dia: 150px; --t-estado: 130px; --t-cta: 68px; --t-handle: 38px; }
+</style>
+</head>
+<body>
+<div class="lienzo" id="lienzo">
+  <div class="foto"><img src="assets/muro.jpg" alt=""></div>
+  <svg class="ruta" id="ruta"></svg>
+  <div class="cabecera mono"><b style="font-weight:400">Crash Path</b><span>Festivo · 02.11.26</span></div>
+  <p class="chiste">Hasta el gecko toma festivo.</p>
+  <div class="sello"><img src="assets/gecko_rust.png" alt=""></div>
+
+  <div class="fecha">
+    <span class="dia">Lunes 2 nov</span>
+    <span class="estado">Cerrado</span>
+  </div>
+
+  <div class="salida">
+    <div>
+      <span class="mono">¿Igual quieres escalar?</span>
+      <h2>Escríbenos<br><span>por DM</span></h2>
+    </div>
+    <div class="handle">@crash_path</div>
+  </div>
+
+  <svg class="grano" width="100%" height="100%">
+    <filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .17  0 0 0 0 .15  0 0 0 0 .12  0 0 0 .55 0"/></filter>
+    <rect width="100%" height="100%" filter="url(#n)"/>
+  </svg>
+</div>
+
+<script>
+  const f = new URLSearchParams(location.search).get("f") || "story";
+  const lienzo = document.getElementById("lienzo");
+  lienzo.classList.add(f);
+
+  Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode())]).then(() => {
+    const cs = getComputedStyle(lienzo);
+    const px = v => parseFloat(cs.getPropertyValue(v));
+    const W = 1080, m = px("--m"), fh = px("--foto-h");
+
+    // Fecha y estado ocupan exactamente el ancho útil.
+    for (const sel of [".dia", ".estado"]) {
+      const el = lienzo.querySelector(sel); el.style.display = "inline-block";
+      el.style.fontSize = parseFloat(getComputedStyle(el).fontSize) * (W - 2 * m) / el.getBoundingClientRect().width + "px";
+      el.style.display = "block";
+    }
+
+    // Línea de reseña dibujada sobre la pared: número de vía abajo, chapas (×) y reunión arriba.
+    const svg = document.getElementById("ruta");
+    svg.setAttribute("viewBox", `0 0 ${W} ${fh}`);
+    const NS = "http://www.w3.org/2000/svg";
+    const nuevo = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; };
+    // Puntos en coordenadas de la foto (1126 px de ancho), pasados al recorte de cada formato.
+    const img = lienzo.querySelector(".foto img"), k = W / 1126;
+    const dy = (W * img.naturalHeight / img.naturalWidth - fh) * px("--foto-y") / 100;
+    const enLienzo = (x, y) => [x * k, y * k - dy];
+    const [x0, y0] = enLienzo(...(f === "story" ? [735, 840] : [740, 760]));
+    const [x1, y1] = enLienzo(...(f === "story" ? [880, 545] : [870, 520]));
+    const d = `M ${x0} ${y0} C ${x0 + 40} ${y0 - (y0 - y1) * .4}, ${x1 - 120} ${y1 + (y0 - y1) * .45}, ${x1} ${y1}`;
+    for (const [color, ancho] of [["#2B2620", 9], ["#E7E1D2", 4]])
+      nuevo("path", { d, fill: "none", stroke: color, "stroke-width": ancho, "stroke-dasharray": ancho > 5 ? "none" : "14 10", "stroke-linecap": "round", opacity: ancho > 5 ? .45 : 1 });
+    const guia = nuevo("path", { d, fill: "none", stroke: "none" }), L = guia.getTotalLength();
+    for (const t of [.3, .58, .84]) {
+      const p = guia.getPointAtLength(L * t), r = 10;
+      nuevo("path", { d: `M ${p.x - r} ${p.y - r} L ${p.x + r} ${p.y + r} M ${p.x + r} ${p.y - r} L ${p.x - r} ${p.y + r}`,
+        stroke: "#9C4F24", "stroke-width": 5, "stroke-linecap": "round" });
+    }
+    nuevo("circle", { cx: x1, cy: y1, r: 13, fill: "none", stroke: "#E7E1D2", "stroke-width": 4 });
+    nuevo("circle", { cx: x0, cy: y0 + 34, r: 22, fill: "#E7E1D2" });
+    const n = nuevo("text", { x: x0, y: y0 + 42, "text-anchor": "middle", "font-family": "Mono", "font-size": 22, fill: "#2B2620" });
+    n.textContent = "02";
+    document.body.dataset.listo = "1";
+  });
+</script>
+</body>
+</html>
