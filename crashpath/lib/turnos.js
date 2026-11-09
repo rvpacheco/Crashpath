@@ -7,6 +7,7 @@
 
 import mongoose from "mongoose";
 import StaffGrant from "../models/StaffGrant";
+import StaffPermanente from "../models/StaffPermanente";
 import { esAdminEmail, normalizarEmail } from "./roles";
 import { finDelTurno } from "./staff";
 import { logAudit } from "./audit";
@@ -46,6 +47,15 @@ export async function otorgarTurno({ email: crudo, name = "", nota = "", actor, 
 
   const invalido = validarEmailVoluntario(email);
   if (invalido) return invalido;
+
+  // Un permanente ya entra todos los días: darle turno de hoy no suma nada y
+  // dejaría un turno vencido en el historial como si fuera otra persona.
+  if (await StaffPermanente.exists({ email, quitadoEn: null })) {
+    return {
+      status: 200,
+      body: { message: "Ese voluntario es permanente: ya tiene acceso.", code: "YA_ES_PERMANENTE", email },
+    };
+  }
 
   // Si ya tiene turno hoy, no se duplica: se devuelve el que hay. Dos
   // admins dándole acceso al mismo voluntario es lo normal en un sábado.
@@ -109,6 +119,111 @@ export async function otorgarTurno({ email: crudo, name = "", nota = "", actor, 
       },
       auditEvent,
     },
+  };
+}
+
+/** Voluntarios permanentes (los que no se quitaron), por nombre. */
+export async function listarPermanentes() {
+  return StaffPermanente.find({ quitadoEn: null }).sort({ name: 1, email: 1 }).lean();
+}
+
+/**
+ * Agrega un voluntario permanente: entra al mostrador todos los días, sin que
+ * nadie le dé turno, hasta que un admin lo quite. Idempotente.
+ */
+export async function agregarPermanente({ email: crudo, name = "", nota = "", actor, origen }) {
+  const email = normalizarEmail(crudo);
+  name = String(name || "").trim().slice(0, 120);
+  nota = String(nota || "").trim().slice(0, 300);
+
+  const invalido = validarEmailVoluntario(email);
+  if (invalido) return invalido;
+
+  const existente = await StaffPermanente.findOne({ email, quitadoEn: null }).lean();
+  if (existente) {
+    return {
+      status: 200,
+      body: {
+        message: "Ese voluntario ya es permanente.",
+        code: "YA_ES_PERMANENTE",
+        permanente: { _id: String(existente._id), email: existente.email, name: existente.name || null },
+      },
+    };
+  }
+
+  const doc = await StaffPermanente.create({
+    email,
+    name: name || undefined,
+    nota: nota || undefined,
+    agregadoEn: new Date(),
+    agregadoPor: { email: actor.email, name: actor.name },
+  });
+
+  const auditEvent = await logAudit({
+    action: "STAFF_PERMANENTE_ADD",
+    actor,
+    user: { email, name: name || undefined },
+    summary: `Voluntario permanente agregado: ${name || email}`,
+    meta: conOrigen({ email, nota: nota || undefined }, origen),
+  });
+
+  return {
+    status: 201,
+    body: {
+      message: "Voluntario permanente agregado. Entra todos los días hasta que lo quites.",
+      permanente: { _id: String(doc._id), email: doc.email, name: doc.name || null },
+      auditEvent,
+    },
+  };
+}
+
+/**
+ * Quita a un permanente de la lista, por `id` o `email`. También corta el
+ * turno de hoy si lo tenía, para que el acceso se acabe en el acto y no a
+ * medianoche. Idempotente.
+ */
+export async function quitarPermanente({ id: crudoId, email: crudoEmail, actor, origen }) {
+  const id = String(crudoId || "").trim();
+  const email = normalizarEmail(crudoEmail);
+
+  if (!id && !email) return { status: 400, body: { message: "Falta id o email" } };
+  if (id && !mongoose.isValidObjectId(id)) return { status: 400, body: { message: "ID inválido" } };
+
+  const referencia = id ? await StaffPermanente.findById(id).lean() : null;
+  if (id && !referencia) {
+    return { status: 404, body: { message: "Ese voluntario no existe", code: "NO_ENCONTRADO" } };
+  }
+
+  const objetivo = referencia?.email || email;
+  const ahora = new Date();
+
+  const quitados = await StaffPermanente.updateMany(
+    { email: objetivo, quitadoEn: null },
+    { $set: { quitadoEn: ahora, quitadoPor: { email: actor.email, name: actor.name } } }
+  );
+  await StaffGrant.updateMany(
+    { email: objetivo, revocadoEn: null, vence: { $gte: ahora } },
+    { $set: { revocadoEn: ahora, revocadoPor: { email: actor.email, name: actor.name } } }
+  );
+
+  if (quitados.modifiedCount === 0) {
+    return {
+      status: 200,
+      body: { message: "Ese voluntario ya no estaba en la lista.", code: "SIN_EFECTO", email: objetivo },
+    };
+  }
+
+  const auditEvent = await logAudit({
+    action: "STAFF_PERMANENTE_REMOVE",
+    actor,
+    user: { email: objetivo, name: referencia?.name || undefined },
+    summary: `Voluntario permanente quitado: ${referencia?.name || objetivo}`,
+    meta: conOrigen({ email: objetivo }, origen),
+  });
+
+  return {
+    status: 200,
+    body: { message: "Voluntario quitado. El acceso se corta de inmediato.", email: objetivo, auditEvent },
   };
 }
 

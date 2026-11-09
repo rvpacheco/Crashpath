@@ -15,6 +15,7 @@ import { estadoGate, ACCION_LOGIN, ACCION_REINTENTAR, ACCION_INICIO } from "@/li
 import { PrivacyProvider, usePrivacy } from "@/components/PrivacyContext";
 import { InventarioModal, VentaRapida } from "@/components/Inventario";
 import { buscarProductos } from "@/lib/inventario";
+import { PRECIOS, precioDia, precioTiquetera, precioMensualidad, pesos } from "@/lib/precios";
 
 // ============================================
 // SISTEMA DE DISEÑO MINIMALISTA
@@ -1104,7 +1105,7 @@ function isCanvasBlank(canvas) {
 const INITIAL_FORM = {
   name: "", email: "", documentType: "CC", documentNumber: "",
   phone: "", epsName: "", emergencyContactName: "", emergencyContactPhone: "",
-  accessType: "ticketera", mensualidadMeses: 1, esMinor: false,
+  accessType: "ticketera", mensualidadMeses: 1, zapatos: false, esMinor: false,
 };
 
 // Invitado que entra con la cortesía de un socio. Pide lo mínimo legal
@@ -1396,6 +1397,96 @@ function AuditFeed({ events, loading }) {
 }
 
 // ============================================
+// INGRESOS (solo admin): caja real por tipo de cobro y por día
+// ============================================
+const TIPOS_INGRESO = [
+  { clave: "dia", etiqueta: "Pases de día", color: "#0066CC" },
+  { clave: "tiquetera", etiqueta: "Tiqueteras", color: "#7C3AED" },
+  { clave: "mensualidad", etiqueta: "Mensualidades", color: "#16A34A" },
+  { clave: "inventario", etiqueta: "Inventario", color: "#D97706" },
+];
+
+function IngresosPanel({ data, loading, error, periodo }) {
+  if (error) return <ErrorBox style={{ margin: spacing.md }}>{error}</ErrorBox>;
+  if (!data) {
+    return (
+      <div style={{ padding: spacing.lg, color: palette.textLight, fontSize: fontSize.sm }}>
+        {loading ? "Calculando ingresos..." : ""}
+      </div>
+    );
+  }
+
+  const cambio = data.cambio;
+  const maxDia = Math.max(1, ...data.dias.map((d) => d.total));
+  const nombreDia = (ymd) => formatTabDate(ymd);
+
+  return (
+    <div style={{ padding: `${spacing.lg} ${spacing.xl}`, background: palette.bg, borderBottom: `1px solid ${palette.border}` }}>
+      <KPIGrid style={{ padding: 0, background: "transparent", border: "none" }}>
+        <KPICard style={{ gridColumn: "span 2" }}>
+          <KPIValue $color={palette.success}>{pesos(data.total)}</KPIValue>
+          <KPILabel>Caja del período</KPILabel>
+          <KPISub style={{ color: cambio == null ? palette.textLight : cambio >= 0 ? palette.success : palette.danger }}>
+            {cambio == null
+              ? "Sin período anterior para comparar"
+              : `${cambio >= 0 ? "↑" : "↓"} ${Math.abs(cambio).toFixed(1)}% vs. período anterior (${pesos(data.previo)})`}
+          </KPISub>
+          {data.estimado > 0 && (
+            <KPISub title="Cobros de antes de que el panel guardara el monto: se calculan con las tarifas actuales">
+              Incluye ~{pesos(data.estimado)} estimado de cobros antiguos
+            </KPISub>
+          )}
+        </KPICard>
+        {TIPOS_INGRESO.map((t) => (
+          <KPICard key={t.clave}>
+            <KPIValue $color={t.color}>{pesos(data.porTipo[t.clave])}</KPIValue>
+            <KPILabel>{t.etiqueta}</KPILabel>
+            {t.clave === "dia" && (
+              <KPISub>
+                {data.pases.sinZapatos} sin zapatos · {data.pases.conZapatos} con zapatos
+              </KPISub>
+            )}
+          </KPICard>
+        ))}
+      </KPIGrid>
+
+      {periodo !== "today" && (
+        <div style={{ marginTop: spacing.lg }}>
+          <div style={{ fontSize: fontSize.sm, fontWeight: 600, marginBottom: spacing.sm }}>Por día</div>
+          {data.dias.map((d) => (
+            <div key={d.dia} style={{ display: "flex", alignItems: "center", gap: spacing.sm, marginBottom: 4 }}>
+              <div style={{ width: 92, fontSize: fontSize.xs, color: palette.textLight, flexShrink: 0 }}>{nombreDia(d.dia)}</div>
+              <div style={{ flex: 1, display: "flex", height: 14, background: palette.border, borderRadius: 4, overflow: "hidden" }}>
+                {TIPOS_INGRESO.map((t) =>
+                  d.porTipo[t.clave] > 0 ? (
+                    <div
+                      key={t.clave}
+                      title={`${t.etiqueta}: ${pesos(d.porTipo[t.clave])}`}
+                      style={{ width: `${(d.porTipo[t.clave] / maxDia) * 100}%`, background: t.color }}
+                    />
+                  ) : null
+                )}
+              </div>
+              <div style={{ width: 84, textAlign: "right", fontSize: fontSize.xs, fontVariantNumeric: "tabular-nums" }}>
+                {d.total > 0 ? pesos(d.total) : "—"}
+              </div>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: spacing.md, flexWrap: "wrap", marginTop: spacing.sm }}>
+            {TIPOS_INGRESO.map((t) => (
+              <span key={t.clave} style={{ fontSize: fontSize.xs, color: palette.textLight }}>
+                <span style={{ display: "inline-block", width: 10, height: 10, background: t.color, borderRadius: 2, marginRight: 4 }} />
+                {t.etiqueta}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 export default function AdminPage() {
@@ -1425,6 +1516,13 @@ function AdminPanel() {
   const [staffName, setStaffName] = useState("");
   const [staffMsg, setStaffMsg] = useState("");
   const [staffOk, setStaffOk] = useState(true);
+  const [staffPermanentes, setStaffPermanentes] = useState([]);
+  const [staffPermanente, setStaffPermanente] = useState(false);
+
+  // Caja del gimnasio (solo admin): lo calcula /api/admin/ingresos.
+  const [ingresos, setIngresos] = useState(null);
+  const [ingresosLoading, setIngresosLoading] = useState(false);
+  const [ingresosError, setIngresosError] = useState("");
 
   // Inventario del mostrador (magnesio, cepillos). El estado vive en
   // components/Inventario.jsx; acá solo se abre.
@@ -1514,6 +1612,13 @@ function AdminPanel() {
   const [waiverUser, setWaiverUser] = useState(null);
   const [checkinUser, setCheckinUser] = useState(null);
   const [checkinSuccess, setCheckinSuccess] = useState("");
+  // Cómo entra: "normal" (su tiquetera o mensualidad), "dia" (paga el día) o
+  // "voluntario" (gratis). Ver hacerCheckin en lib/operaciones.js.
+  const [pase, setPase] = useState("normal");
+  const [paseZapatos, setPaseZapatos] = useState(false);
+  const [creditsVenta, setCreditsVenta] = useState(true);
+  const [renovarZapatos, setRenovarZapatos] = useState(false);
+  const [accessZapatos, setAccessZapatos] = useState(false);
 
   // Cortesía (pase de invitado): paso 1 datos del invitado, paso 2 su waiver
   const [showCortesiaModal, setShowCortesiaModal] = useState(false);
@@ -1876,6 +1981,8 @@ function AdminPanel() {
     let totalMensualidadCheckins = 0;
     let totalTicketeraCheckins = 0;
     let totalCortesiaCheckins = 0;
+    let totalDiaCheckins = 0;
+    let totalVoluntarioCheckins = 0;
     let uniqueUsers = new Set();
     let mensualidadUsers = new Set();
     let ticketeraUsers = new Set();
@@ -1905,6 +2012,12 @@ function AdminPanel() {
               case "cortesia":
                 totalCortesiaCheckins++;
                 break;
+              case "dia":
+                totalDiaCheckins++;
+                break;
+              case "voluntario":
+                totalVoluntarioCheckins++;
+                break;
               case "mensualidad":
                 totalMensualidadCheckins++;
                 mensualidadUsers.add(user._id);
@@ -1927,7 +2040,6 @@ function AdminPanel() {
     
     const checkinChange = prevTotalCheckins === 0 ? 100 : ((totalCheckins - prevTotalCheckins) / prevTotalCheckins) * 100;
     const usersChange = prevUniqueUsers.size === 0 ? 100 : ((uniqueUsers.size - prevUniqueUsers.size) / prevUniqueUsers.size) * 100;
-    const estimatedRevenue = totalTicketeraCheckins * 15000;
     
     return {
       totalCheckins,
@@ -1935,13 +2047,39 @@ function AdminPanel() {
       mensualidadCheckins: totalMensualidadCheckins,
       ticketeraCheckins: totalTicketeraCheckins,
       cortesiaCheckins: totalCortesiaCheckins,
+      diaCheckins: totalDiaCheckins,
+      voluntarioCheckins: totalVoluntarioCheckins,
       mensualidadUsers: mensualidadUsers.size,
       ticketeraUsers: ticketeraUsers.size,
-      estimatedRevenue,
       checkinChange,
       usersChange
     };
   }, [users, kpiPeriod]);
+
+  // La caja se recalcula al cambiar el período y cada vez que la lista de
+  // usuarios se refresca (después de cada cobro o check-in).
+  const puedeVerIngresos = can(PERMISOS.VER_INGRESOS);
+  useEffect(() => {
+    if (!puedeVerIngresos) return undefined;
+    let vigente = true;
+    setIngresosLoading(true);
+    axios
+      .get("/api/admin/ingresos", { params: { periodo: kpiPeriod } })
+      .then((res) => {
+        if (!vigente) return;
+        setIngresos(res.data);
+        setIngresosError("");
+      })
+      .catch(() => {
+        if (vigente) setIngresosError("No se pudieron cargar los ingresos.");
+      })
+      .finally(() => {
+        if (vigente) setIngresosLoading(false);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [puedeVerIngresos, kpiPeriod, users]);
 
   const handleEditVisit = (user, visit) => {
     setEditingVisitUser(user);
@@ -2159,6 +2297,10 @@ function AdminPanel() {
     setUiError("");
     setCheckinSuccess("");
     setCheckinUser(user);
+    // Quien no puede entrar con su modalidad (sin créditos, mes vencido o sin
+    // modalidad) arranca en pase de día: es lo que casi siempre viene a hacer.
+    setPase(userCanCheckin(user) ? "normal" : "dia");
+    setPaseZapatos(false);
     setShowCheckinModal(true);
   };
 
@@ -2168,10 +2310,18 @@ function AdminPanel() {
     if (!checkinUser) return;
     setBusy(true);
     try {
-      const res = await axios.post("/api/admin/visits/checkin", { userId: checkinUser._id });
+      const res = await axios.post("/api/admin/visits/checkin", {
+        userId: checkinUser._id,
+        pase: pase === "normal" ? undefined : pase,
+        zapatos: pase === "dia" ? paseZapatos : undefined,
+      });
       const code = res.data?.code;
       if (code === "ALREADY_CHECKED_IN") {
         setCheckinSuccess("✅ Este usuario ya hizo check-in hoy.");
+      } else if (pase === "dia") {
+        setCheckinSuccess(`✅ Pase de día registrado. Cobrar ${pesos(precioDia(paseZapatos))}.`);
+      } else if (pase === "voluntario") {
+        setCheckinSuccess("✅ Entrada de voluntario registrada (gratis).");
       } else {
         const creditsMsg = checkinUser.accessType === "ticketera"
           ? ` Créditos restantes: ${res.data?.credits ?? ""}` : "";
@@ -2287,6 +2437,7 @@ function AdminPanel() {
     setCreditsSuccess("");
     setSelectedUser(userId);
     setCredits(0);
+    setCreditsVenta(true);
     setShowCreditsModal(true);
   };
 
@@ -2300,6 +2451,7 @@ function AdminPanel() {
     try {
       const res = await axios.post("/api/admin/adjust-credits", {
         userId: selectedUser, credits: parseInt(amount, 10),
+        venta: creditsVenta && amount > 0,
       });
       if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
       setCreditsSuccess("✅ Créditos actualizados correctamente.");
@@ -2317,6 +2469,7 @@ function AdminPanel() {
     setUiError("");
     setSelectedUser(userId);
     setRenovarMonths(1);
+    setRenovarZapatos(false);
     setShowRenovarModal(true);
   };
 
@@ -2326,7 +2479,7 @@ function AdminPanel() {
     setBusy(true);
     try {
       const res = await axios.post("/api/admin/mensualidad/renovar", {
-        userId: selectedUser, months: renovarMonths,
+        userId: selectedUser, months: renovarMonths, zapatos: renovarZapatos,
       });
       setShowRenovarModal(false);
       if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
@@ -2344,6 +2497,7 @@ function AdminPanel() {
     setAccessTypeDraft(user?.accessType || "ticketera");
     setAccessMonthsDraft(1);
     setAccessCreditsDraft(0);
+    setAccessZapatos(false);
     setShowAccessModal(true);
   };
 
@@ -2357,6 +2511,7 @@ function AdminPanel() {
         accessType: accessTypeDraft,
         months: accessTypeDraft === "mensualidad" ? accessMonthsDraft : undefined,
         credits: accessTypeDraft === "ticketera" ? Number(accessCreditsDraft || 0) : undefined,
+        zapatos: accessTypeDraft === "mensualidad" ? accessZapatos : undefined,
       };
       const res = await axios.post("/api/admin/users/set-access-type", payload);
       if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
@@ -2503,6 +2658,7 @@ function AdminPanel() {
     try {
       const res = await axios.get("/api/admin/staff");
       setStaffTurnos(Array.isArray(res.data?.turnos) ? res.data.turnos : []);
+      setStaffPermanentes(Array.isArray(res.data?.permanentes) ? res.data.permanentes : []);
     } catch {
       setStaffOk(false);
       setStaffMsg("No se pudo cargar la lista de voluntarios.");
@@ -2515,6 +2671,8 @@ function AdminPanel() {
     setStaffMsg("");
     setStaffOk(true);
     setStaffTurnos([]);
+    setStaffPermanentes([]);
+    setStaffPermanente(false);
     setStaffEmail("");
     setStaffName("");
     setShowStaffModal(true);
@@ -2533,9 +2691,9 @@ function AdminPanel() {
     setStaffMsg("");
     setStaffOk(true);
     try {
-      const res = await axios.post("/api/admin/staff", { email, name: staffName.trim() });
+      const res = await axios.post("/api/admin/staff", { email, name: staffName.trim(), permanente: staffPermanente });
       setStaffOk(true);
-      setStaffMsg(res.data?.message || "Turno otorgado.");
+      setStaffMsg(res.data?.message || (staffPermanente ? "Voluntario permanente agregado." : "Turno otorgado."));
       setStaffEmail("");
       setStaffName("");
       appendAuditEvent(res.data?.auditEvent);
@@ -2543,6 +2701,25 @@ function AdminPanel() {
     } catch (e) {
       setStaffOk(false);
       setStaffMsg(e?.response?.data?.message || "No se pudo otorgar el turno.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const quitarPermanente = async (v) => {
+    if (!window.confirm(`¿Quitar a ${v.name || v.email} de los voluntarios permanentes? Pierde el acceso de inmediato.`)) return;
+
+    setBusy(true);
+    setStaffMsg("");
+    setStaffOk(true);
+    try {
+      const res = await axios.post("/api/admin/staff/revocar", { id: v._id, permanente: true });
+      setStaffMsg(res.data?.message || "Voluntario quitado.");
+      appendAuditEvent(res.data?.auditEvent);
+      await fetchStaff();
+    } catch (e) {
+      setStaffOk(false);
+      setStaffMsg(e?.response?.data?.message || "No se pudo quitar al voluntario.");
     } finally {
       setBusy(false);
     }
@@ -2599,6 +2776,7 @@ function AdminPanel() {
       emergencyContactPhone: (newUserForm.emergencyContactPhone || "").trim(),
       accessType: newUserForm.accessType ?? "ticketera",
       mensualidadMeses: newUserForm.accessType === "mensualidad" ? newUserForm.mensualidadMeses : undefined,
+      zapatos: newUserForm.accessType === "mensualidad" ? !!newUserForm.zapatos : undefined,
       esMinor: newUserForm.esMinor ?? false,
     };
     if (!payload.name) return setUiError("El nombre es obligatorio.");
@@ -2878,7 +3056,7 @@ function AdminPanel() {
             Si no, lo descubre con un error en mitad de un cobro. */}
         {esVoluntario && (
           <TurnoBanner>
-            <span>🕐 {etiquetaTurno(rolInfo?.vence)}</span>
+            <span>🕐 {rolInfo?.permanente ? "Voluntario permanente" : etiquetaTurno(rolInfo?.vence)}</span>
             <span style={{ opacity: 0.8 }}>
               Podés cobrar y hacer check-in. Los datos personales y la gestión quedan para un admin.
             </span>
@@ -2968,15 +3146,7 @@ function AdminPanel() {
             <KPICard>
               <KPIValue>{kpiData.ticketeraCheckins}</KPIValue>
               <KPILabel>Check-ins (tiquetera)</KPILabel>
-              {can(PERMISOS.VER_INGRESOS) && <KPISub>× $15,000 c/u</KPISub>}
             </KPICard>
-            {can(PERMISOS.VER_INGRESOS) && (
-              <KPICard>
-                <KPIValue $color={palette.success}>${kpiData.estimatedRevenue.toLocaleString()}</KPIValue>
-                <KPILabel>Ingreso estimado</KPILabel>
-                <KPISub>Solo tiquetera</KPISub>
-              </KPICard>
-            )}
             <KPICard>
               <KPIValue>{kpiData.mensualidadCheckins}</KPIValue>
               <KPILabel>Check-ins (mensualidad)</KPILabel>
@@ -2986,6 +3156,15 @@ function AdminPanel() {
               <KPIValue>{kpiData.cortesiaCheckins}</KPIValue>
               <KPILabel>Invitados (cortesía)</KPILabel>
               <KPISub>Entradas gratis, no suman ingreso</KPISub>
+            </KPICard>
+            <KPICard>
+              <KPIValue>{kpiData.diaCheckins}</KPIValue>
+              <KPILabel>Pases de día</KPILabel>
+            </KPICard>
+            <KPICard>
+              <KPIValue>{kpiData.voluntarioCheckins}</KPIValue>
+              <KPILabel>Voluntarios</KPILabel>
+              <KPISub>Gratis, no suman ingreso</KPISub>
             </KPICard>
             <KPICard>
               <KPIValue>{kpiData.totalCheckins}</KPIValue>
@@ -3002,6 +3181,10 @@ function AdminPanel() {
               </KPISub>
             </KPICard>
           </KPIGrid>
+        )}
+
+        {dashboardExpanded && can(PERMISOS.VER_INGRESOS) && (
+          <IngresosPanel data={ingresos} loading={ingresosLoading} error={ingresosError} periodo={kpiPeriod} />
         )}
 
         <FilterRow>
@@ -3335,12 +3518,16 @@ function AdminPanel() {
                       <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>
                         {checkin.esCortesia
                           ? `🎟️ Invitado de ${maskName(checkin.cortesiaHostName) || "un socio"}`
-                          : maskEmail(checkin.userEmail)}
+                          : checkin.esPaseDia
+                            ? `Pase de día ${checkin.conZapatos ? "con" : "sin"} zapatos`
+                            : checkin.esVoluntario
+                              ? "Voluntario"
+                              : maskEmail(checkin.userEmail)}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
                       <Badge $success={checkin.accessType === "mensualidad"}>
-                        {checkin.esCortesia ? "Cortesía" : checkin.accessType === "mensualidad" ? "Mens" : "Tiq"}
+                        {checkin.esCortesia ? "Cortesía" : checkin.esPaseDia ? "Día" : checkin.esVoluntario ? "Vol" : checkin.accessType === "mensualidad" ? "Mens" : "Tiq"}
                       </Badge>
                       <span style={{ fontSize: fontSize.sm, color: palette.textLight }}>
                         {formatCheckinTime(checkin.time)}
@@ -3392,6 +3579,18 @@ function AdminPanel() {
               onChange={(e) => setCredits(e.target.value)}
               placeholder="Cantidad (+ para agregar, - para quitar)"
             />
+            {Number(credits) > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: spacing.xs, marginBottom: spacing.md }}>
+                <label style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
+                  <input type="radio" name="venta" checked={creditsVenta} onChange={() => setCreditsVenta(true)} />
+                  Venta de tiquetera · {pesos(precioTiquetera(Number(credits)))}
+                </label>
+                <label style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
+                  <input type="radio" name="venta" checked={!creditsVenta} onChange={() => setCreditsVenta(false)} />
+                  Corrección de saldo (no suma a la caja)
+                </label>
+              </div>
+            )}
             {uiError && <ErrorBox>{uiError}</ErrorBox>}
             {creditsSuccess && <SuccessBox>{creditsSuccess}</SuccessBox>}
             <ActionButtons>
@@ -3432,11 +3631,52 @@ function AdminPanel() {
                 {hasCheckedInToday(checkinUser) && (
                   <SuccessBox>✅ Ya aparece con check-in hoy.</SuccessBox>
                 )}
-                {checkinUser.accessType === "ticketera" && (checkinUser.credits ?? 0) <= 0 && (
-                  <ErrorBox>⚠️ Sin créditos — no se puede registrar el check-in.</ErrorBox>
+                {!hasCheckedInToday(checkinUser) && !checkinSuccess && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: spacing.xs, marginBottom: spacing.md }}>
+                    <div style={{ fontSize: fontSize.sm, fontWeight: 600 }}>¿Cómo entra hoy?</div>
+                    <label style={{ display: "flex", gap: spacing.sm, alignItems: "center", opacity: userCanCheckin(checkinUser) ? 1 : 0.5 }}>
+                      <input type="radio" name="pase" checked={pase === "normal"} disabled={!userCanCheckin(checkinUser)}
+                        onChange={() => setPase("normal")} />
+                      {checkinUser.accessType === "mensualidad"
+                        ? "Con su mensualidad"
+                        : checkinUser.accessType === "ticketera"
+                          ? "Con su tiquetera (−1 crédito)"
+                          : "Con su modalidad"}
+                      {!userCanCheckin(checkinUser) && (
+                        <span style={{ color: palette.danger, fontSize: fontSize.xs }}>
+                          {checkinUser.accessType === "ticketera" ? "sin créditos" : checkinUser.accessType === "mensualidad" ? "vencida" : "no tiene"}
+                        </span>
+                      )}
+                    </label>
+                    <label style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
+                      <input type="radio" name="pase" checked={pase === "dia"} onChange={() => setPase("dia")} />
+                      Pase de día (no gasta créditos)
+                    </label>
+                    {pase === "dia" && (
+                      <div style={{ marginLeft: spacing.lg, display: "flex", gap: spacing.md, flexWrap: "wrap" }}>
+                        <label style={{ display: "flex", gap: spacing.xs, alignItems: "center" }}>
+                          <input type="radio" name="zapatos" checked={!paseZapatos} onChange={() => setPaseZapatos(false)} />
+                          Sin zapatos · {pesos(PRECIOS.DIA)}
+                        </label>
+                        <label style={{ display: "flex", gap: spacing.xs, alignItems: "center" }}>
+                          <input type="radio" name="zapatos" checked={paseZapatos} onChange={() => setPaseZapatos(true)} />
+                          Con zapatos · {pesos(PRECIOS.DIA_ZAPATOS)}
+                        </label>
+                      </div>
+                    )}
+                    {can(PERMISOS.CHECKIN) && (
+                      <label style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
+                        <input type="radio" name="pase" checked={pase === "voluntario"} onChange={() => setPase("voluntario")} />
+                        Voluntario (gratis)
+                      </label>
+                    )}
+                  </div>
                 )}
-                {checkinUser.accessType === "mensualidad" && !getMensualidadStatus(checkinUser.mensualidad).active && (
-                  <ErrorBox>⚠️ Mensualidad vencida — no se puede registrar el check-in.</ErrorBox>
+                {pase === "normal" && checkinUser.accessType === "ticketera" && (checkinUser.credits ?? 0) <= 0 && (
+                  <ErrorBox>⚠️ Sin créditos — elige pase de día o recarga la tiquetera.</ErrorBox>
+                )}
+                {pase === "normal" && checkinUser.accessType === "mensualidad" && !getMensualidadStatus(checkinUser.mensualidad).active && (
+                  <ErrorBox>⚠️ Mensualidad vencida — elige pase de día o renueva el mes.</ErrorBox>
                 )}
               </>
             )}
@@ -3444,8 +3684,14 @@ function AdminPanel() {
             {checkinSuccess && <SuccessBox>{checkinSuccess}</SuccessBox>}
             <ActionButtons>
               {!checkinSuccess && (
-                <Button onClick={submitCheckin} disabled={busy || !checkinUser || !userCanCheckin(checkinUser)}>
-                  {busy ? "Registrando..." : "✓ Confirmar Check-in"}
+                <Button onClick={submitCheckin} disabled={busy || !checkinUser || (pase === "normal" && !userCanCheckin(checkinUser))}>
+                  {busy
+                    ? "Registrando..."
+                    : pase === "dia"
+                      ? `✓ Registrar pase · ${pesos(precioDia(paseZapatos))}`
+                      : pase === "voluntario"
+                        ? "✓ Entrada de voluntario"
+                        : "✓ Confirmar Check-in"}
                 </Button>
               )}
               <Button $variant="secondary" onClick={() => { setShowCheckinModal(false); setCheckinSuccess(""); setUiError(""); }} disabled={busy}>
@@ -3615,6 +3861,13 @@ function AdminPanel() {
                 <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>
               ))}
             </Select>
+            <CheckboxRow>
+              <input type="checkbox" checked={renovarZapatos} onChange={(e) => setRenovarZapatos(e.target.checked)} />
+              <span>Con pies de gato incluidos</span>
+            </CheckboxRow>
+            <div style={{ fontWeight: 600, marginBottom: spacing.md }}>
+              Total a cobrar: {pesos(precioMensualidad(renovarMonths, renovarZapatos))}
+            </div>
             {uiError && <ErrorBox>{uiError}</ErrorBox>}
             <ActionButtons>
               <Button onClick={submitRenovar} disabled={busy}>{busy ? "Renovando..." : "Confirmar"}</Button>
@@ -3640,8 +3893,9 @@ function AdminPanel() {
 
             <p style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>
               El turno vence solo al final del día (11:59 pm). No hay que acordarse de
-              quitarlo. Puede hacer check-in, vender tiqueteras y renovar mensualidades;
-              no ve datos personales, ni la auditoría, ni puede borrar o exportar.
+              quitarlo. Un voluntario <strong>permanente</strong> entra todos los días hasta que
+              lo quites de la lista. Puede hacer check-in, vender tiqueteras y renovar
+              mensualidades; no ve datos personales, ni la auditoría, ni puede borrar o exportar.
             </p>
 
             <Input
@@ -3655,15 +3909,58 @@ function AdminPanel() {
               value={staffName}
               onChange={(e) => setStaffName(e.target.value)}
             />
+            <CheckboxRow>
+              <input type="checkbox" checked={staffPermanente} onChange={(e) => setStaffPermanente(e.target.checked)} />
+              <span>Permanente (sin vencimiento)</span>
+            </CheckboxRow>
             {staffMsg && (staffOk ? <SuccessBox>{staffMsg}</SuccessBox> : <ErrorBox>{staffMsg}</ErrorBox>)}
             <ActionButtons>
               <Button onClick={otorgarTurno} disabled={busy}>
-                {busy ? "Guardando..." : "Dar turno de hoy"}
+                {busy ? "Guardando..." : staffPermanente ? "Agregar permanente" : "Dar turno de hoy"}
               </Button>
               <Button $variant="secondary" onClick={() => setShowStaffModal(false)} disabled={busy}>
                 Cerrar
               </Button>
             </ActionButtons>
+
+            <div style={{ marginTop: spacing.lg }}>
+              <div style={{ fontWeight: 600, marginBottom: spacing.sm }}>
+                Voluntarios permanentes ({staffPermanentes.length})
+              </div>
+              {staffLoading ? (
+                <div style={{ color: palette.textLight, fontSize: fontSize.sm }}>Cargando...</div>
+              ) : staffPermanentes.length === 0 ? (
+                <div style={{ color: palette.textLight, fontSize: fontSize.sm }}>
+                  Todavía no hay voluntarios permanentes.
+                </div>
+              ) : (
+                staffPermanentes.map((v) => (
+                  <div
+                    key={v._id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: spacing.sm,
+                      padding: `${spacing.sm} 0`,
+                      borderBottom: `1px solid ${palette.border}`,
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, overflowWrap: "anywhere" }}>{v.name || v.email}</div>
+                      <div style={{ fontSize: fontSize.sm, color: palette.textLight }}>
+                        {v.name ? `${v.email} · ` : ""}
+                        desde {formatDate(v.agregadoEn)}
+                        {v.agregadoPor ? ` · lo agregó ${v.agregadoPor}` : ""}
+                      </div>
+                    </div>
+                    <Button $variant="danger" $small onClick={() => quitarPermanente(v)} disabled={busy}>
+                      Quitar
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
 
             <div style={{ marginTop: spacing.lg }}>
               <div style={{ fontWeight: 600, marginBottom: spacing.sm }}>Turnos recientes</div>
@@ -3739,6 +4036,13 @@ function AdminPanel() {
                         <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>
                       ))}
                     </Select>
+                    <CheckboxRow>
+                      <input type="checkbox" checked={accessZapatos} onChange={(e) => setAccessZapatos(e.target.checked)} />
+                      <span>Con pies de gato incluidos</span>
+                    </CheckboxRow>
+                    <div style={{ fontWeight: 600, marginBottom: spacing.md }}>
+                      Total a cobrar: {pesos(precioMensualidad(accessMonthsDraft, accessZapatos))}
+                    </div>
                   </>
                 ) : (
                   <>
@@ -3749,6 +4053,12 @@ function AdminPanel() {
                       onChange={(e) => setAccessCreditsDraft(e.target.value)}
                       placeholder="0"
                     />
+                    {/* El campo FIJA el saldo; se cobra solo lo que queda por encima de lo que ya tenía. */}
+                    {Number(accessCreditsDraft) > (accessUser.credits ?? 0) && (
+                      <div style={{ fontWeight: 600, marginBottom: spacing.md }}>
+                        Total a cobrar: {pesos(precioTiquetera(Number(accessCreditsDraft) - (accessUser.credits ?? 0)))}
+                      </div>
+                    )}
                   </>
                 )}
                 {uiError && <ErrorBox>{uiError}</ErrorBox>}
@@ -3912,6 +4222,8 @@ function AdminPanel() {
                       <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: spacing.xs }}>
                         {v.createdBy === "user" ? "Auto-registro" : v.createdBy === "staff" ? "Registrado por voluntario" : "Registrado por admin"}
                         {v.esCortesia && ` · 🎟️ cortesía de ${v.cortesiaHostName || "un socio"}`}
+                        {v.esPaseDia && ` · pase de día ${v.conZapatos ? "con" : "sin"} zapatos${v.monto ? ` (${pesos(v.monto)})` : ""}`}
+                        {v.esVoluntario && " · voluntario (gratis)"}
                       </div>
                       <div style={{ marginTop: spacing.xs }}>
                         <Button $variant="secondary" $small onClick={() => handleEditVisit(historyUser, v)}>✏️ Editar</Button>
@@ -4205,6 +4517,12 @@ function AdminPanel() {
                       <Select value={newUserForm.mensualidadMeses} onChange={(e) => setNewUserForm(s => ({ ...s, mensualidadMeses: Number(e.target.value) }))}>
                         {[1, 2, 3, 6, 12].map(m => <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>)}
                       </Select>
+                    )}
+                    {newUserForm.accessType === "mensualidad" && (
+                      <CheckboxRow>
+                        <input type="checkbox" checked={!!newUserForm.zapatos} onChange={(e) => setNewUserForm(s => ({ ...s, zapatos: e.target.checked }))} />
+                        <span>Con pies de gato · total {pesos(precioMensualidad(newUserForm.mensualidadMeses, !!newUserForm.zapatos))}</span>
+                      </CheckboxRow>
                     )}
                     <Input placeholder="Nombre completo" value={newUserForm.name} onChange={(e) => setNewUserForm(s => ({ ...s, name: e.target.value }))} />
                     <Input placeholder="Email" value={newUserForm.email} onChange={(e) => setNewUserForm(s => ({ ...s, email: e.target.value }))} />

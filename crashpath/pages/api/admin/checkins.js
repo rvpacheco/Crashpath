@@ -51,6 +51,9 @@ export default async function handler(req, res) {
               // modalidad propia, así que la UI lo etiqueta aparte.
               esCortesia: !!visit.esCortesia,
               cortesiaHostName: visit.cortesiaHostName || null,
+              esPaseDia: !!visit.esPaseDia,
+              conZapatos: !!visit.conZapatos,
+              esVoluntario: !!visit.esVoluntario,
               time: visit.checkedInAt || visit.date,
               status: visit.status
             });

@@ -22,6 +22,7 @@ const ESPERADO = {
   // Vender es cobrar. Llegadas y ajustes los frena el propio endpoint con
   // INVENTARIO_GESTIONAR, que el voluntario no tiene (test/permisos.test.js).
   "inventario/index.js": PERMISOS.COBRAR,
+  "ingresos.js": PERMISOS.VER_INGRESOS,
   "users.js": PERMISOS.VER_SOCIOS,
   "cortesia/set.js": PERMISOS.CORTESIA_CORREGIR,
   "cortesia/usar.js": PERMISOS.CORTESIA_USAR,

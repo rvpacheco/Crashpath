@@ -39,6 +39,10 @@ export default async function handler(req, res) {
     notes: v.notes || "",
     esCortesia: !!v.esCortesia,
     cortesiaHostName: v.cortesiaHostName || null,
+    esPaseDia: !!v.esPaseDia,
+    conZapatos: !!v.conZapatos,
+    monto: v.monto ?? null,
+    esVoluntario: !!v.esVoluntario,
   }));
 
   return res.status(200).json({

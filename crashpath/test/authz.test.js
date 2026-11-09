@@ -14,6 +14,11 @@ vi.mock("../lib/mongodb", () => ({ default: (...a) => dbConnect(...a) }));
 vi.mock("../models/StaffGrant", () => ({
   default: { findOne: (...a) => findOne(...a) },
 }));
+// Voluntarios permanentes: por defecto nadie lo es.
+const findOnePermanente = vi.fn();
+vi.mock("../models/StaffPermanente", () => ({
+  default: { findOne: (...a) => findOnePermanente(...a) },
+}));
 
 const { resolverActor, requireAuth, verSensible } = await import("../lib/authz.js");
 const { PERMISOS } = await import("../lib/permisos.js");
@@ -62,6 +67,52 @@ beforeEach(() => {
   vi.clearAllMocks();
   dbConnect.mockResolvedValue(true);
   encolarGrants(null);
+  findOnePermanente.mockImplementation(() => ({ lean: () => Promise.resolve(null) }));
+});
+
+describe("resolverActor: voluntario permanente", () => {
+  it("entra como staff sin vencimiento aunque no tenga turno de hoy", async () => {
+    getToken.mockResolvedValue(tokenDe(VOLUNTARIO));
+    encolarGrants(null); // sin turno diario
+    findOnePermanente.mockImplementation(() => ({
+      lean: () => Promise.resolve({ email: VOLUNTARIO, name: "Vito" }),
+    }));
+
+    const actor = await resolverActor({});
+
+    expect(actor.rol).toBe("staff");
+    expect(actor.vence).toBeNull();
+    expect(actor.permanente).toBe(true);
+  });
+
+  it("solo cuenta si no lo quitaron de la lista (filtra quitadoEn en la consulta)", async () => {
+    getToken.mockResolvedValue(tokenDe(VOLUNTARIO));
+    encolarGrants(null, null);
+
+    await resolverActor({});
+
+    const filtro = findOnePermanente.mock.calls[0][0];
+    expect(filtro.email).toBe(VOLUNTARIO);
+    expect(filtro.quitadoEn).toBeNull();
+  });
+
+  it("si lo quitaron y no tiene turno, queda sin rol", async () => {
+    getToken.mockResolvedValue(tokenDe(VOLUNTARIO));
+    encolarGrants(null, null);
+
+    const actor = await resolverActor({});
+
+    expect(actor.rol).toBeNull();
+    expect(actor.motivo).toBe("SIN_ROL");
+  });
+
+  it("un admin no consulta la lista de permanentes", async () => {
+    getToken.mockResolvedValue(tokenDe(ADMIN));
+
+    await resolverActor({});
+
+    expect(findOnePermanente).not.toHaveBeenCalled();
+  });
 });
 
 describe("resolverActor: admin", () => {

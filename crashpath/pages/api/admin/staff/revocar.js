@@ -6,7 +6,7 @@
 // le caiga la sesión. La regla vive en lib/turnos.js (la comparte el MCP).
 import dbConnect from "../../../../lib/mongodb";
 import { requireAuth, PERMISOS } from "../../../../lib/authz";
-import { revocarTurno } from "../../../../lib/turnos";
+import { revocarTurno, quitarPermanente } from "../../../../lib/turnos";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -22,7 +22,9 @@ export default async function handler(req, res) {
 
   try {
     await dbConnect();
-    const { status, body } = await revocarTurno({ id: req.body?.id, email: req.body?.email, actor });
+    // `permanente: true`: el id es el de la lista de permanentes, no el de un turno.
+    const accion = req.body?.permanente === true ? quitarPermanente : revocarTurno;
+    const { status, body } = await accion({ id: req.body?.id, email: req.body?.email, actor });
     return res.status(status).json(body);
   } catch (e) {
     console.error("staff revoke error:", e?.message || e);

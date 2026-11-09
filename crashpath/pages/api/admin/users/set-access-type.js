@@ -5,6 +5,7 @@ import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { logAudit } from "../../../../lib/audit";
 import { otorgarCortesia } from "../../../../lib/cortesia";
+import { precioMensualidad, precioTiquetera, pesos } from "../../../../lib/precios";
 
 function addMonths(date, months) {
   const d = new Date(date);
@@ -48,6 +49,13 @@ export default async function handler(req, res) {
     const prevType = user.accessType || "ticketera";
     user.accessType = accessType;
 
+    // Lo que se cobra con este cambio: los meses de la mensualidad o los
+    // créditos con los que arranca la tiquetera.
+    const conZapatos = req.body?.zapatos === true;
+    let creditosVendidos = 0;
+    let monto = 0;
+    const creditosAntes = Math.max(0, Number(user.credits) || 0);
+
     // --- Switch to mensualidad ---
     if (accessType === "mensualidad") {
       if (!Number.isFinite(months) || months <= 0) {
@@ -85,6 +93,7 @@ export default async function handler(req, res) {
 
       // Vender/activar mensualidad renueva la cortesía (vuelve a 1, vence con el mes)
       otorgarCortesia(user, { vence: endDate, ts: now });
+      monto = precioMensualidad(months, conZapatos);
 
       // ojo: NO tocamos créditos aquí (los de ticketera los puedes dejar como saldo guardado)
     }
@@ -113,6 +122,11 @@ export default async function handler(req, res) {
 
           // Tiquetera nueva => cortesía nueva (vence con la tiquetera)
           otorgarCortesia(user, { vence: endDate, ts: startDate });
+          // Este endpoint FIJA el saldo, no lo suma. Solo es venta lo que
+          // queda por encima de lo que ya tenía: reescribir los mismos 5
+          // créditos al cambiar de modalidad no es plata nueva.
+          creditosVendidos = Math.max(0, user.credits - creditosAntes);
+          monto = precioTiquetera(creditosVendidos);
         }
       }
 
@@ -126,8 +140,17 @@ export default async function handler(req, res) {
       action: "ACCESS_TYPE_CHANGED",
       actor,
       user,
-      summary: `Acceso: ${prevType} → ${accessType}`,
-      meta: { from: prevType, to: accessType, months: accessType === "mensualidad" ? months : undefined },
+      summary: `Acceso: ${prevType} → ${accessType}${monto ? ` · ${pesos(monto)}` : ""}`,
+      // `monto` siempre presente (0 si solo cambió la modalidad sin cobrar):
+      // lib/ingresos.js suma de acá y estima los eventos viejos que no lo traen.
+      meta: {
+        from: prevType,
+        to: accessType,
+        months: accessType === "mensualidad" ? months : undefined,
+        zapatos: accessType === "mensualidad" ? conZapatos : undefined,
+        creditos: creditosVendidos || undefined,
+        monto,
+      },
     });
 
     return res.status(200).json({
