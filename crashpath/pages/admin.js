@@ -1144,10 +1144,10 @@ function CortesiaBadge({ user }) {
 function AccessInfo({ user, onRenovar, onChangeAccess, onEditTiquetera, onEditMensualidad, busy, can = () => false }) {
   // Invitado que entró con la cortesía de un socio: no tiene modalidad propia.
   // Sin este caso se mostraría como "Tiquetera · 0 créditos", que no es cierto.
-  if (user.userType === "walkin" && !user.accessType) {
+  if ((user.userType === "walkin" || user.userType === "daypass") && !user.accessType) {
     return (
       <div style={{ display: "flex", gap: spacing.sm, alignItems: "center", flexWrap: "wrap" }}>
-        <Badge>👤 Invitado</Badge>
+        <Badge>{user.userType === "daypass" ? "🎫 Pase de día" : "👤 Invitado"}</Badge>
         {can(PERMISOS.COBRAR) && (
           <Button $variant="secondary" $small onClick={() => onChangeAccess(user)} disabled={busy}>
             Volver socio
@@ -2826,8 +2826,29 @@ function AdminPanel() {
         esMinor: !!newUserForm.esMinor,
       });
       if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+
+      // Pase de día: con el waiver firmado, entra y queda cobrado.
+      let falloPase = "";
+      if (newUserForm.accessType === "dia") {
+        try {
+          const ci = await axios.post("/api/admin/visits/checkin", {
+            userId: selectedUser,
+            pase: "dia",
+            zapatos: !!newUserForm.zapatos,
+          });
+          if (ci.data?.auditEvent) appendAuditEvent(ci.data.auditEvent);
+        } catch (e) {
+          falloPase = e?.response?.data?.message || "no se pudo registrar el pase";
+        }
+      }
+
       closeNewUser();
       await fetchUsers();
+      setUiError(
+        falloPase
+          ? `El miembro quedó creado y con waiver firmado, pero ${falloPase}. Regístrale el pase desde Acciones → Check-in.`
+          : ""
+      );
     } catch (error) {
       setUiError(error?.response?.data?.message || "No se pudo firmar el waiver.");
     } finally {
@@ -3304,7 +3325,7 @@ function AdminPanel() {
                           <CardEmail>{maskEmail(user.email)}</CardEmail>
                         </div>
                         <Badge $success={user.accessType === "mensualidad"}>
-                          {user.accessType === "mensualidad" ? "Mensualidad" : "Tiquetera"}
+                          {user.accessType === "mensualidad" ? "Mensualidad" : user.accessType === "ticketera" ? "Tiquetera" : "Sin modalidad"}
                         </Badge>
                       </CardHeader>
                       <CardInfo>
@@ -3617,7 +3638,7 @@ function AdminPanel() {
                 <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.md }}>{maskEmail(checkinUser.email)}</div>
                 <div style={{ display: "flex", gap: spacing.sm, marginBottom: spacing.md, flexWrap: "wrap" }}>
                   <Badge $success={checkinUser.accessType === "mensualidad"}>
-                    {checkinUser.accessType === "mensualidad" ? "Mensualidad" : "Tiquetera"}
+                    {checkinUser.accessType === "mensualidad" ? "Mensualidad" : checkinUser.accessType === "ticketera" ? "Tiquetera" : "Sin modalidad"}
                   </Badge>
                   {checkinUser.accessType === "ticketera" ? (
                     <Badge>{checkinUser.credits ?? 0} créditos</Badge>
@@ -4512,7 +4533,20 @@ function AdminPanel() {
                     <Select value={newUserForm.accessType} onChange={(e) => setNewUserForm(s => ({ ...s, accessType: e.target.value }))}>
                       <option value="ticketera">Tiquetera (créditos)</option>
                       <option value="mensualidad">Mensualidad</option>
+                      <option value="dia">Pase de día</option>
                     </Select>
+                    {newUserForm.accessType === "dia" && (
+                      <div style={{ display: "flex", gap: spacing.md, flexWrap: "wrap", marginBottom: spacing.md }}>
+                        <label style={{ display: "flex", gap: spacing.xs, alignItems: "center" }}>
+                          <input type="radio" name="nuevoZapatos" checked={!newUserForm.zapatos} onChange={() => setNewUserForm(s => ({ ...s, zapatos: false }))} />
+                          Sin zapatos · {pesos(PRECIOS.DIA)}
+                        </label>
+                        <label style={{ display: "flex", gap: spacing.xs, alignItems: "center" }}>
+                          <input type="radio" name="nuevoZapatos" checked={!!newUserForm.zapatos} onChange={() => setNewUserForm(s => ({ ...s, zapatos: true }))} />
+                          Con zapatos · {pesos(PRECIOS.DIA_ZAPATOS)}
+                        </label>
+                      </div>
+                    )}
                     {newUserForm.accessType === "mensualidad" && (
                       <Select value={newUserForm.mensualidadMeses} onChange={(e) => setNewUserForm(s => ({ ...s, mensualidadMeses: Number(e.target.value) }))}>
                         {[1, 2, 3, 6, 12].map(m => <option key={m} value={m}>{m} {m === 1 ? "mes" : "meses"}</option>)}
@@ -4566,7 +4600,13 @@ function AdminPanel() {
                     </SigRow>
                     {uiError && <ErrorBox>{uiError}</ErrorBox>}
                     <ActionButtons>
-                      <Button onClick={submitNewUserWaiver} disabled={busy}>{busy ? "Guardando..." : "Crear miembro"}</Button>
+                      <Button onClick={submitNewUserWaiver} disabled={busy}>
+                        {busy
+                          ? "Guardando..."
+                          : newUserForm.accessType === "dia"
+                            ? `Crear y registrar pase · ${pesos(precioDia(!!newUserForm.zapatos))}`
+                            : "Crear miembro"}
+                      </Button>
                       <Button $variant="secondary" onClick={() => setNewUserStep(1)} disabled={busy}>Atrás</Button>
                     </ActionButtons>
                   </>

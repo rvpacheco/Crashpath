@@ -39,8 +39,14 @@ export default async function handler(req, res) {
   const emergencyContactName = String(body.emergencyContactName || "").trim();
   const emergencyContactPhone = String(body.emergencyContactPhone || "").trim();
 
-  const resolvedAccessType =
-    body.accessType === "mensualidad" ? "mensualidad" : "ticketera";
+  // "dia": alguien que viene a pagar el día. No es socio de nada: sin
+  // modalidad (así no ensucia el filtro "sin créditos") y marcado como
+  // `daypass`. Su check-in con el cobro lo registra el panel después del
+  // waiver, por /api/admin/visits/checkin con pase "dia".
+  const esPaseDia = body.accessType === "dia";
+  const resolvedAccessType = esPaseDia
+    ? null
+    : body.accessType === "mensualidad" ? "mensualidad" : "ticketera";
 
   const esMinor = body.esMinor === true || body.esMinor === "true";
 
@@ -108,6 +114,7 @@ export default async function handler(req, res) {
       emergencyContactPhone,
       esMinor,
       accessType: resolvedAccessType,
+      userType: esPaseDia ? "daypass" : undefined,
       credits: resolvedAccessType === "ticketera" ? 0 : undefined,
       mensualidad: mensualidadData,
       cortesia: cortesiaData,
@@ -118,7 +125,7 @@ export default async function handler(req, res) {
       action: "USER_CREATE",
       actor,
       user,
-      summary: `Usuario creado: ${user.name} (${resolvedAccessType})${monto ? ` · ${pesos(monto)}` : ""}`,
+      summary: `Usuario creado: ${user.name} (${resolvedAccessType || "pase de día"})${monto ? ` · ${pesos(monto)}` : ""}`,
       // `monto` siempre presente: crear con mensualidad es una venta; crear
       // con tiquetera nace en 0 créditos y la venta se anota al cargarlos.
       meta: {
