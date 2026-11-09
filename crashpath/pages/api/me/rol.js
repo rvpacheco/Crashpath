@@ -28,6 +28,8 @@ export default async function handler(req, res) {
       permisos: permisosDe(actor.rol),
       // Solo el voluntario tiene vencimiento; el admin no vence.
       vence: actor.vence || null,
+      // Voluntario permanente: es staff pero sin hora de caída.
+      permanente: !!actor.permanente,
       motivo: actor.motivo || null,
     });
   } catch (e) {

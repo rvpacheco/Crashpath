@@ -3,6 +3,7 @@ import { recortarUsuario } from "../../../../lib/redact";
 import dbConnect from "../../../../lib/mongodb";
 import User from "../../../../models/User";
 import { logAudit } from "../../../../lib/audit";
+import { precioMensualidad, pesos } from "../../../../lib/precios";
 
 function makeWalkInEmail() {
   const rand = Math.random().toString(36).slice(2, 10);
@@ -47,6 +48,9 @@ export default async function handler(req, res) {
     resolvedAccessType === "mensualidad"
       ? Math.min(Math.max(parseInt(body.mensualidadMeses, 10) || 1, 1), 12)
       : null;
+
+  const conZapatos = body.zapatos === true;
+  const monto = mensualidadMeses ? precioMensualidad(mensualidadMeses, conZapatos) : 0;
 
   if (!name) return res.status(400).json({ message: "Missing name" });
 
@@ -114,8 +118,16 @@ export default async function handler(req, res) {
       action: "USER_CREATE",
       actor,
       user,
-      summary: `Usuario creado: ${user.name} (${resolvedAccessType})`,
-      meta: { accessType: resolvedAccessType, esMinor },
+      summary: `Usuario creado: ${user.name} (${resolvedAccessType})${monto ? ` · ${pesos(monto)}` : ""}`,
+      // `monto` siempre presente: crear con mensualidad es una venta; crear
+      // con tiquetera nace en 0 créditos y la venta se anota al cargarlos.
+      meta: {
+        accessType: resolvedAccessType,
+        esMinor,
+        months: mensualidadMeses || undefined,
+        zapatos: resolvedAccessType === "mensualidad" ? conZapatos : undefined,
+        monto,
+      },
     });
 
     return res.status(200).json({

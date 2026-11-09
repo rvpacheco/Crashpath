@@ -24,7 +24,9 @@ export default async function handler(req, res) {
 
     await dbConnect();
     // La lógica vive en lib/operaciones.js: la comparte con el MCP.
-    const { status, body } = await ajustarCreditos({ userId, delta, actor });
+    // `venta: true` = se cobró una tiquetera (suma ingreso). Sin eso es una
+    // corrección de saldo y no cuenta como plata.
+    const { status, body } = await ajustarCreditos({ userId, delta, venta: req.body?.venta === true, actor });
     res.status(status).json(body);
   } catch (error) {
     console.error('Error al ajustar créditos:', error);

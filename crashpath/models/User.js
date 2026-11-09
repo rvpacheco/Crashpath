@@ -64,6 +64,16 @@ const VisitSchema = new mongoose.Schema(
     cortesiaHostId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     cortesiaHostName: { type: String },
 
+    // ── Entradas que no gastan crédito ni piden mensualidad ───────────
+    // Pase de día: paga en el mostrador y entra. `monto` guarda lo cobrado
+    // ese día (20.000 sin zapatos, 30.000 con); el dashboard de ingresos lo
+    // suma desde acá, así cancelar la visita lo saca de la caja solo.
+    esPaseDia: { type: Boolean, default: false },
+    conZapatos: { type: Boolean, default: false },
+    monto: { type: Number },
+    // Voluntario que entra a escalar: gratis, no suma ingreso.
+    esVoluntario: { type: Boolean, default: false },
+
     // ✅ auditoría por visita
     events: { type: [VisitEventSchema], default: [] },
   },

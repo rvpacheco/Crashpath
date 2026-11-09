@@ -17,11 +17,11 @@ export default async function handler(req, res) {
 
   await dbConnect();
 
-  const { userId, months = 1 } = req.body;
+  const { userId, months = 1, zapatos = false } = req.body;
 
   try {
     // La lógica vive en lib/operaciones.js: la comparte con el MCP.
-    const { status, body } = await renovarMensualidad({ userId, months, actor });
+    const { status, body } = await renovarMensualidad({ userId, months, zapatos: zapatos === true, actor });
     return res.status(status).json(body);
   } catch (error) {
     console.error("[renovar mensualidad]", error);

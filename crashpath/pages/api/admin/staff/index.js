@@ -9,7 +9,7 @@ import dbConnect from "../../../../lib/mongodb";
 import StaffGrant from "../../../../models/StaffGrant";
 import { requireAuth, PERMISOS } from "../../../../lib/authz";
 import { estadoTurno } from "../../../../lib/staff";
-import { otorgarTurno } from "../../../../lib/turnos";
+import { otorgarTurno, agregarPermanente, listarPermanentes } from "../../../../lib/turnos";
 
 // Cuánta historia devuelve el GET. Alcanza para responder "¿quién estuvo en el
 // mostrador esta semana?" sin traerse la colección entera.
@@ -33,8 +33,17 @@ export default async function handler(req, res) {
         .lean();
 
       const ahora = new Date();
+      const permanentes = await listarPermanentes();
       res.setHeader("Cache-Control", "no-store");
       return res.status(200).json({
+        permanentes: permanentes.map((p) => ({
+          _id: String(p._id),
+          email: p.email,
+          name: p.name || null,
+          nota: p.nota || null,
+          agregadoEn: p.agregadoEn,
+          agregadoPor: p.agregadoPor?.email || null,
+        })),
         turnos: grants.map((g) => ({
           _id: String(g._id),
           email: g.email,
@@ -56,7 +65,9 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     try {
-      const { status, body } = await otorgarTurno({
+      // `permanente: true` = entra todos los días, sin turno, hasta que lo quiten.
+      const accion = req.body?.permanente === true ? agregarPermanente : otorgarTurno;
+      const { status, body } = await accion({
         email: req.body?.email,
         name: req.body?.name,
         nota: req.body?.nota,

@@ -87,6 +87,16 @@ function ultimaEntrada(u) {
 
 const modalidadLegible = (accessType) => (accessType === "ticketera" ? "tiquetera" : accessType || null);
 
+/** Cómo entró en ESA visita: manda la visita antes que la modalidad del socio. */
+const modalidadDeVisita = (u, v) =>
+  v?.esCortesia
+    ? "cortesía"
+    : v?.esPaseDia
+      ? "pase de día"
+      : v?.esVoluntario
+        ? "voluntario"
+        : modalidadLegible(u?.accessType);
+
 async function cargarUsuario(userId) {
   if (!mongoose.isValidObjectId(userId)) return null;
   return User.findById(userId).lean();
@@ -271,7 +281,7 @@ export function registrarHerramientas(server, actor) {
           const fila = {
             userId: String(u._id),
             nombre: u.name,
-            modalidad: v.esCortesia ? "cortesía" : modalidadLegible(u.accessType),
+            modalidad: modalidadDeVisita(u, v),
             invitadoDe: v.esCortesia ? v.cortesiaHostName || null : undefined,
           };
           if (v.status === "checked_in") entraron.push({ ...fila, hora: horaBogota(momentoVisita(v)), _t: momentoVisita(v) });
@@ -455,7 +465,7 @@ export function registrarHerramientas(server, actor) {
 
       const usuarios = await User.find(
         { visits: { $elemMatch: { date: { $gte: start, $lte: end }, status: "checked_in" } } },
-        "accessType visits.date visits.status visits.checkedInAt visits.esCortesia"
+        "accessType visits.date visits.status visits.checkedInAt visits.esCortesia visits.esPaseDia visits.esVoluntario"
       ).lean();
 
       const porDia = {};
@@ -475,7 +485,7 @@ export function registrarHerramientas(server, actor) {
           porDia[diaBogota(d)] = (porDia[diaBogota(d)] || 0) + 1;
           const h = `${horaBogota(momentoVisita(v)).slice(0, 2)}:00`;
           porHora[h] = (porHora[h] || 0) + 1;
-          const m = v.esCortesia ? "cortesía" : modalidadLegible(u.accessType) || "sin modalidad";
+          const m = modalidadDeVisita(u, v) || "sin modalidad";
           porModalidad[m] = (porModalidad[m] || 0) + 1;
           if (v.esCortesia) cortesias++;
         }
@@ -684,7 +694,15 @@ export function registrarHerramientas(server, actor) {
         });
       }
 
-      const { status, body } = await ajustarCreditos({ userId: String(u._id), delta: creditos, actor, origen: ORIGEN });
+      // Cargar una tiquetera es una venta: sin `venta` quedaría como corrección
+      // de saldo y no sumaría a la caja (lib/ingresos.js).
+      const { status, body } = await ajustarCreditos({
+        userId: String(u._id),
+        delta: creditos,
+        venta: creditos > 0,
+        actor,
+        origen: ORIGEN,
+      });
       if (status >= 400) return error(body.message || "No se pudieron cargar los créditos.");
       return texto({
         hecho: "Créditos cargados.",
@@ -719,7 +737,8 @@ export function registrarHerramientas(server, actor) {
 
       // Devolver el crédito solo si el check-in lo descontó: tiquetera y no
       // entró como invitado de cortesía.
-      const devolver = u.accessType === "ticketera" && !visita.esCortesia;
+      const sinCredito = visita.esCortesia || visita.esPaseDia || visita.esVoluntario;
+      const devolver = u.accessType === "ticketera" && !sinCredito;
 
       if (!ok) {
         return texto({
@@ -731,6 +750,10 @@ export function registrarHerramientas(server, actor) {
             ? `Cancela la visita y devuelve 1 crédito: ${u.credits ?? 0} → ${(u.credits ?? 0) + 1}`
             : visita.esCortesia
               ? `Cancela la visita de invitado (cortesía de ${visita.cortesiaHostName || "otro socio"}); la cortesía no se devuelve`
+              : visita.esPaseDia
+                ? "Cancela el pase de día y lo saca de la caja (devolver la plata es aparte)"
+                : visita.esVoluntario
+                  ? "Cancela la entrada de voluntario (era gratis)"
               : "Cancela la visita (mensualidad, no hay crédito que devolver)",
         });
       }
@@ -900,6 +923,9 @@ export function registrarHerramientas(server, actor) {
 
       const { status, body } = await otorgarTurno({ email: normalizado, name: nombre, nota, actor, origen: ORIGEN });
       if (status >= 400) return error(body.message || "No se pudo otorgar el turno.");
+      if (body.code === "YA_ES_PERMANENTE") {
+        return texto({ hecho: "Es voluntario permanente: ya tiene acceso todos los días.", email: normalizado });
+      }
       return texto({
         hecho: body.code === "YA_TENIA_TURNO" ? "Ya tenía turno hoy; no se creó otro." : "Turno otorgado.",
         ...turnoLegible(body.turno),

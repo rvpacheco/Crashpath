@@ -91,9 +91,14 @@ export function esElegibleParaCortesia(user, now = new Date()) {
  *
  * "otro" son los que no generan ingreso ni son cortesía: walk-ins viejos e
  * importados a medias, sin modalidad asignada. Cuentan como asistencia.
+ *
+ * Pase de día y voluntario también se leen de la visita: un socio de
+ * mensualidad vencida que paga el día no es un check-in de mensualidad.
  */
 export function clasificarCheckin(user, visit) {
   if (visit?.esCortesia) return "cortesia";
+  if (visit?.esPaseDia) return "dia";
+  if (visit?.esVoluntario) return "voluntario";
   if (user?.accessType === "mensualidad") return "mensualidad";
   if (user?.accessType === "ticketera") return "ticketera";
   return "otro";

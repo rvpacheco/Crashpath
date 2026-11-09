@@ -17,6 +17,7 @@ import { recortarCortesia, recortarUsuario } from "./redact";
 import { logAudit } from "./audit";
 import { otorgarCortesia, estadoCortesia } from "./cortesia";
 import { normalizeName } from "./importExcel";
+import { precioDia, precioTiquetera, precioMensualidad, pesos } from "./precios";
 
 const conOrigen = (meta, origen) => (origen ? { ...meta, origen } : meta);
 
@@ -45,6 +46,9 @@ function dayRangeBogota(dateLike) {
   return { start, end };
 }
 
+/** Entradas que no pasan por la modalidad del socio. */
+export const PASES = ["dia", "voluntario"];
+
 export function canAccessOrFail(user) {
   if (user.accessType === "ticketera") {
     if ((user.credits ?? 0) <= 0) return { ok: false, code: "NO_CREDITS", message: "Sin créditos disponibles." };
@@ -68,10 +72,44 @@ export function canAccessOrFail(user) {
  * @param {boolean}[p.createIfMissing=true]
  * @param {string} [p.notes]
  * @param {string} [p.origen]
+ * @param {string} [p.pase]     - "dia" (paga el día) o "voluntario" (gratis).
+ *                                Ninguno de los dos gasta crédito ni exige
+ *                                mensualidad vigente: es la entrada de quien
+ *                                no tiene (o no quiere usar) su modalidad.
+ * @param {boolean}[p.zapatos]  - solo con pase "dia": alquiló pies de gato
  */
-export async function hacerCheckin({ query, actor, meta = {}, date, createIfMissing = true, notes = "", origen }) {
+export async function hacerCheckin({
+  query,
+  actor,
+  meta = {},
+  date,
+  createIfMissing = true,
+  notes = "",
+  origen,
+  pase,
+  zapatos = false,
+}) {
   const range = dayRangeBogota(date);
   if (!range) return { status: 400, body: { message: "Invalid date" } };
+
+  if (pase && !PASES.includes(pase)) {
+    return { status: 400, body: { message: "Tipo de entrada inválido", code: "PASE_INVALIDO" } };
+  }
+  const esDia = pase === "dia";
+  const conZapatos = esDia && (zapatos === true || zapatos === "true");
+  const monto = esDia ? precioDia(conZapatos) : undefined;
+  // Lo que distingue a la visita. Va plano en el subdocumento (ver models/User.js).
+  const camposPase = esDia
+    ? { esPaseDia: true, conZapatos, monto }
+    : pase === "voluntario"
+      ? { esVoluntario: true }
+      : {};
+  const etiquetaPase = esDia
+    ? `Pase de día ${conZapatos ? "con" : "sin"} zapatos · ${pesos(monto)}`
+    : pase === "voluntario"
+      ? "Entrada de voluntario (gratis)"
+      : null;
+  const metaPase = pase ? { pase, ...(esDia ? { zapatos: conZapatos, monto } : {}) } : {};
 
   const now = new Date();
 
@@ -113,11 +151,14 @@ export async function hacerCheckin({ query, actor, meta = {}, date, createIfMiss
     };
   }
 
-  const access = canAccessOrFail(user);
-  if (!access.ok) return { status: 403, body: { message: access.message, code: access.code } };
+  // Con pase no se mira la modalidad: no gasta crédito ni pide mes vigente.
+  if (!pase) {
+    const access = canAccessOrFail(user);
+    if (!access.ok) return { status: 403, body: { message: access.message, code: access.code } };
+  }
 
-  const isTicketera = user.accessType === "ticketera";
-  const isMensualidad = user.accessType === "mensualidad";
+  const isTicketera = !pase && user.accessType === "ticketera";
+  const isMensualidad = !pase && user.accessType === "mensualidad";
 
   // ── Caso A: existe visita hoy pero no está checked_in ──────────────────
   if (existingToday?._id) {
@@ -146,6 +187,7 @@ export async function hacerCheckin({ query, actor, meta = {}, date, createIfMiss
     };
 
     if (notes) update.$set["visits.$[v].notes"] = String(notes).slice(0, 400);
+    for (const [k, v] of Object.entries(camposPase)) update.$set[`visits.$[v].${k}`] = v;
     if (isTicketera) update.$inc = { credits: -1 };
 
     const updated = await User.findOneAndUpdate(atomicQuery, update, {
@@ -162,9 +204,9 @@ export async function hacerCheckin({ query, actor, meta = {}, date, createIfMiss
       action: "CHECKIN",
       actor,
       user: updated,
-      summary: `Check-in${isTicketera ? ` (-1 crédito, quedan ${updated.credits})` : ""}`,
+      summary: etiquetaPase || `Check-in${isTicketera ? ` (-1 crédito, quedan ${updated.credits})` : ""}`,
       meta: conOrigen(
-        { visitId: String(existingToday._id), accessType: user.accessType, credits: updated.credits },
+        { visitId: String(existingToday._id), accessType: user.accessType, credits: updated.credits, ...metaPase },
         origen
       ),
     });
@@ -174,6 +216,7 @@ export async function hacerCheckin({ query, actor, meta = {}, date, createIfMiss
         message: "Checked in",
         visit: newVisit,
         credits: updated.credits,
+        ...metaPase,
         auditEvent,
       },
     };
@@ -192,6 +235,7 @@ export async function hacerCheckin({ query, actor, meta = {}, date, createIfMiss
     createdBy: actorRole,
     checkedInAt: now,
     notes: String(notes || "").slice(0, 400),
+    ...camposPase,
     events: [
       {
         ts: now,
@@ -235,9 +279,14 @@ export async function hacerCheckin({ query, actor, meta = {}, date, createIfMiss
     action: "CHECKIN",
     actor,
     user: updated,
-    summary: `Check-in (visita creada)${isTicketera ? ` -1 crédito, quedan ${updated.credits}` : ""}`,
+    summary: etiquetaPase || `Check-in (visita creada)${isTicketera ? ` -1 crédito, quedan ${updated.credits}` : ""}`,
     meta: conOrigen(
-      { visitId: lastVisit ? String(lastVisit._id) : null, accessType: user.accessType, credits: updated.credits },
+      {
+        visitId: lastVisit ? String(lastVisit._id) : null,
+        accessType: user.accessType,
+        credits: updated.credits,
+        ...metaPase,
+      },
       origen
     ),
   });
@@ -248,6 +297,7 @@ export async function hacerCheckin({ query, actor, meta = {}, date, createIfMiss
       message: "Checked in (visit created by admin)",
       visit: lastVisit,
       credits: updated.credits,
+      ...metaPase,
       auditEvent,
     },
   };
@@ -265,7 +315,11 @@ export function calcularNuevoVencimiento(endDateActual, months, now = new Date()
   return newEndDate;
 }
 
-export async function renovarMensualidad({ userId, months = 1, actor, origen }) {
+/**
+ * Renovar es una venta: queda anotado cuánto entró (`monto` en el AuditLog,
+ * de ahí lo suma lib/ingresos.js). `zapatos` = mensualidad con pies de gato.
+ */
+export async function renovarMensualidad({ userId, months = 1, zapatos = false, actor, origen }) {
   if (!userId) {
     return { status: 400, body: { message: "userId es requerido." } };
   }
@@ -304,18 +358,25 @@ export async function renovarMensualidad({ userId, months = 1, actor, origen }) 
 
   await user.save();
 
+  const conZapatos = zapatos === true || zapatos === "true";
+  const monto = precioMensualidad(months, conZapatos);
+
   const auditEvent = await logAudit({
     action: "MENSUALIDAD_RENEW",
     actor,
     user,
-    summary: `Mensualidad renovada +${months} mes(es) (vence ${newEndDate.toLocaleDateString("en-CA")}) · cortesía renovada`,
-    meta: conOrigen({ months, newEndDate, cortesia: user.cortesia?.disponibles ?? 0 }, origen),
+    summary: `Mensualidad renovada +${months} mes(es)${conZapatos ? " con zapatos" : ""} · ${pesos(monto)} (vence ${newEndDate.toLocaleDateString("en-CA")}) · cortesía renovada`,
+    meta: conOrigen(
+      { months, zapatos: conZapatos, monto, newEndDate, cortesia: user.cortesia?.disponibles ?? 0 },
+      origen
+    ),
   });
 
   return {
     status: 200,
     body: {
       message: "Mensualidad renovada correctamente.",
+      monto,
       mensualidad: {
         active: user.mensualidad.active,
         startDate: user.mensualidad.startDate,
@@ -333,14 +394,24 @@ export async function renovarMensualidad({ userId, months = 1, actor, origen }) 
 /**
  * Suma (delta > 0, recarga de tiquetera) o resta créditos. Nunca deja saldo
  * negativo.
+ *
+ * `venta` separa cobrar una tiquetera de corregir un saldo: solo la venta
+ * suma ingreso (`monto` en el AuditLog). Un ajuste queda con monto 0, que no
+ * es lo mismo que no tener el campo: los eventos viejos, sin `monto`, son los
+ * que lib/ingresos.js estima.
  */
-export async function ajustarCreditos({ userId, delta, actor, origen }) {
+export async function ajustarCreditos({ userId, delta, venta = false, actor, origen }) {
   if (!userId) {
     return { status: 400, body: { message: "Falta userId" } };
   }
   if (!Number.isInteger(delta)) {
     return { status: 400, body: { message: "credits debe ser un entero" } };
   }
+  const esVenta = venta === true || venta === "true";
+  if (esVenta && delta <= 0) {
+    return { status: 400, body: { message: "Una venta tiene que sumar créditos.", code: "VENTA_SIN_CREDITOS" } };
+  }
+  const monto = esVenta ? precioTiquetera(delta) : 0;
 
   const user = await User.findById(userId);
 
@@ -380,16 +451,20 @@ export async function ajustarCreditos({ userId, delta, actor, origen }) {
     action: "ADJUST_CREDITS",
     actor,
     user,
-    summary: `Créditos: ${before} → ${user.credits} (${delta >= 0 ? "+" : ""}${delta})${
-      delta > 0 && user.accessType === "ticketera" ? " · cortesía renovada" : ""
-    }`,
-    meta: conOrigen({ before, after: user.credits, delta, cortesia: user.cortesia?.disponibles ?? 0 }, origen),
+    summary: `${esVenta ? `Tiquetera vendida · ${pesos(monto)} · ` : ""}Créditos: ${before} → ${user.credits} (${
+      delta >= 0 ? "+" : ""
+    }${delta})${delta > 0 && user.accessType === "ticketera" ? " · cortesía renovada" : ""}`,
+    meta: conOrigen(
+      { before, after: user.credits, delta, venta: esVenta, monto, cortesia: user.cortesia?.disponibles ?? 0 },
+      origen
+    ),
   });
 
   return {
     status: 200,
     body: {
       message: "Créditos ajustados con éxito",
+      monto,
       credits: user.credits,
       tiquetera: user.tiquetera,
       cortesia: recortarCortesia(user.cortesia, opcionesRecorte(actor)),
@@ -429,6 +504,10 @@ export async function cancelarVisita({ userId, visitId, notes = "", refund = fal
 
   visit.status = "cancelled";
   if (notes) visit.notes = notes;
+  // Un pase de día o una entrada de voluntario no gastaron crédito: no hay
+  // nada que devolver. (El pase cancelado sale solo de la caja, porque el
+  // dashboard no cuenta visitas canceladas.)
+  if (visit.esPaseDia || visit.esVoluntario) refund = false;
   if (refund) user.credits = (user.credits ?? 0) + 1;
 
   await user.save();

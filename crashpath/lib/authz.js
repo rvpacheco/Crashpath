@@ -11,6 +11,7 @@
 import { getToken } from "next-auth/jwt";
 import dbConnect from "./mongodb";
 import StaffGrant from "../models/StaffGrant";
+import StaffPermanente from "../models/StaffPermanente";
 import { esAdminEmail, normalizarEmail } from "./roles";
 import { ROL_ADMIN, ROL_STAFF, PERMISOS, puede, permisosDe } from "./permisos";
 
@@ -57,6 +58,22 @@ export async function resolverActor(req) {
       sub,
       rol: ROL_STAFF,
       vence: vigente.vence,
+      motivo: null,
+    };
+  }
+
+  // Voluntario permanente: sin vencimiento, vale mientras no lo quiten de la
+  // lista. Va DESPUÉS del turno diario para que el camino de siempre no pague
+  // esta consulta de más.
+  const permanente = await StaffPermanente.findOne({ email, quitadoEn: null }).lean();
+  if (permanente) {
+    return {
+      email,
+      name: name || permanente.name || null,
+      sub,
+      rol: ROL_STAFF,
+      vence: null,
+      permanente: true,
       motivo: null,
     };
   }
