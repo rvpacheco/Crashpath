@@ -473,6 +473,82 @@ export async function ajustarCreditos({ userId, delta, venta = false, actor, ori
   };
 }
 
+/* -------------------- CORREGIR CRÉDITOS -------------------- */
+
+const diaCorto = (d) => (d ? new Date(d).toLocaleDateString("en-CA", { timeZone: "America/Bogota" }) : null);
+
+/**
+ * Corrige el saldo de una tiquetera para revertir errores: "restar" N (sin
+ * bajar de 0) o "fijar" en exactamente N; opcionalmente restaura el
+ * vencimiento (`vigencia`, un Date). NO toca la cortesía ni crea cobros
+ * (`venta: false`, `monto: 0`). Con `simular` calcula y devuelve los cambios
+ * sin guardar ni auditar.
+ */
+export async function corregirCreditos({ userId, modo, creditos, motivo, vigencia, actor, origen, simular = false }) {
+  if (!userId) return { status: 400, body: { message: "Falta userId" } };
+  if (!["restar", "fijar"].includes(modo)) return { status: 400, body: { message: 'modo debe ser "restar" o "fijar"' } };
+  if (!Number.isInteger(creditos) || creditos < 0) {
+    return { status: 400, body: { message: "creditos debe ser un entero mayor o igual a 0" } };
+  }
+  const razon = String(motivo || "").trim();
+  if (!razon) return { status: 400, body: { message: "Falta el motivo de la corrección" } };
+
+  const user = await User.findById(userId);
+  if (!user) return { status: 404, body: { message: "Usuario no encontrado" } };
+  if (user.accessType !== "ticketera") {
+    return {
+      status: 400,
+      body: { message: `${user.name} no es de tiquetera (modalidad: ${user.accessType || "ninguna"}).`, code: "NO_ES_TIQUETERA" },
+    };
+  }
+
+  const antes = Math.max(0, Number(user.credits) || 0);
+  const despues = modo === "fijar" ? creditos : Math.max(0, antes - creditos);
+  const delta = despues - antes;
+  const vigenciaAntes = user.tiquetera?.endDate || null;
+  const cambiaVigencia = vigencia instanceof Date && !Number.isNaN(vigencia.getTime());
+  const cambios = {
+    creditos: { antes, despues, delta },
+    vigencia: { antes: diaCorto(vigenciaAntes), despues: cambiaVigencia ? diaCorto(vigencia) : diaCorto(vigenciaAntes) },
+  };
+
+  if (simular) return { status: 200, body: { cambios, user: { name: user.name } } };
+
+  user.credits = despues;
+  if (cambiaVigencia) {
+    if (!user.tiquetera) user.tiquetera = {};
+    user.tiquetera.endDate = vigencia;
+  }
+  await user.save();
+
+  const auditEvent = await logAudit({
+    action: "ADJUST_CREDITS",
+    actor,
+    user,
+    summary:
+      `Créditos: ${antes} → ${despues} (${delta >= 0 ? "+" : ""}${delta})` +
+      (cambiaVigencia ? ` · vigencia: ${cambios.vigencia.antes || "sin fecha"} → ${cambios.vigencia.despues}` : "") +
+      ` · corrección: ${razon}`,
+    meta: conOrigen(
+      {
+        before: antes,
+        after: despues,
+        delta,
+        venta: false,
+        monto: 0,
+        correccion: true,
+        modo,
+        motivo: razon,
+        vigenciaAntes,
+        vigenciaDespues: cambiaVigencia ? vigencia : vigenciaAntes,
+      },
+      origen
+    ),
+  });
+
+  return { status: 200, body: { cambios, user: { name: user.name }, credits: despues, tiquetera: user.tiquetera, auditEvent } };
+}
+
 /* -------------------- CANCELAR VISITA -------------------- */
 
 /**

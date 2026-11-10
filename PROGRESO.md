@@ -128,7 +128,9 @@ Rodolfo decidió no tocar el admin por ahora (24/09/2026).
   AuditLog (`meta.origen: "mcp"`).
 - **Herramientas nuevas del 26/09/2026 sin probar contra la base real** (solo tests con
   datos simulados): `checkins_del_dia`, `inactivos`, `vencidos_recientes`, `historial`,
-  `resumen_periodo`, `datos_pendientes`, `deshacer_checkin`, `usar_cortesia`. Para
+  `resumen_periodo`, `datos_pendientes`, `deshacer_checkin`, `usar_cortesia`,
+  `ajustar_creditos` (10/11/2026: restar/fijar créditos de tiquetera + vigencia; el
+  historial ahora muestra antes/después en ADJUST_CREDITS y ACCESS_TYPE_CHANGED). Para
   compartirlas, `visits/cancel` y `cortesia/usar` pasaron a `lib/operaciones.js`: probar
   cancelar una visita y usar una cortesía desde el panel.
 - El admin no muestra el origen `mcp` en el feed a propósito: Rodolfo no quiere que el resto
