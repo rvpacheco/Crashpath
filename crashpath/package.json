@@ -15,6 +15,8 @@
     "verificar:recorte": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verificar-recorte.mjs",
     "voluntarios": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/voluntarios-permanentes.mjs",
     "voluntarios:apply": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/voluntarios-permanentes.mjs --apply",
+    "corregir-jacome": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/corregir-jacome.mjs",
+    "corregir-jacome:apply": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/corregir-jacome.mjs --apply",
     "cortesias:apply": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/otorgar-cortesias.mjs --apply"
   },
   "dependencies": {
