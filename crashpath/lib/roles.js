@@ -12,14 +12,10 @@
 export const ADMIN_EMAILS = [
   "santistebanfabi@gmail.com",
   "jeevanobando97@gmail.com",
-  "mattucm01@gmail.com",
-  "mattucm@hotmail.com",
   "rvpacheco17@gmail.com",
   "jdba.94@gmail.com",
   "miguelvarbla@gmail.com",
   "dmp702@gmail.com",
-  "miguelcomposi@gmail.com",
-  "hexon.lizcano@gmail.com",
 ].map((e) => e.trim().toLowerCase());
 
 /** Normaliza un email para comparar (los emails se guardan en minúscula). */
