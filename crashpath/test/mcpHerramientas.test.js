@@ -84,6 +84,16 @@ const h = vi.hoisted(() => {
     },
     cancelarVisita: vi.fn(async () => ({ status: 200, body: { credits: 4 } })),
     usarCortesia: vi.fn(async () => ({ status: 200, body: {} })),
+    corregirCreditos: vi.fn(async ({ modo, creditos }) => ({
+      status: 200,
+      body: {
+        user: { name: "Ana Tiquetera" },
+        cambios: {
+          creditos: { antes: 3, despues: modo === "fijar" ? creditos : Math.max(0, 3 - creditos), delta: (modo === "fijar" ? creditos : Math.max(0, 3 - creditos)) - 3 },
+          vigencia: { antes: "2026-10-30", despues: "2026-10-30" },
+        },
+      },
+    })),
     turnosVigentes: vi.fn(async () => []),
     otorgarTurno: vi.fn(async ({ email, name }) => ({
       status: 201,
@@ -105,6 +115,7 @@ vi.mock("../models/AuditLog", () => ({ default: h.AuditLog }));
 vi.mock("../lib/operaciones", () => ({
   cancelarVisita: h.cancelarVisita,
   usarCortesia: h.usarCortesia,
+  corregirCreditos: h.corregirCreditos,
   actualizarPerfil: h.actualizarPerfil,
   calcularNuevoVencimiento: () => new Date(),
   canAccessOrFail: () => ({ ok: true }),
@@ -234,6 +245,41 @@ describe("usar_cortesia", () => {
     expect(h.usarCortesia).toHaveBeenCalledWith(
       expect.objectContaining({ hostId: "aaaaaaaaaaaaaaaaaaaaaaaa", guestUserId: "cccccccccccccccccccccccc", origen: "mcp" })
     );
+  });
+});
+
+describe("ajustar_creditos", () => {
+  const ana = "aaaaaaaaaaaaaaaaaaaaaaaa";
+  const base = { userId: ana, modo: "restar", creditos: 2, motivo: "Carga por error" };
+
+  it("sin confirmar es vista previa (simular) y no guarda", async () => {
+    h.corregirCreditos.mockClear();
+    const r = await llamar("ajustar_creditos", base);
+    expect(r.aviso).toMatch(/VISTA PREVIA/);
+    expect(r.creditos).toBe("3 → 1 (-2)");
+    expect(r.vigencia).toMatch(/sin cambios/);
+    expect(h.corregirCreditos).toHaveBeenCalledWith(expect.objectContaining({ simular: true, origen: "mcp", motivo: "Carga por error" }));
+  });
+
+  it("confirmado aplica y manda la vigencia como 00:00 Bogotá", async () => {
+    h.corregirCreditos.mockClear();
+    const r = await llamar("ajustar_creditos", { ...base, modo: "fijar", creditos: 0, vigencia: "2026-10-30", confirmar: true });
+    expect(r.hecho).toBe("Créditos corregidos.");
+    const arg = h.corregirCreditos.mock.calls[0][0];
+    expect(arg.simular).toBe(false);
+    expect(arg.vigencia.toISOString()).toBe("2026-10-30T05:00:00.000Z");
+  });
+
+  it("rechaza fecha inexistente y userId inválido sin llamar la operación", async () => {
+    h.corregirCreditos.mockClear();
+    expect((await llamar("ajustar_creditos", { ...base, vigencia: "2026-02-30" })).error).toMatch(/inválida/);
+    expect((await llamar("ajustar_creditos", { ...base, userId: "juan" })).error).toMatch(/no encontrado/);
+    expect(h.corregirCreditos).not.toHaveBeenCalled();
+  });
+
+  it("pasa el error de la operación (ej. no es tiquetera)", async () => {
+    h.corregirCreditos.mockResolvedValueOnce({ status: 400, body: { message: "Beto no es de tiquetera (modalidad: mensualidad)." } });
+    expect((await llamar("ajustar_creditos", base)).error).toMatch(/no es de tiquetera/);
   });
 });
 

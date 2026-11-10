@@ -3,8 +3,8 @@
 // Lectura: buscar, estado, vigentes, por vencer, check-ins del día, inactivos,
 // vencidos recientes, historial (AuditLog), resumen de un periodo, datos por limpiar.
 // Escritura: check-in, deshacer check-in, renovar mensualidad, cargar
-// tiquetera, usar cortesía, editar datos del socio, dar y quitar turnos de
-// voluntario. Corren la MISMA lógica que el panel (lib/operaciones.js,
+// tiquetera, corregir créditos (ajustar_creditos), usar cortesía, editar datos
+// del socio, dar y quitar turnos de voluntario. Corren la MISMA lógica que el panel (lib/operaciones.js,
 // lib/turnos.js) y quedan en AuditLog con origen
 // "mcp". Cada una tiene dos pasos: sin `confirmar` solo muestra qué va a pasar;
 // con `confirmar: true` lo hace.
@@ -23,6 +23,7 @@ import {
   hacerCheckin,
   renovarMensualidad,
   ajustarCreditos,
+  corregirCreditos,
   cancelarVisita,
   usarCortesia,
   canAccessOrFail,
@@ -57,6 +58,14 @@ function resumen(u) {
 }
 
 const DIA_MS = 86400000;
+
+/** Antes/después de un ACCESS_TYPE_CHANGED (eventos nuevos; los viejos no lo traen). */
+const antesDespuesAcceso = (m) => ({
+  modalidad: { antes: m.from, despues: m.to },
+  creditos: { antes: m.creditosAntes, despues: m.creditosDespues },
+  tiqueteraVence: { antes: diaBogota(m.tiqueteraVenceAntes), despues: diaBogota(m.tiqueteraVenceDespues) },
+  mensualidadVence: { antes: diaBogota(m.mensualidadVenceAntes), despues: diaBogota(m.mensualidadVenceDespues) },
+});
 
 /** Hora "HH:mm" en Bogotá. */
 const horaBogota = (v) =>
@@ -435,6 +444,10 @@ export function registrarHerramientas(server, actor) {
           por: ev.actorName || ev.actorEmail || null,
           rol: ev.actorRol || null,
           origen: ev.meta?.origen || "panel",
+          // Valores de antes/después, para poder revertir (solo si el evento los guardó).
+          creditos: ev.meta?.before !== undefined ? { antes: ev.meta.before, despues: ev.meta.after } : undefined,
+          cambio: ev.action === "ACCESS_TYPE_CHANGED" && ev.meta?.creditosAntes !== undefined ? antesDespuesAcceso(ev.meta) : undefined,
+          motivo: ev.meta?.motivo || undefined,
         })),
       });
     }
@@ -493,10 +506,11 @@ export function registrarHerramientas(server, actor) {
 
       const eventos = await AuditLog.find(
         { ts: { $gte: start, $lte: end }, action: { $in: ["MENSUALIDAD_RENEW", "ADJUST_CREDITS", "VISIT_CANCEL"] } },
-        "action meta.delta meta.months"
+        "action meta.delta meta.months meta.correccion"
       ).lean();
       const renovaciones = eventos.filter((e) => e.action === "MENSUALIDAD_RENEW");
-      const cargas = eventos.filter((e) => e.action === "ADJUST_CREDITS" && (e.meta?.delta ?? 0) > 0);
+      // Las correcciones de ajustar_creditos (meta.correccion) no son ventas.
+      const cargas = eventos.filter((e) => e.action === "ADJUST_CREDITS" && (e.meta?.delta ?? 0) > 0 && !e.meta?.correccion);
 
       const dias = Object.keys(porDia).length;
       return texto({
@@ -710,6 +724,59 @@ export function registrarHerramientas(server, actor) {
         creditos: body.credits,
         vence: diaBogota(body.tiquetera?.endDate),
       });
+    }
+  );
+
+  server.registerTool(
+    "ajustar_creditos",
+    {
+      title: "Corregir créditos de tiquetera",
+      description:
+        "Corrige los créditos de un socio de tiquetera para revertir errores (ej. créditos cargados por equivocación): " +
+        '"restar" quita N créditos (sin bajar de 0); "fijar" los deja exactamente en N. Opcionalmente restaura la vigencia ' +
+        "(YYYY-MM-DD). NO toca la cortesía ni crea cobros. Queda en el historial como ADJUST_CREDITS con el motivo. " +
+        "Primero llamá sin confirmar para ver la vista previa.",
+      inputSchema: {
+        userId: idUsuario,
+        modo: z.enum(["restar", "fijar"]).describe('"restar": quita N créditos; "fijar": deja los créditos exactamente en N'),
+        creditos: z.number().int().min(0).max(50).describe("El N de modo (0 a 50)"),
+        motivo: z.string().trim().min(1).describe("Razón de la corrección; se guarda en el historial"),
+        vigencia: fechaOpcional("Nuevo vencimiento YYYY-MM-DD de la tiquetera; si no se manda, no se toca"),
+        confirmar,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    },
+    async ({ userId, modo, creditos, motivo, vigencia, confirmar: ok }) => {
+      if (!mongoose.isValidObjectId(userId)) return error("Usuario no encontrado.");
+      let fechaVigencia;
+      if (vigencia) {
+        const r = rangoDia(vigencia);
+        if (!r) return error("Fecha de vigencia inválida.");
+        fechaVigencia = r.start; // 00:00 Bogotá, como las demás vigencias
+      }
+
+      const { status, body } = await corregirCreditos({
+        userId,
+        modo,
+        creditos,
+        motivo,
+        vigencia: fechaVigencia,
+        actor,
+        origen: ORIGEN,
+        simular: !ok,
+      });
+      if (status >= 400) return error(body.message || "No se pudieron corregir los créditos.");
+
+      const { creditos: c, vigencia: v } = body.cambios;
+      const resultado = {
+        socio: body.user.name,
+        creditos: `${c.antes} → ${c.despues} (${c.delta >= 0 ? "+" : ""}${c.delta})`,
+        vigencia: v.antes === v.despues ? `sin cambios (${v.antes || "sin fecha"})` : `${v.antes || "sin fecha"} → ${v.despues}`,
+        motivo,
+        nota: "No toca la cortesía ni crea cobros.",
+      };
+      if (!ok) return texto({ aviso: AVISO_PREVIA, ...resultado });
+      return texto({ hecho: "Créditos corregidos.", ...resultado });
     }
   );
 

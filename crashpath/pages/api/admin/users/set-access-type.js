@@ -55,6 +55,9 @@ export default async function handler(req, res) {
     let creditosVendidos = 0;
     let monto = 0;
     const creditosAntes = Math.max(0, Number(user.credits) || 0);
+    // Para poder revertir: lo que había antes del cambio (el historial no guardaba "antes").
+    const vigenciaTiqueteraAntes = user.tiquetera?.endDate || null;
+    const vigenciaMensualidadAntes = user.mensualidad?.endDate || null;
 
     // --- Switch to mensualidad ---
     if (accessType === "mensualidad") {
@@ -150,6 +153,13 @@ export default async function handler(req, res) {
         zapatos: accessType === "mensualidad" ? conZapatos : undefined,
         creditos: creditosVendidos || undefined,
         monto,
+        // Antes/después (aditivo; ingresos.js no los lee).
+        creditosAntes,
+        creditosDespues: user.credits ?? 0,
+        tiqueteraVenceAntes: vigenciaTiqueteraAntes,
+        tiqueteraVenceDespues: user.tiquetera?.endDate || null,
+        mensualidadVenceAntes: vigenciaMensualidadAntes,
+        mensualidadVenceDespues: user.mensualidad?.endDate || null,
       },
     });
 
