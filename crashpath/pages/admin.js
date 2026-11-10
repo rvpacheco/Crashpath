@@ -1575,6 +1575,8 @@ function AdminPanel() {
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showWaiverModal, setShowWaiverModal] = useState(false);
+  // Aviso tras firmar el waiver de un miembro nuevo: devolver el teléfono al staff.
+  const [showEntregaTelefono, setShowEntregaTelefono] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
 
@@ -2843,6 +2845,7 @@ function AdminPanel() {
       }
 
       closeNewUser();
+      setShowEntregaTelefono(true);
       await fetchUsers();
       setUiError(
         falloPase
@@ -4739,6 +4742,22 @@ function AdminPanel() {
           </ModalContent>
         </Modal>
 
+        {/* Aviso: devolver el teléfono al staff tras firmar el waiver */}
+        <Overlay $show={showEntregaTelefono} />
+        <Modal $show={showEntregaTelefono} style={{ maxWidth: "420px" }}>
+          <ModalContent style={{ textAlign: "center" }}>
+            <ModalHeader>
+              <ModalTitle>📱 Entrega el teléfono al staff</ModalTitle>
+            </ModalHeader>
+            <p style={{ margin: `${spacing.md} 0` }}>
+              ¡Listo, waiver firmado! Por favor devuélvele el teléfono al staff.
+            </p>
+            <ActionButtons>
+              <Button onClick={() => setShowEntregaTelefono(false)}>Entendido</Button>
+            </ActionButtons>
+          </ModalContent>
+        </Modal>
+
         {/* Attendance Modal */}
         <Overlay $show={showAttendanceModal} onClick={() => setShowAttendanceModal(false)} />
         <Modal $show={showAttendanceModal} style={{ maxWidth: "700px" }}>
@@ -4805,8 +4824,14 @@ function AdminPanel() {
                             </div>
                             <div style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
                               {formatCheckinTime(ts) && <Badge>🕐 {formatCheckinTime(ts)}</Badge>}
-                              <Badge $success={user.accessType === "mensualidad"}>
-                                {user.accessType === "mensualidad" ? "Mens" : "Tiq"}
+                              <Badge $success={!visit?.esPaseDia && !visit?.esVoluntario && !visit?.esCortesia && user.accessType === "mensualidad"}>
+                                {visit?.esCortesia
+                                  ? "Cortesía"
+                                  : visit?.esPaseDia
+                                    ? `Día${visit?.conZapatos ? " + zapatos" : ""}`
+                                    : visit?.esVoluntario
+                                      ? "Vol"
+                                      : user.accessType === "mensualidad" ? "Mens" : "Tiq"}
                               </Badge>
                               <Button $variant="secondary" $small onClick={() => handleEditVisit(user, visit)}>✏️</Button>
                             </div>
