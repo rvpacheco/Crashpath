@@ -63,6 +63,20 @@ export default async function handler(req, res) {
   await dbConnect();
 
   try {
+    // Menor: el correo y el celular que se teclean son los del responsable, y
+    // un responsable puede tener varios hijos. Se guardan como contacto del
+    // responsable (sin unicidad) y la cuenta del menor usa un correo interno
+    // cuando el del responsable ya está tomado.
+    let responsableEmail;
+    let responsablePhone;
+    let phoneCuenta = phone;
+    if (esMinor) {
+      responsableEmail = email || undefined;
+      responsablePhone = phone || undefined;
+      if (email && (await User.exists({ email }))) email = "";
+      if (phone && (await User.exists({ phone }))) phoneCuenta = "";
+    }
+
     if (!email) email = makeWalkInEmail();
 
     const existing = await User.findOne({ email });
@@ -104,7 +118,9 @@ export default async function handler(req, res) {
     const user = await User.create({
       name,
       email,
-      phone,
+      phone: phoneCuenta,
+      responsableEmail,
+      responsablePhone,
       documentType,
       documentNumber,
       epsName,

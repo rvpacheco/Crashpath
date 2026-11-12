@@ -21,6 +21,8 @@ export const CAMPOS_SENSIBLES = [
   "documentType",
   "documentNumber",
   "phone",
+  "responsableEmail",
+  "responsablePhone",
   "emergencyContactName",
   "emergencyContactPhone",
   "epsName",

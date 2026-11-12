@@ -17,6 +17,8 @@
     "voluntarios:apply": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/voluntarios-permanentes.mjs --apply",
     "corregir-jacome": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/corregir-jacome.mjs",
     "corregir-jacome:apply": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/corregir-jacome.mjs --apply",
+    "corregir-villamizar": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/corregir-villamizar.mjs",
+    "corregir-villamizar:apply": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/corregir-villamizar.mjs --apply",
     "cortesias:apply": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/otorgar-cortesias.mjs --apply"
   },
   "dependencies": {

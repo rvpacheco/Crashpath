@@ -233,6 +233,13 @@ const UserSchema = new mongoose.Schema(
 
     // si lo estás usando en UI
     esMinor: { type: Boolean, default: false },
+
+    // Un mismo responsable puede tener varios hijos registrados. `phone` y
+    // `email` son únicos, así que el segundo hijo chocaba con el primero. Para
+    // un menor el contacto del responsable se guarda acá (sin unicidad) y
+    // `phone`/`email` solo se llenan si están libres.
+    responsableEmail: { type: String, lowercase: true, trim: true },
+    responsablePhone: { type: String, trim: true },
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
