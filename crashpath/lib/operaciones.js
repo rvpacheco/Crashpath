@@ -696,8 +696,10 @@ export async function usarCortesia({ hostId, guestUserId, guest: g = {}, waiver:
     // `email` son únicos y un duplicado reventaría el save con E11000.
     const or = [];
     if (guestDocNumber) or.push({ documentType: guestDocType, documentNumber: guestDocNumber });
-    if (guestEmail) or.push({ email: guestEmail });
-    if (guestPhone) or.push({ phone: guestPhone });
+    // Un menor comparte correo y celular con su responsable (y con sus
+    // hermanos): buscar por eso lo confundiría con otro hijo. Solo documento.
+    if (guestEmail && !guestEsMinor) or.push({ email: guestEmail });
+    if (guestPhone && !guestEsMinor) or.push({ phone: guestPhone });
     guest = or.length ? await User.findOne({ $or: or }) : null;
   }
 
@@ -734,7 +736,13 @@ export async function usarCortesia({ hostId, guestUserId, guest: g = {}, waiver:
     guest.documentType = guestDocType;
     guest.documentNumber = guestDocNumber;
   }
-  fill("phone", guestPhone);
+  if (guestEsMinor && guestPhone) {
+    // El celular es del responsable: va a su campo, y a `phone` (único) solo si está libre.
+    guest.responsablePhone = guestPhone;
+    if (!(await User.exists({ phone: guestPhone, _id: { $ne: guest._id } }))) fill("phone", guestPhone);
+  } else {
+    fill("phone", guestPhone);
+  }
   fill("epsName", guestEps);
   fill("emergencyContactName", guestEcName);
   fill("emergencyContactPhone", guestEcPhone);
