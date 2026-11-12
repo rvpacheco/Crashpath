@@ -27,7 +27,7 @@ export default async function handler(req, res) {
 
   // `pase`: "dia" (con `zapatos` true/false) o "voluntario". Sin pase es el
   // check-in normal por tiquetera o mensualidad.
-  const { userId, email, date, createIfMissing = true, notes = "", pase, zapatos } = req.body || {};
+  const { userId, email, date, createIfMissing = true, notes = "", pase, zapatos, acompanantes } = req.body || {};
   if (!userId && !email) return res.status(400).json({ message: "Provide userId or email" });
 
   await dbConnect();
@@ -45,6 +45,7 @@ export default async function handler(req, res) {
       notes,
       pase: pase || undefined,
       zapatos,
+      acompanantes: acompanantes === undefined ? 0 : Number(acompanantes),
     });
     return res.status(status).json(body);
   } catch (error) {

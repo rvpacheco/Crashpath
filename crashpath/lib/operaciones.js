@@ -49,6 +49,9 @@ function dayRangeBogota(dateLike) {
 /** Entradas que no pasan por la modalidad del socio. */
 export const PASES = ["dia", "voluntario"];
 
+/** Tope de acompañantes por check-in o descuento: un error de dedo no vacía una tiquetera. */
+export const MAX_ACOMPANANTES = 10;
+
 export function canAccessOrFail(user) {
   if (user.accessType === "ticketera") {
     if ((user.credits ?? 0) <= 0) return { ok: false, code: "NO_CREDITS", message: "Sin créditos disponibles." };
@@ -77,6 +80,9 @@ export function canAccessOrFail(user) {
  *                                mensualidad vigente: es la entrada de quien
  *                                no tiene (o no quiere usar) su modalidad.
  * @param {boolean}[p.zapatos]  - solo con pase "dia": alquiló pies de gato
+ * @param {number} [p.acompanantes] - solo tiquetera sin pase: otras personas que
+ *                                entran con el mismo socio (un padre con sus hijos).
+ *                                Se descuentan en el mismo golpe: 1 + acompañantes.
  */
 export async function hacerCheckin({
   query,
@@ -88,9 +94,18 @@ export async function hacerCheckin({
   origen,
   pase,
   zapatos = false,
+  acompanantes = 0,
 }) {
   const range = dayRangeBogota(date);
   if (!range) return { status: 400, body: { message: "Invalid date" } };
+
+  const extra = Number(acompanantes ?? 0);
+  if (!Number.isInteger(extra) || extra < 0 || extra > MAX_ACOMPANANTES) {
+    return {
+      status: 400,
+      body: { message: `Los acompañantes deben ser un entero entre 0 y ${MAX_ACOMPANANTES}.`, code: "ACOMPANANTES_INVALIDOS" },
+    };
+  }
 
   if (pase && !PASES.includes(pase)) {
     return { status: 400, body: { message: "Tipo de entrada inválido", code: "PASE_INVALIDO" } };
@@ -160,6 +175,30 @@ export async function hacerCheckin({
   const isTicketera = !pase && user.accessType === "ticketera";
   const isMensualidad = !pase && user.accessType === "mensualidad";
 
+  // Acompañantes: solo tienen sentido descontando de una tiquetera. Con
+  // mensualidad o pase no hay crédito que gastar, así que se rechaza en vez de
+  // ignorarlo en silencio (el mostrador creería que quedó anotado).
+  if (extra > 0 && !isTicketera) {
+    return {
+      status: 400,
+      body: { message: "Los acompañantes solo se descuentan de una tiquetera.", code: "ACOMPANANTES_SIN_TIQUETERA" },
+    };
+  }
+  const costo = isTicketera ? 1 + extra : 0;
+  if (isTicketera && (user.credits ?? 0) < costo) {
+    return {
+      status: 409,
+      body: {
+        message: `Alcanzan ${user.credits ?? 0} crédito(s) y se necesitan ${costo} (1 + ${extra} acompañante${extra === 1 ? "" : "s"}).`,
+        code: "CREDITOS_INSUFICIENTES",
+      },
+    };
+  }
+  const etiquetaCredito = (quedan) =>
+    extra > 0
+      ? `Check-in + ${extra} acompañante${extra === 1 ? "" : "s"} (-${costo} créditos, quedan ${quedan})`
+      : `Check-in (-1 crédito, quedan ${quedan})`;
+
   // ── Caso A: existe visita hoy pero no está checked_in ──────────────────
   if (existingToday?._id) {
     const atomicQuery = {
@@ -173,7 +212,7 @@ export async function hacerCheckin({
       },
     };
 
-    if (isTicketera) atomicQuery.credits = { $gt: 0 };
+    if (isTicketera) atomicQuery.credits = { $gte: costo };
     if (isMensualidad) atomicQuery["mensualidad.endDate"] = { $gt: now };
 
     const update = {
@@ -188,7 +227,7 @@ export async function hacerCheckin({
 
     if (notes) update.$set["visits.$[v].notes"] = String(notes).slice(0, 400);
     for (const [k, v] of Object.entries(camposPase)) update.$set[`visits.$[v].${k}`] = v;
-    if (isTicketera) update.$inc = { credits: -1 };
+    if (isTicketera) update.$inc = { credits: -costo };
 
     const updated = await User.findOneAndUpdate(atomicQuery, update, {
       new: true,
@@ -204,9 +243,15 @@ export async function hacerCheckin({
       action: "CHECKIN",
       actor,
       user: updated,
-      summary: etiquetaPase || `Check-in${isTicketera ? ` (-1 crédito, quedan ${updated.credits})` : ""}`,
+      summary: etiquetaPase || (isTicketera ? etiquetaCredito(updated.credits) : "Check-in"),
       meta: conOrigen(
-        { visitId: String(existingToday._id), accessType: user.accessType, credits: updated.credits, ...metaPase },
+        {
+          visitId: String(existingToday._id),
+          accessType: user.accessType,
+          credits: updated.credits,
+          ...(extra > 0 ? { acompanantes: extra } : {}),
+          ...metaPase,
+        },
         origen
       ),
     });
@@ -261,11 +306,11 @@ export async function hacerCheckin({
     },
   };
 
-  if (isTicketera) atomicCreateQuery.credits = { $gt: 0 };
+  if (isTicketera) atomicCreateQuery.credits = { $gte: costo };
   if (isMensualidad) atomicCreateQuery["mensualidad.endDate"] = { $gt: now };
 
   const createUpdate = { $push: { visits: visitDoc } };
-  if (isTicketera) createUpdate.$inc = { credits: -1 };
+  if (isTicketera) createUpdate.$inc = { credits: -costo };
 
   const updated = await User.findOneAndUpdate(atomicCreateQuery, createUpdate, { new: true }).lean();
 
@@ -279,12 +324,13 @@ export async function hacerCheckin({
     action: "CHECKIN",
     actor,
     user: updated,
-    summary: etiquetaPase || `Check-in (visita creada)${isTicketera ? ` -1 crédito, quedan ${updated.credits}` : ""}`,
+    summary: etiquetaPase || (isTicketera ? etiquetaCredito(updated.credits) : "Check-in (visita creada)"),
     meta: conOrigen(
       {
         visitId: lastVisit ? String(lastVisit._id) : null,
         accessType: user.accessType,
         credits: updated.credits,
+        ...(extra > 0 ? { acompanantes: extra } : {}),
         ...metaPase,
       },
       origen
@@ -547,6 +593,68 @@ export async function corregirCreditos({ userId, modo, creditos, motivo, vigenci
   });
 
   return { status: 200, body: { cambios, user: { name: user.name }, credits: despues, tiquetera: user.tiquetera, auditEvent } };
+}
+
+/* -------------------- DESCONTAR CRÉDITOS (acompañantes) -------------------- */
+
+/**
+ * Descuenta créditos de una tiquetera DESPUÉS del check-in: un padre que entró
+ * con sus hijos, o alguien que se acordó tarde. No es una venta ni una
+ * corrección: queda en el historial con `acompanantes: true` y monto 0 (la
+ * tiquetera ya se cobró cuando se compró; esto solo gasta entradas).
+ * Atómico: si el saldo no alcanza no descuenta nada.
+ */
+export async function descontarCreditos({ userId, cantidad, motivo = "", actor, origen }) {
+  if (!userId) return { status: 400, body: { message: "Falta userId" } };
+  const n = Number(cantidad);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_ACOMPANANTES) {
+    return {
+      status: 400,
+      body: { message: `La cantidad debe ser un entero entre 1 y ${MAX_ACOMPANANTES}.`, code: "CANTIDAD_INVALIDA" },
+    };
+  }
+
+  const user = await User.findById(userId).lean();
+  if (!user) return { status: 404, body: { message: "Usuario no encontrado" } };
+  if (user.accessType !== "ticketera") {
+    return {
+      status: 400,
+      body: { message: `${user.name} no es de tiquetera (modalidad: ${user.accessType || "ninguna"}).`, code: "NO_ES_TIQUETERA" },
+    };
+  }
+  const antes = user.credits ?? 0;
+  if (antes < n) {
+    return {
+      status: 409,
+      body: { message: `${user.name} tiene ${antes} crédito(s) y se piden ${n}.`, code: "CREDITOS_INSUFICIENTES" },
+    };
+  }
+
+  const actualizado = await User.findOneAndUpdate(
+    { _id: userId, accessType: "ticketera", credits: { $gte: n } },
+    { $inc: { credits: -n } },
+    { new: true }
+  ).lean();
+  if (!actualizado) {
+    return {
+      status: 409,
+      body: { message: "El saldo cambió mientras tanto; revisa y vuelve a intentar.", code: "CREDITOS_INSUFICIENTES" },
+    };
+  }
+
+  const razon = String(motivo || "").trim().slice(0, 200);
+  const auditEvent = await logAudit({
+    action: "ADJUST_CREDITS",
+    actor,
+    user: actualizado,
+    summary: `${n} acompañante${n === 1 ? "" : "s"}: créditos ${antes} → ${actualizado.credits} (-${n})${razon ? ` · ${razon}` : ""}`,
+    meta: conOrigen(
+      { before: antes, after: actualizado.credits, delta: -n, venta: false, monto: 0, acompanantes: true, ...(razon ? { motivo: razon } : {}) },
+      origen
+    ),
+  });
+
+  return { status: 200, body: { message: "Créditos descontados", credits: actualizado.credits, descontados: n, auditEvent } };
 }
 
 /* -------------------- CANCELAR VISITA -------------------- */
