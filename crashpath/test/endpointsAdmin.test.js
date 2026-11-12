@@ -16,6 +16,7 @@ const RAIZ = path.join(process.cwd(), "pages", "api", "admin");
 const ESPERADO = {
   "adjust-credits.js": PERMISOS.COBRAR,
   "audit.js": PERMISOS.VER_AUDITORIA,
+  "descontar-creditos.js": PERMISOS.CHECKIN,
   "checkins.js": PERMISOS.CHECKIN,
   "export-xlsx.js": PERMISOS.EXPORTAR,
   "import-xlsx.js": PERMISOS.IMPORTAR,
@@ -121,6 +122,7 @@ describe("qué endpoints alcanza un voluntario", () => {
         "adjust-credits.js",
         "checkins.js",
         "cortesia/usar.js",
+        "descontar-creditos.js",
         "inventario/index.js",
         "mensualidad/renovar.js",
         "moon/cancel.js",

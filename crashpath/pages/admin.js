@@ -1121,6 +1121,24 @@ const INITIAL_GUEST = {
 // SUBCOMPONENTES
 // ============================================
 /** Badge de la cortesía (pase de invitado). Aplica a las dos modalidades. */
+// Tope de acompañantes por check-in/descuento. Espejo de MAX_ACOMPANANTES en
+// lib/operaciones.js (no se importa de allá: arrastraría Mongoose al cliente).
+const MAX_ACOMPANANTES = 10;
+
+/** − N + para elegir una cantidad de créditos sin teclear. */
+function CreditStepper({ value, min = 0, max = MAX_ACOMPANANTES, onChange, disabled }) {
+  const clamp = (n) => Math.min(Math.max(n, min), Math.max(min, max));
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: spacing.sm }}>
+      <Button type="button" $variant="secondary" disabled={disabled || value <= min} onClick={() => onChange(clamp(value - 1))}
+        aria-label="Quitar uno" style={{ minWidth: 44 }}>−</Button>
+      <strong style={{ minWidth: 28, textAlign: "center", fontSize: fontSize.lg }}>{value}</strong>
+      <Button type="button" $variant="secondary" disabled={disabled || value >= max} onClick={() => onChange(clamp(value + 1))}
+        aria-label="Sumar uno" style={{ minWidth: 44 }}>+</Button>
+    </div>
+  );
+}
+
 function CortesiaBadge({ user }) {
   const st = estadoCortesia(user);
   if (st.disponible) {
@@ -1618,6 +1636,12 @@ function AdminPanel() {
   // "voluntario" (gratis). Ver hacerCheckin en lib/operaciones.js.
   const [pase, setPase] = useState("normal");
   const [paseZapatos, setPaseZapatos] = useState(false);
+  // Acompañantes que entran con el socio y se descuentan de su tiquetera: al
+  // hacer el check-in, o después (descuento). `checkinCredits` es el saldo vivo
+  // del modal: checkinUser es una foto y no se refresca al descontar.
+  const [acompanantes, setAcompanantes] = useState(0);
+  const [descuentoN, setDescuentoN] = useState(1);
+  const [checkinCredits, setCheckinCredits] = useState(null);
   const [creditsVenta, setCreditsVenta] = useState(true);
   const [renovarZapatos, setRenovarZapatos] = useState(false);
   const [accessZapatos, setAccessZapatos] = useState(false);
@@ -2303,7 +2327,34 @@ function AdminPanel() {
     // modalidad) arranca en pase de día: es lo que casi siempre viene a hacer.
     setPase(userCanCheckin(user) ? "normal" : "dia");
     setPaseZapatos(false);
+    setAcompanantes(0);
+    setDescuentoN(1);
+    setCheckinCredits(user?.credits ?? 0);
     setShowCheckinModal(true);
+  };
+
+  // Descontar créditos de acompañantes DESPUÉS del check-in (ya entró el socio
+  // y se acuerdan de que venía con sus hijos).
+  const submitDescuento = async () => {
+    setUiError("");
+    if (!checkinUser) return;
+    setBusy(true);
+    try {
+      const res = await axios.post("/api/admin/descontar-creditos", {
+        userId: checkinUser._id,
+        cantidad: descuentoN,
+        motivo: "acompañantes",
+      });
+      setCheckinCredits(res.data?.credits ?? null);
+      setCheckinSuccess(`✅ Descontados ${descuentoN} crédito${descuentoN === 1 ? "" : "s"}. Créditos restantes: ${res.data?.credits ?? ""}`);
+      setDescuentoN(1);
+      if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
+      await fetchUsers();
+    } catch (error) {
+      setUiError(error?.response?.data?.message || "No se pudieron descontar los créditos.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submitCheckin = async () => {
@@ -2316,7 +2367,10 @@ function AdminPanel() {
         userId: checkinUser._id,
         pase: pase === "normal" ? undefined : pase,
         zapatos: pase === "dia" ? paseZapatos : undefined,
+        acompanantes:
+          pase === "normal" && checkinUser.accessType === "ticketera" && acompanantes > 0 ? acompanantes : undefined,
       });
+      if (typeof res.data?.credits === "number") setCheckinCredits(res.data.credits);
       const code = res.data?.code;
       if (code === "ALREADY_CHECKED_IN") {
         setCheckinSuccess("✅ Este usuario ya hizo check-in hoy.");
@@ -2327,7 +2381,8 @@ function AdminPanel() {
       } else {
         const creditsMsg = checkinUser.accessType === "ticketera"
           ? ` Créditos restantes: ${res.data?.credits ?? ""}` : "";
-        setCheckinSuccess(`✅ Check-in registrado.${creditsMsg}`);
+        const conAcomp = acompanantes > 0 ? ` (tú + ${acompanantes} acompañante${acompanantes === 1 ? "" : "s"})` : "";
+        setCheckinSuccess(`✅ Check-in registrado${conAcomp}.${creditsMsg}`);
       }
       if (res.data?.auditEvent) appendAuditEvent(res.data.auditEvent);
       await fetchUsers();
@@ -3597,12 +3652,43 @@ function AdminPanel() {
             <ModalHeader>
               <ModalTitle>Modificar Créditos</ModalTitle>
             </ModalHeader>
-            <Input
-              type="number"
-              value={credits}
-              onChange={(e) => setCredits(e.target.value)}
-              placeholder="Cantidad (+ para agregar, - para quitar)"
-            />
+            {(() => {
+              const u = users.find((x) => x._id === selectedUser);
+              const saldo = u?.credits ?? 0;
+              const delta = Number.isFinite(Number(credits)) ? Math.trunc(Number(credits)) : 0;
+              const nuevo = saldo + delta;
+              return (
+                <div style={{ marginBottom: spacing.sm }}>
+                  {u && (
+                    <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginBottom: spacing.xs }}>
+                      {u.name} · saldo actual: <strong>{saldo}</strong> crédito{saldo === 1 ? "" : "s"}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: spacing.xs, flexWrap: "wrap", marginBottom: spacing.sm }}>
+                    {[-1, -2, -3, -4].map((n) => (
+                      <Button key={n} type="button" $variant="secondary" disabled={busy || saldo + n < 0}
+                        onClick={() => { setCredits(n); setCreditsVenta(false); }}>{n}</Button>
+                    ))}
+                    <Button type="button" $variant="secondary" disabled={busy}
+                      onClick={() => { setCredits(PRECIOS.TIQUETERA_USOS); setCreditsVenta(true); }}>
+                      +{PRECIOS.TIQUETERA_USOS} tiquetera
+                    </Button>
+                  </div>
+                  <Input
+                    type="number"
+                    value={credits}
+                    onChange={(e) => setCredits(e.target.value)}
+                    placeholder="Cantidad (+ para agregar, - para quitar)"
+                  />
+                  {delta !== 0 && u && (
+                    <div style={{ fontSize: fontSize.sm, color: nuevo < 0 ? palette.danger : palette.textLight }}>
+                      {saldo} → {Math.max(0, nuevo)} créditos
+                      {nuevo < 0 && " · el saldo no puede quedar negativo (quedaría en 0)"}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             {Number(credits) > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: spacing.xs, marginBottom: spacing.md }}>
                 <label style={{ display: "flex", gap: spacing.sm, alignItems: "center" }}>
@@ -3644,7 +3730,7 @@ function AdminPanel() {
                     {checkinUser.accessType === "mensualidad" ? "Mensualidad" : checkinUser.accessType === "ticketera" ? "Tiquetera" : "Sin modalidad"}
                   </Badge>
                   {checkinUser.accessType === "ticketera" ? (
-                    <Badge>{checkinUser.credits ?? 0} créditos</Badge>
+                    <Badge>{checkinCredits ?? checkinUser.credits ?? 0} créditos</Badge>
                   ) : (
                     (() => {
                       const { active, label } = getMensualidadStatus(checkinUser.mensualidad);
@@ -3698,6 +3784,49 @@ function AdminPanel() {
                 )}
                 {pase === "normal" && checkinUser.accessType === "ticketera" && (checkinUser.credits ?? 0) <= 0 && (
                   <ErrorBox>⚠️ Sin créditos — elige pase de día o recarga la tiquetera.</ErrorBox>
+                )}
+                {/* Entra con acompañantes (un padre con sus hijos): se descuentan de una vez. */}
+                {!hasCheckedInToday(checkinUser) && !checkinSuccess && pase === "normal" &&
+                  checkinUser.accessType === "ticketera" && (checkinUser.credits ?? 0) > 1 && (
+                  <div style={{ marginBottom: spacing.md }}>
+                    <div style={{ fontSize: fontSize.sm, fontWeight: 600, marginBottom: spacing.xs }}>
+                      ¿Entra con acompañantes? (cada uno gasta un crédito)
+                    </div>
+                    <CreditStepper
+                      value={acompanantes}
+                      min={0}
+                      max={Math.min(MAX_ACOMPANANTES, (checkinUser.credits ?? 0) - 1)}
+                      onChange={setAcompanantes}
+                      disabled={busy}
+                    />
+                    {acompanantes > 0 && (
+                      <div style={{ fontSize: fontSize.sm, color: palette.textLight, marginTop: spacing.xs }}>
+                        Se descuentan {1 + acompanantes} créditos: {checkinUser.credits ?? 0} → {(checkinUser.credits ?? 0) - 1 - acompanantes}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Ya entró: descontar más créditos después (se acordaron de los acompañantes). */}
+                {checkinUser.accessType === "ticketera" && (hasCheckedInToday(checkinUser) || (checkinSuccess && pase === "normal")) &&
+                  (checkinCredits ?? 0) > 0 && (
+                  <div style={{ marginBottom: spacing.md, paddingTop: spacing.sm, borderTop: `1px solid ${palette.border || "#e5e5e5"}` }}>
+                    <div style={{ fontSize: fontSize.sm, fontWeight: 600, marginBottom: spacing.xs }}>
+                      Descontar créditos de acompañantes
+                    </div>
+                    <CreditStepper
+                      value={descuentoN}
+                      min={1}
+                      max={Math.min(MAX_ACOMPANANTES, checkinCredits ?? 0)}
+                      onChange={setDescuentoN}
+                      disabled={busy}
+                    />
+                    <div style={{ fontSize: fontSize.sm, color: palette.textLight, margin: `${spacing.xs} 0` }}>
+                      {checkinCredits} → {(checkinCredits ?? 0) - descuentoN} créditos
+                    </div>
+                    <Button onClick={submitDescuento} disabled={busy || descuentoN > (checkinCredits ?? 0)}>
+                      {busy ? "Descontando..." : `− Descontar ${descuentoN} crédito${descuentoN === 1 ? "" : "s"}`}
+                    </Button>
+                  </div>
                 )}
                 {pase === "normal" && checkinUser.accessType === "mensualidad" && !getMensualidadStatus(checkinUser.mensualidad).active && (
                   <ErrorBox>⚠️ Mensualidad vencida — elige pase de día o renueva el mes.</ErrorBox>
