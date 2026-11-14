@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<!-- "Rejilla Desnuda" (filosofía en ../2026-11-02-cerrado/filosofia-muro.md): el muro abierto arriba, la placa sin presas abajo. -->
+<style>
+  @font-face { font-family: "Shoulders"; src: url("../../../.claude/skills/canvas-design/canvas-fonts/BigShoulders-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Shoulders"; src: url("../../../.claude/skills/canvas-design/canvas-fonts/BigShoulders-Regular.ttf"); font-weight: 400; }
+
+  :root { --triplex: #BDAA88; --tinta: #1C1A17; --hueco: #3A332A; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  .lienzo { position: relative; overflow: hidden; width: 1080px; height: var(--alto); background: var(--triplex); color: var(--tinta); }
+
+  .foto { position: absolute; left: 0; top: 0; width: 1080px; height: var(--foto-h); overflow: hidden; }
+  .foto img { width: 100%; height: 100%; object-fit: cover; object-position: 50% var(--foto-y);
+    filter: saturate(.9) sepia(.12) contrast(1.05) brightness(1.06); }
+
+  .placa { position: absolute; left: 0; right: 0; top: var(--foto-h); bottom: 0; }
+  .vetas { position: absolute; inset: 0; opacity: .5; mix-blend-mode: multiply; }
+
+  .titulo { position: absolute; left: var(--m); top: calc(var(--foto-h) + var(--sep));
+    font-family: "Shoulders"; font-weight: 700; text-transform: uppercase; line-height: .8; letter-spacing: -.02em; }
+  .titulo span { display: block; }
+  .titulo span + span { margin-top: .06em; }
+
+  .frase { position: absolute; left: var(--m); width: var(--frase-w);
+    font-family: "Shoulders"; font-weight: 400; font-size: var(--t-frase); line-height: 1.12; letter-spacing: .005em; }
+
+  .gecko { position: absolute; width: var(--g); height: var(--g); }
+
+  .story { --alto: 1920px; --m: 96px; --foto-h: 800px; --foto-y: 46%; --sep: 92px; --paso: 55.5px;
+    --t-frase: 46px; --frase-w: 470px; --g: 300px; --pie: 270px; }
+  .post { --alto: 1350px; --m: 80px; --foto-h: 500px; --foto-y: 52%; --sep: 64px; --paso: 54.12px;
+    --t-frase: 40px; --frase-w: 450px; --g: 230px; --pie: 40px; }
+</style>
+</head>
+<body>
+<div class="lienzo" id="lienzo">
+  <div class="foto"><img src="assets/muro.jpg" alt="El muro de Crash Path con sus presas"></div>
+  <div class="placa">
+    <svg class="vetas" width="100%" height="100%">
+      <filter id="v"><feTurbulence type="fractalNoise" baseFrequency=".004 .09" numOctaves="3" seed="7"/>
+        <feColorMatrix values="0 0 0 0 .45  0 0 0 0 .36  0 0 0 0 .24  0 0 0 .5 0"/></filter>
+      <rect width="100%" height="100%" filter="url(#v)"/>
+    </svg>
+    <svg id="tuercas" width="100%" height="100%" style="position:absolute;inset:0"></svg>
+  </div>
+
+  <h1 class="titulo"><span>Jue 19 y vie 20</span><span>cerrado</span></h1>
+  <p class="frase">El gecko se toma el jueves y el viernes libres. Cualquier cosa, escríbenos por DM.</p>
+  <img class="gecko" src="assets/gecko_rust.png" alt="">
+</div>
+
+<script>
+  const f = new URLSearchParams(location.search).get("f") || "story";
+  const lienzo = document.getElementById("lienzo");
+  lienzo.classList.add(f);
+
+  Promise.all([document.fonts.ready, ...[...document.images].map(i => i.decode())]).then(() => {
+    const cs = getComputedStyle(lienzo), px = v => parseFloat(cs.getPropertyValue(v));
+    const W = 1080, H = lienzo.offsetHeight, m = px("--m"), fh = px("--foto-h"), paso = px("--paso");
+    const $ = s => lienzo.querySelector(s), caja = el => el.getBoundingClientRect();
+
+    // Título al ancho útil exacto: las dos líneas al mismo ancho.
+    for (const el of lienzo.querySelectorAll(".titulo span")) {
+      el.style.display = "inline-block"; el.style.fontSize = "100px";
+      el.style.fontSize = 100 * (W - 2 * m) / caja(el).width + "px";
+      el.style.display = "block";
+    }
+
+    // Rejilla de tuercas al tresbolillo, con el mismo paso que ordena los márgenes.
+    const cols = Math.round((W - 2 * m) / paso);
+    const fila0 = fh + paso * .5, filas = Math.ceil((H - fila0) / paso) + 1;
+    const punto = (c, r) => ({ x: m + c * paso + (r % 2 ? paso / 2 : 0), y: fila0 + r * paso });
+
+    // Frase y gecko abajo, en la rejilla: la frase arranca en una fila, el gecko se atornilla en un punto.
+    const tituloAbajo = caja($(".titulo")).bottom;
+    const rFrase = Math.ceil((tituloAbajo + paso * 1.1 - fila0) / paso);
+    const frase = $(".frase");
+    frase.style.top = punto(0, rFrase).y - paso * .32 + "px";
+    // El gecko va en el punto de la rejilla más cercano al centro del hueco entre el título y el pie,
+    // y se achica si hace falta para no tocar ni el título ni la zona que tapa la interfaz.
+    const arriba = tituloAbajo + paso * .45, abajo = H - px("--pie");
+    const objetivo = (arriba + abajo) / 2;
+    const rG = Math.round((objetivo - fila0) / paso);
+    let gMax = px("--g");
+    const pG = punto(cols - Math.round(gMax / paso / 2) - (rG % 2 ? 1 : 0), rG);
+    const g = Math.min(gMax, 2 * Math.min(pG.y - arriba, abajo - pG.y), 2 * (W - m - pG.x) + 24);
+    $(".gecko").style.width = $(".gecko").style.height = g + "px";
+    Object.assign($(".gecko").style, { left: pG.x - g / 2 + "px", top: pG.y - g / 2 + "px" });
+
+    // Las tuercas no se dibujan debajo del texto ni del gecko.
+    const libres = [".titulo span", ".frase"].flatMap(s => [...lienzo.querySelectorAll(s)]).map(el => {
+      const b = caja(el), pad = 10; return { l: b.left - pad, r: b.right + pad, t: b.top - pad, b: b.bottom + pad };
+    });
+    const radioG = g / 2 + 12;
+    const NS = "http://www.w3.org/2000/svg", svg = document.getElementById("tuercas");
+    for (let r = 0; r < filas; r++) for (let c = -1; c <= cols; c++) {
+      const p = punto(c, r);
+      if (p.x < 8 || p.x > W - 8) continue;
+      if (libres.some(z => p.x > z.l && p.x < z.r && p.y > z.t && p.y < z.b)) continue;
+      if (Math.hypot(p.x - pG.x, p.y - pG.y) < radioG) continue;
+      const y = p.y - fh;
+      const anillo = document.createElementNS(NS, "circle");
+      Object.entries({ cx: p.x, cy: y, r: 7.5, fill: "#A8946F" }).forEach(([k, v]) => anillo.setAttribute(k, v));
+      const hueco = document.createElementNS(NS, "circle");
+      Object.entries({ cx: p.x, cy: y, r: 4.6, fill: "#3A332A" }).forEach(([k, v]) => hueco.setAttribute(k, v));
+      svg.append(anillo, hueco);
+    }
+    document.body.dataset.listo = "1";
+  });
+</script>
+</body>
+</html>
